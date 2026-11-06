@@ -268,6 +268,12 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 
 /* Kritisk linje: klikk tar boksen med eller ut */
 .sheet-host.critical-mode g[data-id] { cursor: pointer; }
+/* Kritisk linje: rød som linjen i planen, og fylt når du merker bokser */
+#critical-mode { --crit: #D00000; color: var(--crit); border-color: color-mix(in srgb, var(--crit) 55%, transparent); font-weight: 600; }
+#critical-mode:hover:not(:disabled) { background: color-mix(in srgb, var(--crit) 10%, transparent); }
+#critical-mode[aria-pressed='true'] { background: var(--crit); color: #FFFFFF; border-color: var(--crit); }
+#critical-mode[aria-pressed='true']:hover { background: color-mix(in srgb, var(--crit) 85%, #000000); }
+@media (prefers-color-scheme: dark) { #critical-mode { --crit: #FF5A5A; } #critical-mode[aria-pressed='true'] { color: #10141A; } }
 .panel input[type='range'] { flex: 1; min-width: 0; accent-color: var(--accent); }
 
 /* Detaljer ved musepeker og fremhevet periode */
