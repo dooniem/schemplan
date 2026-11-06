@@ -191,6 +191,15 @@ describe('tilpasning til arket', () => {
     expect(last.label.x + approxMeasure(last.label.lines[0], last.label.size)).toBeLessThan(L.subtitle.x - approxMeasure(L.subtitle.lines[0], L.subtitle.size));
   });
 
+  it('A4 gir et mindre ark med mindre tekst', () => {
+    const p = shape('mange-lanes-faa-bokser');
+    const base = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 14, fitToSheet: true, minTextPt: 4 };
+    const a4 = computeLayout(p, { ...base, paper: 'A4' }, approxMeasure);
+    const a3 = computeLayout(p, { ...base, paper: 'A3' }, approxMeasure);
+    expect([a4.width, a4.height]).toEqual([297, 210]);
+    expect(a4.textSizePt).toBeLessThanOrEqual(a3.textSizePt);
+  });
+
   it('større ark gir større tekst', () => {
     const p = shape('mange-lanes-faa-bokser');
     const base = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 14, fitToSheet: true, minTextPt: 4 };
