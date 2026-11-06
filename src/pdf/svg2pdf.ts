@@ -193,7 +193,8 @@ function drawText(c: Ctx, el: SVGTextElement) {
 function walk(c: Ctx, el: Element) {
   for (const child of Array.from(el.children)) {
     const tag = child.tagName;
-    if (tag === 'defs') continue;
+    // Markeringer fra redigeringen hører ikke til planen
+    if (tag === 'defs' || child.classList.contains('edit-overlay')) continue;
     if (tag === 'g') {
       walk(c, child);
       continue;

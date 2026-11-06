@@ -9,6 +9,7 @@ import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
+import { createEditor } from './editor';
 import type { PdfVariant } from './pdf/export';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
@@ -45,6 +46,18 @@ $('#zoom-in').addEventListener('click', () => viewer.zoomIn());
 $('#zoom-out').addEventListener('click', () => viewer.zoomOut());
 $('#zoom-fit').addEventListener('click', () => viewer.fit());
 $('#zoom-width').addEventListener('click', () => viewer.fitWidth());
+const editor = createEditor(
+  {
+    getPlan: () => plan,
+    setPlan: (p) => (plan = p),
+    redraw: () => draw(),
+  },
+  host,
+  $<HTMLElement>('#panel'),
+  $<HTMLButtonElement>('#edit'),
+  $<HTMLElement>('#edit-tools'),
+);
+viewer.setIgnore((e) => editor.owns(e));
 const status = el('p', '', 'muted small');
 const saveStatus = el('p', '', 'muted small');
 const suggest = el('div', '', 'suggest small');
@@ -67,6 +80,7 @@ function draw() {
   const svg = renderPlan(layout);
   shown = { layout, svg };
   viewer.show(svg, layout.width, layout.height);
+  editor.afterDraw(svg, layout);
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
@@ -177,6 +191,8 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   info.append(status, suggest, saveStatus);
   $<HTMLButtonElement>('#print').disabled = false;
   $<HTMLButtonElement>('#save-work').disabled = false;
+  $<HTMLButtonElement>('#edit').disabled = false;
+  editor.reset();
   $<HTMLButtonElement>('#save-share').disabled = false;
   draw();
 });
@@ -281,6 +297,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
     const kb = Math.max(1, Math.round(pdf.length / 1024));
     saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å redigere eller oppdatere planen.' : ' Klar til deling.'}`;
     saveStatus.className = 'ok small';
+    if (variant === 'arbeidsfil') editor.markSaved();
   } catch (e) {
     if ((e as Error).name === 'AbortError') saveStatus.textContent = '';
     else {

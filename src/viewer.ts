@@ -14,6 +14,8 @@ export interface Viewer {
   /** Arket fyller bredden av vinduet; rull opp og ned for resten. */
   fitWidth(): void;
   onChange(cb: (zoom: number) => void): void;
+  /** Hendelser som filteret sier ja til, overlates til andre (f.eks. redigering): ingen panorering eller zoom. */
+  setIgnore(fn: (e: Event) => boolean): void;
 }
 
 export function createViewer(host: HTMLElement): Viewer {
@@ -22,6 +24,7 @@ export function createViewer(host: HTMLElement): Viewer {
   let hMm = 1;
   let zoom = 1;
   let listener: (zoom: number) => void = () => {};
+  let ignore: (e: Event) => boolean = () => false;
 
   // Piksler per mm når hele arket får plass i vinduet
   const fitScale = () => {
@@ -73,7 +76,7 @@ export function createViewer(host: HTMLElement): Viewer {
   // Dra for å flytte når det er zoomet inn
   let drag: { x: number; y: number; sl: number; st: number } | null = null;
   host.addEventListener('pointerdown', (e) => {
-    if (!svg || zoom <= 1 || e.button !== 0) return;
+    if (!svg || zoom <= 1 || e.button !== 0 || ignore(e)) return;
     drag = { x: e.clientX, y: e.clientY, sl: host.scrollLeft, st: host.scrollTop };
     host.setPointerCapture(e.pointerId);
     host.classList.add('dragging');
@@ -91,7 +94,7 @@ export function createViewer(host: HTMLElement): Viewer {
   host.addEventListener('pointercancel', end);
   // Dobbeltklikk zoomer inn der du klikker; med Shift tilbake til hele arket
   host.addEventListener('dblclick', (e) => {
-    if (!svg) return;
+    if (!svg || ignore(e)) return;
     const hr = host.getBoundingClientRect();
     if (e.shiftKey) setZoom(1);
     else setZoom(zoom * 2, e.clientX - hr.left, e.clientY - hr.top);
@@ -120,6 +123,9 @@ export function createViewer(host: HTMLElement): Viewer {
     },
     onChange(cb) {
       listener = cb;
+    },
+    setIgnore(fn) {
+      ignore = fn;
     },
   };
 }

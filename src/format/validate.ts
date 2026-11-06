@@ -179,6 +179,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         needEnum(b, 'rotation', bp, [0, 90, -90]);
         if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
+        for (const k of ['fill', 'textColor'] as const)
+          if (b[k] !== undefined && !(typeof b[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b[k] as string))) err(`${bp}.${k}`, 'må være en farge som #RRGGBB');
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');
         const label = typeof b.id === 'string' ? `Boks ${b.id}` : bp;
         if (typeof b.id === 'string') {
