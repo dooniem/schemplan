@@ -18,7 +18,7 @@ export interface LayoutOptions {
   minTextPt?: number;
   /** Arkstørrelse. Standard A3. */
   paper?: Paper;
-  /** 'excel' etterligner VBA-utskriften, 'ny' er lesbarhetsforslaget. */
+  /** 'excel' etterligner den gamle utskriften, 'ny' er lesbarhetsforslaget. */
   style?: PlanStyle;
 }
 

@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
 import { summarize, validatePlan } from './validate';
 import { parseBoxText } from './text';
 
-const example = readFileSync(new URL('../../examples/eksempelplan.json', import.meta.url), 'utf8');
+const example = JSON.stringify(testplan());
 const clone = () => JSON.parse(example);
 
 describe('validatePlan', () => {
