@@ -109,3 +109,21 @@ describe('layout', () => {
     expect(L.items.length).toBeGreaterThan(0);
   });
 });
+
+describe('Excel-utseende', () => {
+  it('annenhver måned er skyggelagt, og bare årsskifter får kraftig strek', () => {
+    const L = computeLayout(example(), { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true }, approxMeasure);
+    expect(L.bands).toHaveLength(12);
+    expect(new Set(L.bands.map((b) => b.fill)).size).toBe(2);
+    expect(L.bands[0].fill).not.toBe(L.bands[1].fill);
+    expect(L.grid.filter((g) => g.strong)).toHaveLength(0); // eksempelet dekker ett år
+    expect(L.calendarTop[1].rotate).toBe(true);
+  });
+
+  it('ruter-milepæler har fet tekst og vanlig dato', () => {
+    const L = computeLayout(example(), { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true }, approxMeasure);
+    const m = L.items.find((i) => i.kind === 'milestone' && i.symbol === 'diamond');
+    expect(m && m.kind === 'milestone' && m.label.boldLines?.[0]).toBe(false);
+    expect(m && m.kind === 'milestone' && m.label.boldLines?.[1]).toBe(true);
+  });
+});
