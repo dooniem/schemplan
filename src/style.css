@@ -171,8 +171,15 @@ details summary { cursor: pointer; font-size: 13px; }
 .suggest:empty { display: none; }
 
 /* Redigering */
-.sheet-host.editing g[data-id] { cursor: pointer; }
-.sheet-host.editing.zoomed g[data-id] { cursor: pointer; }
+.sheet-host.editing g[data-id] { cursor: grab; }
+.sheet-host.editing.zoomed g[data-id] { cursor: grab; }
+.sheet-host .box-handle { cursor: ns-resize; }
+.sheet-host .lane-edge { cursor: row-resize; }
+.sheet-host .lane-edge:hover { stroke: rgba(31, 95, 191, 0.35); }
+.panel-empty-title { margin: 0; font-size: 14px; font-weight: 600; }
+.tips { margin: 0; padding-left: 16px; color: var(--muted); line-height: 1.5; display: flex; flex-direction: column; gap: 6px; }
+.pop-title { margin: 6px 10px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pop-title:first-child { margin-top: 2px; }
 #panel { width: 236px; flex: none; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border-left: 1px solid var(--border); font-size: 12px; }
 #panel[hidden] { display: none; }
 #panel .small { font-size: 12px; }

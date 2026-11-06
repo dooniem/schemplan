@@ -1,7 +1,7 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
-import type { Box, PlanFile, Rotation } from './format/types';
-import type { Item, Layout } from './layout/layout';
+import type { Box, Lane, PlanFile, Rotation } from './format/types';
+import type { BoxItem, Item, LaneLayout, Layout } from './layout/layout';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -33,6 +33,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string,
   return e;
 };
 
+function findLane(plan: PlanFile, id: string): Lane | null {
+  return plan.lanes.find((l) => l.id === id) ?? null;
+}
+
 function findBox(plan: PlanFile, id: string): Box | null {
   for (const l of plan.lanes) for (const b of l.boxes) if (b.id === id) return b;
   return null;
@@ -40,7 +44,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -54,7 +58,12 @@ export function resetBox(b: Box): void {
   delete b.textColor;
   delete b.callout;
   delete b.calloutSide;
+  delete b.height;
+  delete b.top;
 }
+
+/** Runder av til hundredeler av en tekstlinje, så filen ikke fylles med lange desimaltall. */
+const lines = (mm: number, unit: number) => Math.round((mm / unit) * 100) / 100;
 
 /** Husker tekst og rotasjon før første endring, så de kan tilbakestilles. */
 function keepOriginal(b: Box) {
@@ -105,7 +114,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || !plan.lanes.some((l) => l.boxes.some(isEdited));
+    resetAllBtn.disabled = !plan || !plan.lanes.some((l) => l.height || l.boxes.some(isEdited));
     sheet.classList.toggle('editing', active);
   };
 
@@ -131,6 +140,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
     else host.redraw();
     if (opts.rebuild !== false) buildPanel();
+    syncTools();
+  };
+
+  /** Endring som ikke gjelder bare valgt boks (dra, lanehøyde). */
+  const commit = (fn: (plan: PlanFile) => void) => {
+    const plan = host.getPlan();
+    if (!plan) return;
+    snapshot();
+    typingSession = false;
+    fn(plan);
+    host.redraw();
+    buildPanel();
     syncTools();
   };
 
@@ -167,9 +188,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const buildPanel = () => {
     const plan = host.getPlan();
     const b = active && plan && selected ? findBox(plan, selected) : null;
-    panel.hidden = !b;
+    // Panelet står åpent hele tiden i redigering, så arket ikke skifter størrelse når du velger
+    panel.hidden = !active || !plan;
     panel.replaceChildren();
-    if (!plan || !b) return;
+    if (!plan || !active) return;
+    if (!b) {
+      panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
+      const tips = el('ul', { class: 'tips' });
+      for (const t of [
+        'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
+        'Dra en boks opp eller ned for å gi den fast plass i lanen.',
+        'Dra i den blå streken under valgt boks for å endre høyden.',
+        'Dra i nederste kant av en lane for å gi den fast høyde.',
+        'Høyreklikk en lane for automatisk eller fast høyde.',
+        'Ctrl+Z angrer, Ctrl+Y gjør om.',
+      ])
+        tips.append(el('li', {}, t));
+      panel.append(tips);
+      return;
+    }
     const ms = !!b.resolved?.isMilestone;
     const head = el('div', { class: 'panel-head' });
     head.append(el('h2', {}, ms ? 'Milepæl' : 'Boks'));
@@ -263,6 +300,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       if (b.rotation !== 0) panel.append(el('p', { class: 'hint' }, 'Rotert tekst får ikke callout.'));
     }
+    const pw = el('div', { class: 'prop' });
+    pw.append(el('span', { class: 'prop-label' }, 'Høyde og plass'));
+    const prow = el('div', { class: 'row' });
+    if (!ms) {
+      const hb = el('button', { type: 'button', class: 'button small', title: 'Så høy som teksten krever' }, 'Standard høyde');
+      hb.disabled = !b.height;
+      hb.addEventListener('click', () => change((x) => delete x.height));
+      prow.append(hb);
+    }
+    const lb = el('button', { type: 'button', class: 'button small', title: 'La appen velge plassen i lanen igjen' }, 'Løsne');
+    lb.disabled = b.top === undefined;
+    lb.addEventListener('click', () => change((x) => delete x.top));
+    prow.append(lb);
+    pw.append(prow, el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden.'));
+    panel.append(pw);
     const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill boks');
     reset.disabled = !isEdited(b);
     reset.title = 'Fjerner det du har endret, så appens forslag gjelder igjen';
@@ -274,7 +326,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   // ---- Markeringer i tegningen (kommer ikke med i PDF eller utskrift) ----
   const overlay = () => {
     if (!svgNow || !layoutNow) return;
-    svgNow.querySelector('g.edit-overlay')?.remove();
+    svgNow.querySelector('g.edit-overlay:not(.edit-ghost)')?.remove();
     if (!active) return;
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'edit-overlay');
@@ -296,7 +348,162 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         g.append(c);
       }
     }
+    // Håndtak: nederste kant av valgt boks og av hver lane. Strekbredden er i skjermpunkter, så de er like lette å treffe uansett zoom.
+    const line = (x1: number, x2: number, y: number, attrs: Record<string, string | number>) => {
+      const l = document.createElementNS(NS, 'line');
+      for (const [k, v] of Object.entries({ x1, x2, y1: y, y2: y, 'vector-effect': 'non-scaling-stroke', ...attrs })) l.setAttribute(k, String(v));
+      g.append(l);
+      return l;
+    };
+    for (const ln of layoutNow.lanes) {
+      if (ln.manual) line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { stroke: ACCENT, 'stroke-width': 3 });
+      line(layoutNow.laneTitleX, layoutNow.plot.x1, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
+    }
+    const sel = layoutNow.items.find((i) => i.id === selected);
+    if (sel?.kind === 'box') {
+      const w = sel.x1 - sel.x0;
+      line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
+      line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 10, 'pointer-events': 'stroke' });
+    }
     svgNow.append(g);
+  };
+
+  // ---- Dra: høyde på boks, plass i lanen og høyde på lane ----
+  const toMm = (clientX: number, clientY: number) => {
+    const m = svgNow?.getScreenCTM();
+    if (!m) return { x: 0, y: 0 };
+    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  };
+  const laneAt = (y: number): LaneLayout | undefined => layoutNow?.lanes.find((l) => y >= l.y0 - 1e-6 && y < l.y1 + 1e-6);
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  interface Drag {
+    startY: number;
+    startClient: number;
+    moved: boolean;
+    move(dy: number): void;
+    end(): void;
+  }
+  let drag: Drag | null = null;
+  let suppressClick = false;
+
+  const ghostLayer = () => {
+    svgNow?.querySelector('g.edit-ghost')?.remove();
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'edit-overlay edit-ghost');
+    g.setAttribute('pointer-events', 'none');
+    svgNow?.append(g);
+    return g;
+  };
+  const shape = <K extends 'rect' | 'line'>(g: SVGGElement, tag: K, attrs: Record<string, string | number>) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    g.append(e);
+    return e;
+  };
+  const set = (e: Element, attrs: Record<string, string | number>) => Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
+
+  const startBoxResize = (it: BoxItem): Drag | null => {
+    const lane = laneAt(it.y);
+    if (!lane || !layoutNow) return null;
+    const unit = layoutNow.unit;
+    const pad = lane.top - lane.y0;
+    const minH = it.minH ?? it.h;
+    const maxH = Math.max(minH, lane.y1 - pad - it.y);
+    const g = ghostLayer();
+    const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+    let h = it.h;
+    return {
+      startY: it.y + it.h,
+      startClient: 0,
+      moved: false,
+      move(dy) {
+        // Trinn på en kvart tekstlinje
+        h = clamp(Math.round((it.h + dy) / (unit / 4)) * (unit / 4), minH, maxH);
+        set(r, { height: h });
+      },
+      end() {
+        g.remove();
+        if (Math.abs(h - it.h) < 1e-6) return;
+        commit((plan) => {
+          const b = findBox(plan, it.id);
+          if (!b) return;
+          if (h <= minH + 1e-6) delete b.height;
+          else b.height = lines(h, unit);
+          // Boksen blir stående der den er; de andre flyttes rundt den
+          if (b.top === undefined) b.top = lines(it.y - lane.top, unit);
+        });
+      },
+    };
+  };
+
+  const startMove = (it: Item): Drag | null => {
+    if (!layoutNow) return null;
+    const r = bounds(it);
+    const lane = laneAt(r.y0);
+    if (!lane) return null;
+    const unit = layoutNow.unit;
+    const pad = lane.top - lane.y0;
+    const fh = r.y1 - r.y0;
+    const maxY = Math.max(lane.top, lane.y1 - pad - fh);
+    let g: SVGGElement | null = null;
+    let rect: SVGRectElement | null = null;
+    let y = r.y0;
+    return {
+      startY: r.y0,
+      startClient: 0,
+      moved: false,
+      move(dy) {
+        if (!g) {
+          g = ghostLayer();
+          rect = shape(g, 'rect', { x: r.x0, y: r.y0, width: r.x1 - r.x0, height: fh, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+        }
+        y = clamp(lane.top + Math.round((r.y0 + dy - lane.top) / (unit / 4)) * (unit / 4), lane.top, maxY);
+        set(rect!, { y });
+      },
+      end() {
+        g?.remove();
+        if (Math.abs(y - r.y0) < 1e-6) return;
+        selected = it.id;
+        commit((plan) => {
+          const b = findBox(plan, it.id);
+          if (b) b.top = lines(y - lane.top, unit);
+        });
+      },
+    };
+  };
+
+  const startLaneResize = (ln: LaneLayout): Drag | null => {
+    if (!layoutNow) return null;
+    const unit = layoutNow.unit;
+    const L = layoutNow;
+    const g = ghostLayer();
+    const lineAttrs = { x1: L.laneTitleX, x2: L.plot.x1, 'vector-effect': 'non-scaling-stroke' };
+    const ghost = shape(g, 'line', { ...lineAttrs, y1: ln.y1, y2: ln.y1, stroke: ACCENT, 'stroke-width': 2 });
+    // Rød stiplet strek: lanen kan ikke bli lavere enn innholdet
+    const floor = shape(g, 'line', { ...lineAttrs, y1: ln.y0 + ln.minH, y2: ln.y0 + ln.minH, stroke: '#D0021B', 'stroke-width': 2, 'stroke-dasharray': '6 4', visibility: 'hidden' });
+    const startH = ln.y1 - ln.y0;
+    let h = startH;
+    return {
+      startY: ln.y1,
+      startClient: 0,
+      moved: false,
+      move(dy) {
+        const raw = Math.round((startH + dy) / (unit / 4)) * (unit / 4);
+        h = Math.max(ln.minH, raw);
+        set(ghost, { y1: ln.y0 + h, y2: ln.y0 + h });
+        set(floor, { visibility: raw < ln.minH ? 'visible' : 'hidden' });
+      },
+      end() {
+        g.remove();
+        if (Math.abs(h - startH) < 1e-6 && ln.manual) return;
+        commit((plan) => {
+          const lane = findLane(plan, ln.id);
+          if (lane) lane.height = lines(h, unit);
+        });
+      },
+    };
   };
 
   const select = (id: string | null) => {
@@ -310,6 +517,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const itemOf = (e: Event) => (active ? ((e.target as Element | null)?.closest?.('g[data-id]') as SVGGElement | null) : null);
   sheet.addEventListener('click', (e) => {
     if (!active) return;
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     const g = itemOf(e);
     select(g ? g.getAttribute('data-id') : null);
   });
@@ -321,6 +532,94 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.focus();
     ta?.select();
   });
+  sheet.addEventListener('pointerdown', (e) => {
+    if (!active || e.button !== 0 || !layoutNow) return;
+    const t = e.target as Element;
+    let d: Drag | null = null;
+    if (t.closest('.box-handle')) {
+      const it = layoutNow.items.find((i) => i.id === selected);
+      if (it?.kind === 'box') d = startBoxResize(it);
+    } else if (t.closest('.lane-edge')) {
+      const ln = layoutNow.lanes.find((l) => l.id === t.closest('.lane-edge')!.getAttribute('data-lane'));
+      if (ln) d = startLaneResize(ln);
+    } else {
+      const g = itemOf(e);
+      const it = g && layoutNow.items.find((i) => i.id === g.getAttribute('data-id'));
+      if (it) d = startMove(it);
+    }
+    if (!d) return;
+    e.preventDefault();
+    d.startClient = e.clientY;
+    d.startY = toMm(e.clientX, e.clientY).y;
+    drag = d;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    // Flytting starter først etter noen punkter, så et vanlig klikk bare velger
+    if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4) return;
+    drag.moved = true;
+    drag.move(toMm(e.clientX, e.clientY).y - drag.startY);
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.moved) {
+      suppressClick = true;
+      d.end();
+    } else svgNow?.querySelector('g.edit-ghost')?.remove();
+  };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  // Høyreklikk på en lane: automatisk eller fast høyde
+  // Lukkes av koden: på Mac og Linux kommer høyreklikket før museknappen slippes,
+  // og nettleserens egen lukking ville da lukke menyen med en gang.
+  const menu = el('div', { class: 'pop pop-menu no-print', popover: 'manual' });
+  document.body.append(menu);
+  const closeMenu = () => menu.matches(':popover-open') && menu.hidePopover();
+  document.addEventListener('pointerdown', (e) => !menu.contains(e.target as Node) && closeMenu(), true);
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
+  window.addEventListener('blur', closeMenu);
+  menu.addEventListener('click', (e) => {
+    if ((e.target as Element).closest('button')) menu.hidePopover();
+  });
+  sheet.addEventListener('contextmenu', (e) => {
+    if (!active || !layoutNow) return;
+    const plan = host.getPlan();
+    const p = toMm(e.clientX, e.clientY);
+    const L = layoutNow;
+    if (!plan || p.x < L.laneTitleX || p.x > L.plot.x1) return;
+    const ln = laneAt(p.y);
+    const lane = ln && findLane(plan, ln.id);
+    if (!ln || !lane) return;
+    e.preventDefault();
+    const g = itemOf(e);
+    const box = g ? findBox(plan, g.getAttribute('data-id')!) : null;
+    const item = (label: string, note: string, pressed: boolean | null, fn: () => void, disabled = false) => {
+      const b = el('button', { type: 'button' });
+      if (pressed !== null) b.setAttribute('aria-pressed', String(pressed));
+      b.append(el('strong', {}, `${pressed ? '✓ ' : ''}${label}`), el('span', {}, note));
+      b.disabled = disabled;
+      b.addEventListener('click', fn);
+      menu.append(b);
+    };
+    menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
+    item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
+    item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
+    if (box) {
+      const id = box.id;
+      menu.append(el('p', { class: 'pop-title' }, 'Boks'));
+      if (!box.resolved?.isMilestone) item('Standard høyde', 'Så høy som teksten krever.', null, () => commit((pl) => delete findBox(pl, id)!.height), !box.height);
+      item('Løsne', 'La appen velge plassen i lanen igjen.', null, () => commit((pl) => delete findBox(pl, id)!.top), box.top === undefined);
+    }
+    if (!menu.matches(':popover-open')) menu.showPopover();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    menu.style.left = `${Math.max(8, Math.min(e.clientX, vw - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(e.clientY, vh - menu.offsetHeight - 8))}px`;
+  });
+
   toggle.addEventListener('click', () => {
     active = !active;
     if (!active) selected = null;
@@ -339,7 +638,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     if (!plan) return;
     snapshot();
-    plan.lanes.forEach((l) => l.boxes.forEach(resetBox));
+    plan.lanes.forEach((l) => {
+      l.boxes.forEach(resetBox);
+      delete l.height;
+    });
     host.redraw();
     buildPanel();
     syncTools();
@@ -386,7 +688,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e),
+    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')),
     get active() {
       return active;
     },

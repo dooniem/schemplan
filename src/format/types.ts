@@ -74,6 +74,8 @@ export interface Lane {
   /** false = skjult. */
   shown: boolean;
   boxes: Box[];
+  /** Fast høyde valgt i appen, i tekstlinjer (valgfritt). Uten den blir lanen så høy som innholdet krever. */
+  height?: number;
 }
 
 export type Rotation = 0 | 90 | -90;
@@ -99,6 +101,10 @@ export interface Box {
   textColor?: HexColor;
   /** Tekst og rotasjon før første endring i appen, så de kan tilbakestilles (valgfritt). */
   original?: { text: string; rotation: Rotation };
+  /** Høyde valgt i appen, i tekstlinjer (valgfritt). Boksen blir aldri lavere enn teksten krever. */
+  height?: number;
+  /** Fast plass i lanen valgt i appen: avstand fra toppen av lanen, i tekstlinjer (valgfritt). */
+  top?: number;
 }
 
 export interface MilestoneStyle {

@@ -51,6 +51,8 @@ export interface BoxItem {
   callout: { box: { x: number; y: number; w: number; h: number }; text: TextBlock; leader: number[] } | null;
   arrowLeft: boolean;
   arrowRight: boolean;
+  /** Høyden teksten krever, før en høyde valgt i appen. */
+  minH?: number;
 }
 
 export interface MilestoneItem {
@@ -83,6 +85,12 @@ export interface LaneLayout {
   y1: number;
   fill: string | null;
   title: TextBlock;
+  /** Øverste plass for bokser (y0 + luft). */
+  top: number;
+  /** Laveste høyde lanen kan få uten at noe kuttes. */
+  minH: number;
+  /** Høyden er valgt i appen. */
+  manual: boolean;
 }
 
 /** Bakgrunnsstriper i planområdet: annenhver måned litt mørkere. */
@@ -128,6 +136,8 @@ export interface Layout {
   /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
   belowMin: boolean;
   style: PlanStyle;
+  /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
+  unit: number;
 }
 
 const MARGIN = 8;
@@ -156,31 +166,40 @@ interface Piece extends Variant {
   sortW: number;
   /** Alternative plasseringer (callout til høyre/venstre, på én eller flere linjer). Den første er standard. */
   alts?: Variant[];
+  /** Fast plass i lanen (mm fra toppen), valgt i appen. */
+  lock?: number;
 }
 
 /**
  * Som pack, men hver brikke kan ha flere varianter. Velger varianten som ender lavest i lanen,
  * og ved likt den med smalest fotavtrykk, så den sperrer minst for de neste brikkene.
  */
-export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[] }[], gap = GAP): { y: number; k: number }[] {
+export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number }[], gap = GAP): { y: number; k: number }[] {
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
-  const lowest = (p: { fx0: number; fx1: number; h: number }) => {
+  const lowest = (p: { fx0: number; fx1: number; h: number }, from = 0) => {
     const overlapping = placed.filter((q) => p.fx0 < q.x1 - 1e-6 && q.x0 < p.fx1 - 1e-6);
-    const candidates = [0, ...overlapping.map((q) => q.y1 + gap)].sort((a, b) => a - b);
-    return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? 0;
+    const candidates = [from, ...overlapping.map((q) => q.y1 + gap)].filter((c) => c >= from - 1e-6).sort((a, b) => a - b);
+    return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? from;
   };
-  return pieces.map((p) => {
+  const out: { y: number; k: number }[] = new Array(pieces.length);
+  // Brikker med fast plass legges først, så de andre pakkes rundt dem
+  const order = pieces.map((_, i) => i);
+  const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => pieces[a].lock! - pieces[b].lock!);
+  const free = order.filter((i) => pieces[i].lock === undefined);
+  for (const i of [...locked, ...free]) {
+    const p = pieces[i];
     let best = { y: 0, k: 0, score: Infinity, w: Infinity };
     p.alts.forEach((v, k) => {
-      const y = lowest(v);
+      const y = lowest(v, p.lock ?? 0);
       const score = y + v.h;
       const w = v.fx1 - v.fx0;
       if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w };
     });
     const v = p.alts[best.k];
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
-    return { y: best.y, k: best.k };
-  });
+    out[i] = { y: best.y, k: best.k };
+  }
+  return out;
 }
 
 /** Plasserer brikker i en lane: hver brikke legges så høyt som mulig uten å overlappe. */
@@ -303,7 +322,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
   const contentH = lanes.map((_, i) => {
     const pieces = lanePieces[i];
-    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p] })));
+    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock })));
     pieces.forEach((p, j) => {
       const v = (p.alts ?? [p])[placed[j].k];
       Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
@@ -311,6 +330,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     });
     const inner = pieces.reduce((m, p, j) => Math.max(m, placed[j].y + p.h), 0);
     return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * lh + 2 * LANE_PAD, lh * 1.5);
+  });
+  // Lane med høyde valgt i appen: aldri lavere enn innholdet krever
+  const minH = contentH.slice();
+  lanes.forEach((l, i) => {
+    if (l.height) contentH[i] = Math.max(minH[i], l.height * lh);
   });
 
   // ---- Legend ----
@@ -365,13 +389,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
   const overflow = natural > avail + 1e-6;
-  const extra = opts.heightMode === 'fill' && !overflow && lanes.length ? (avail - natural) / lanes.length : 0;
+  // Ledig plass fordeles på lanene med automatisk høyde
+  const autoCount = lanes.filter((l) => !l.height).length;
+  const extra = opts.heightMode === 'fill' && !overflow && autoCount ? (avail - natural) / autoCount : 0;
 
   const laneLayouts: LaneLayout[] = [];
   let y = plotTop;
   const items: Item[] = [];
   lanes.forEach((lane, i) => {
-    const h = contentH[i] + extra;
+    const h = contentH[i] + (lane.height ? 0 : extra);
     const y0 = y;
     lanePieces[i].forEach((p) => {
       offsetY(p.item, y0 + LANE_PAD);
@@ -383,6 +409,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       y0,
       y1: y0 + h,
       fill: lane.fill,
+      top: y0 + LANE_PAD,
+      minH: minH[i],
+      manual: !!lane.height,
       title: {
         x: ny ? laneTitleX + PAD_X + 1 : laneTitleX + LANE_TITLE_W / 2,
         y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
@@ -451,6 +480,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     overflow,
     belowMin: false,
     style: ny ? 'ny' : 'excel',
+    unit: lh,
   };
 }
 
@@ -470,6 +500,18 @@ function setY(item: Item, y: number) {
     item.y += dy;
     item.labelBox.y += dy;
     item.label.y += dy;
+  }
+}
+
+/** Gjør boksen høyere, med teksten (og callouten) midt i. */
+function grow(it: BoxItem, target: number) {
+  const d = (target - it.h) / 2;
+  it.h = target;
+  if (it.text) it.text.y += d;
+  if (it.callout) {
+    it.callout.box.y += d;
+    it.callout.text.y += d;
+    for (let k = 1; k < it.callout.leader.length; k += 2) it.callout.leader[k] += d;
   }
 }
 
@@ -592,6 +634,25 @@ function buildPieces(
     } else {
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
     }
+  }
+
+  // Høyde og plass valgt i appen
+  const byId = new Map(lane.boxes.map((b) => [b.id, b]));
+  for (const p of pieces) {
+    const box = byId.get(p.item.id);
+    if (!box) continue;
+    if (box.top !== undefined) p.lock = box.top * lh;
+    if (p.item.kind !== 'box') continue;
+    const target = (box.height ?? 0) * lh;
+    for (const v of p.alts ?? [p]) {
+      const it = v.item as BoxItem;
+      it.minH = it.h;
+      if (target > it.h) {
+        grow(it, target);
+        v.h = Math.max(v.h, it.h, it.callout ? it.callout.box.y + it.callout.box.h : 0);
+      }
+    }
+    if (p.alts) Object.assign(p, { item: p.alts[0].item, h: p.alts[0].h });
   }
 
   // Tidligst først, lengst først ved lik start
