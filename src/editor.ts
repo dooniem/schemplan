@@ -224,6 +224,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selected: string | null = null;
   /** Valgt lane (klikk i lane-kolonnen). Bare én av boks og lane er valgt om gangen. */
   let selectedLane: string | null = null;
+  /** Flere valgte bokser (Shift-klikk eller rektangel). Når den har to eller flere, er `selected` null. */
+  let group: string[] = [];
   /** Valgt fag (klikk i legenden). */
   let selectedTrade: string | null = null;
   let past: PlanFile[] = [];
@@ -359,6 +361,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     commit((pl) => (made = copyBox(pl, id)));
     if (made) select((made as Box).id);
   };
+  const removeGroup = () => {
+    const ids = group;
+    group = [];
+    commit((pl) => ids.forEach((id) => removeBox(pl, id)));
+    overlay();
+  };
   const removeSelected = () => {
     if (!selected) return;
     const id = selected;
@@ -377,6 +385,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     typingSession = false;
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
+    group = group.filter((id) => findBox(prev, id));
     host.redraw();
     buildPanel();
     syncTools();
@@ -504,6 +513,91 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
+  const buildGroupPanel = (plan: PlanFile) => {
+    const boxes = group.map((id) => findBox(plan, id)).filter((x): x is Box => !!x);
+    const head = el('div', { class: 'panel-head' });
+    head.append(el('h2', {}, `${boxes.length} valgt`));
+    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
+    close.addEventListener('click', () => select(null));
+    head.append(close);
+    panel.append(head);
+    const plain = boxes.filter((x) => !x.resolved?.isMilestone);
+    const ms = boxes.length - plain.length;
+    panel.append(el('p', { class: 'muted small' }, ms ? `${plain.length} bokser og ${ms} milepæler. Farger og callout gjelder bare boksene.` : 'Endringene gjelder alle de valgte boksene.'));
+    const all = (fn: (x: Box) => void, onlyBoxes = true) =>
+      commit((pl) => group.forEach((id) => {
+        const x = findBox(pl, id);
+        if (x && !(onlyBoxes && x.resolved?.isMilestone)) fn(x);
+      }));
+    const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
+
+    const cw = el('div', { class: 'prop' });
+    cw.append(el('span', { class: 'prop-label' }, 'Bakgrunn'));
+    const sw = el('div', { class: 'swatches' });
+    const seen = new Set<string>();
+    const cur = same((x) => (x.fill ?? '').toUpperCase());
+    const swatch = (fill: string, name: string) => {
+      const key = fill.toUpperCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(cur === key) });
+      s.style.background = fill;
+      s.addEventListener('click', () => all((x) => (x.fill = key)));
+      sw.append(s);
+    };
+    plan.colors.filter((c) => c.fill).forEach((c) => swatch(c.fill!, c.name === '(none)' ? 'Uten fag' : c.name));
+    plan.lanes.filter((l) => l.fill).forEach((l) => swatch(l.fill!, 'Lanefarge'));
+    cw.append(sw);
+    const row = el('div', { class: 'row' });
+    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
+    custom.value = (cur || '#FFFFFF').toLowerCase();
+    custom.addEventListener('change', () => all((x) => (x.fill = custom.value.toUpperCase())));
+    const tradeBtn = el('button', { type: 'button', class: 'button small' }, 'Fagets farge');
+    tradeBtn.disabled = !plain.some((x) => x.fill);
+    tradeBtn.addEventListener('click', () => all((x) => delete x.fill));
+    row.append(custom, el('span', { class: 'small' }, 'Egen farge'), tradeBtn);
+    cw.append(row);
+    panel.append(cw);
+
+    const tcNow = same((x) => (x.textColor === '#000000' ? 'black' : x.textColor === '#FFFFFF' ? 'white' : 'auto'));
+    panel.append(segmented('Tekstfarge', tcNow ?? '', [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']], (v) =>
+      all((x) => {
+        if (v === 'auto') delete x.textColor;
+        else x.textColor = v === 'black' ? '#000000' : '#FFFFFF';
+      })));
+    panel.append(segmented('Callout', same((x) => x.callout ?? 'auto') ?? '', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
+      all((x) => {
+        if (v === 'auto') delete x.callout;
+        else x.callout = v as 'on' | 'off';
+      })));
+    panel.append(segmented('Callout-side', same((x) => x.calloutSide ?? 'auto') ?? '', [['auto', 'Auto'], ['left', 'Venstre'], ['right', 'Høyre']], (v) =>
+      all((x) => {
+        if (v === 'auto') delete x.calloutSide;
+        else x.calloutSide = v as 'left' | 'right';
+      })));
+    const pw = el('div', { class: 'prop' });
+    pw.append(el('span', { class: 'prop-label' }, 'Høyde og plass'));
+    const prow = el('div', { class: 'row' });
+    const hb = el('button', { type: 'button', class: 'button small' }, 'Standard høyde');
+    hb.disabled = !plain.some((x) => x.height);
+    hb.addEventListener('click', () => all((x) => delete x.height));
+    const lb = el('button', { type: 'button', class: 'button small' }, 'Løsne');
+    lb.disabled = !boxes.some((x) => x.top !== undefined);
+    lb.addEventListener('click', () => all((x) => delete x.top, false));
+    prow.append(hb, lb);
+    pw.append(prow);
+    panel.append(pw);
+
+    const del = el('button', { type: 'button', class: 'button', title: 'Skjuler bokser fra Project og sletter bokser laget i appen (Delete)' }, 'Skjul/slett');
+    del.addEventListener('click', () => removeGroup());
+    const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill');
+    reset.disabled = !boxes.some(isEdited);
+    reset.addEventListener('click', () => commit((pl) => group.forEach((id) => resetBoxInPlan(pl, id))));
+    const foot = el('div', { class: 'panel-foot row' });
+    foot.append(del, reset);
+    panel.append(foot);
+  };
+
   /** Endrer fargen for et helt fag. undefined fjerner fargen fra appen. */
   const setTradeColor = (trade: string, v: { fill: string; text?: string } | undefined) =>
     commit((pl) => {
@@ -572,6 +666,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.hidden = !active || !plan;
     panel.replaceChildren();
     if (!plan || !active) return;
+    if (!b && group.length > 1) return buildGroupPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
     if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
@@ -587,6 +682,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
         'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
         'Høyreklikk en lane for ny boks, ny lane, lanehøyde og skjulte bokser.',
+        'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
         'Ctrl+D kopierer valgt boks. Delete skjuler den.',
         'Ctrl+Z angrer, Ctrl+Y gjør om.',
       ])
@@ -792,7 +888,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     for (const it of layoutNow.items) {
       const b = plan ? findBox(plan, it.id) : null;
       const r = bounds(it);
-      if (it.id === selected) {
+      if (it.id === selected || group.includes(it.id)) {
         const rect = document.createElementNS(NS, 'rect');
         const pad = 0.6;
         for (const [k, v] of Object.entries({ x: r.x0 - pad, y: r.y0 - pad, width: r.x1 - r.x0 + 2 * pad, height: r.y1 - r.y0 + 2 * pad, fill: 'none', stroke: ACCENT, 'stroke-width': 0.5, rx: 0.6 }))
@@ -861,6 +957,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     startClient: number;
     moved: boolean;
     move(dy: number): void;
+    /** Dra som også følger musen sidelengs (rektangelvalg). Får punktet i mm. */
+    moveXY?(x: number, y: number): void;
+    startClientX?: number;
     end(): void;
   }
   let drag: Drag | null = null;
@@ -1053,6 +1152,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const select = (id: string | null) => {
     selected = id;
+    group = [];
     selectedLane = null;
     selectedTrade = null;
     typingSession = false;
@@ -1061,6 +1161,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   const selectTrade = (t: string) => {
+    group = [];
     selected = null;
     selectedLane = null;
     selectedTrade = t;
@@ -1069,12 +1170,79 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     overlay();
   };
   const selectLane = (id: string | null) => {
+    group = [];
     selected = null;
     selectedTrade = null;
     selectedLane = id;
     typingSession = false;
     buildPanel();
     overlay();
+  };
+
+  /** Shift-klikk: legg til eller ta bort en boks fra valget. */
+  const toggleInGroup = (id: string) => {
+    const cur = group.length ? [...group] : selected ? [selected] : [];
+    const i = cur.indexOf(id);
+    if (i >= 0) cur.splice(i, 1);
+    else cur.push(id);
+    selectedLane = null;
+    selectedTrade = null;
+    typingSession = false;
+    if (cur.length > 1) {
+      group = cur;
+      selected = null;
+    } else {
+      group = [];
+      selected = cur[0] ?? null;
+    }
+    buildPanel();
+    overlay();
+  };
+  const setGroup = (ids: string[]) => {
+    if (ids.length <= 1) return select(ids[0] ?? null);
+    group = ids;
+    selected = null;
+    selectedLane = null;
+    selectedTrade = null;
+    buildPanel();
+    overlay();
+  };
+
+  /** Shift + dra på tom plass: velg alle bokser rektangelet berører. */
+  const startMarquee = (x: number, y: number): Drag | null => {
+    if (!layoutNow) return null;
+    const L = layoutNow;
+    let g: SVGGElement | null = null;
+    let rect: SVGRectElement | null = null;
+    let x1 = x;
+    let y1 = y;
+    const box = () => ({ x0: Math.min(x, x1), x1: Math.max(x, x1), y0: Math.min(y, y1), y1: Math.max(y, y1) });
+    return {
+      startY: y,
+      startClient: 0,
+      moved: false,
+      move() {},
+      moveXY(px, py) {
+        x1 = px;
+        y1 = py;
+        if (!g) {
+          g = ghostLayer();
+          rect = shape(g, 'rect', { fill: ACCENT, 'fill-opacity': 0.08, stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke', 'stroke-dasharray': '4 3' });
+        }
+        const b = box();
+        set(rect!, { x: b.x0, y: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0 });
+      },
+      end() {
+        g?.remove();
+        const b = box();
+        const hit = L.items.filter((it) => {
+          const r = bounds(it);
+          return r.x1 >= b.x0 && r.x0 <= b.x1 && r.y1 >= b.y0 && r.y0 <= b.y1;
+        }).map((it) => it.id);
+        const base = group.length ? group : selected ? [selected] : [];
+        setGroup([...new Set([...base, ...hit])]);
+      },
+    };
   };
 
   // ---- Hendelser ----
@@ -1095,9 +1263,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const g = itemOf(e);
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
+    if (g && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(g.getAttribute('data-id')!);
     const ln = g ? null : titleLaneOf(e);
     if (ln) selectLane(ln.id);
-    else select(g ? g.getAttribute('data-id') : null);
+    else if (!(e.shiftKey && !g)) select(g ? g.getAttribute('data-id') : null);
   });
   sheet.addEventListener('dblclick', (e) => {
     const g = itemOf(e);
@@ -1128,7 +1297,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     } else {
       const g = itemOf(e);
       const it = g && layoutNow.items.find((i) => i.id === g.getAttribute('data-id'));
-      if (it) d = startMove(it);
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        // Shift-klikk velger flere; Shift + dra på tom plass velger med rektangel.
+        // Nettleseren skal ikke merke tekst i tegningen.
+        e.preventDefault();
+        if (!it && e.shiftKey && !titleLaneOf(e)) {
+          const p = toMm(e.clientX, e.clientY);
+          d = startMarquee(p.x, p.y);
+        }
+      } else if (it) d = startMove(it);
       else {
         const ln = titleLaneOf(e);
         if (ln) d = startLaneMove(ln);
@@ -1137,15 +1314,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!d) return;
     e.preventDefault();
     d.startClient = e.clientY;
-    d.startY = toMm(e.clientX, e.clientY).y;
+    d.startClientX = e.clientX;
+    if (!d.moveXY) d.startY = toMm(e.clientX, e.clientY).y;
     drag = d;
   });
   window.addEventListener('pointermove', (e) => {
     if (!drag) return;
     // Flytting starter først etter noen punkter, så et vanlig klikk bare velger
-    if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4) return;
+    if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
-    drag.move(toMm(e.clientX, e.clientY).y - drag.startY);
+    const p = toMm(e.clientX, e.clientY);
+    if (drag.moveXY) drag.moveXY(p.x, p.y);
+    else drag.move(p.y - drag.startY);
   });
   const endDrag = () => {
     if (!drag) return;
@@ -1249,6 +1429,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!active) {
       selected = null;
       selectedLane = null;
+      group = [];
     }
     buildPanel();
     overlay();
@@ -1283,9 +1464,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       else select(null);
       return;
     }
-    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane)) {
+    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane || group.length)) {
       e.preventDefault();
-      if (selected) removeSelected();
+      if (group.length) removeGroup();
+      else if (selected) removeSelected();
       else if (selectedLane) removeLaneById(selectedLane);
       return;
     }
@@ -1324,10 +1506,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       dirty = false;
       selected = null;
       selectedLane = null;
+      group = [];
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
+    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
     get active() {
       return active;
     },
@@ -1342,6 +1525,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       host.setPlan(p);
       selected = null;
       selectedLane = null;
+      group = [];
       typingSession = false;
       host.redraw();
       buildPanel();
