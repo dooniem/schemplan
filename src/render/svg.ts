@@ -1,7 +1,8 @@
 import type { Layout, TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 
-export const FONT_FAMILY = "Calibri, Carlito, 'Segoe UI', Arial, sans-serif";
+// Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
+export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
 const NS = 'http://www.w3.org/2000/svg';
 const GRID = '#C8C8C8';
 const LEADER = '#1F2D3D';

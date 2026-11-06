@@ -36,6 +36,10 @@ Fra fase 3 bygges den samme planen inn som vedlegg i PDF-arbeidsfilen.
 | `layout.textSize` | Skriftstørrelse i punkter |
 | `layout.calloutMaxWidthCm` | Største bredde på callouts |
 | `layout.excelWidthMultiplier` | Background size fra Excel. Brukes ikke av appen |
+| `layout.paper` (valgfri) | `"A3"`, `"A2"` eller `"A1"`. Lagres av appen i arbeidsfilen |
+| `layout.style` (valgfri) | `"excel"` eller `"ny"`. Lagres av appen |
+| `layout.fitToSheet` (valgfri) | `true` krymper teksten til planen får plass. Lagres av appen |
+| `layout.minTextSize` (valgfri) | Minste tekststørrelse ved tilpasning, i punkter. Lagres av appen |
 | `options.legend` | Vis tegnforklaring |
 | `options.flag20Only` | Bare aktiviteter med Flag20 = Yes |
 | `options.filterOutput` | Lane- og boksfilter fra userformen er brukt |
@@ -86,3 +90,10 @@ Fagnavn og datoer beholdes. Bare anonymiserte filer skal deles som testfiler, og
 - Bokser som går utenfor kalenderen i ukesvisning (Excel hopper over dem uten å si fra)
 - Fag uten farge
 - Bokser som viser til aktiviteter som ikke finnes i Project
+
+## Arbeidsfil (PDF)
+
+Arbeidsfilen er en vanlig vektor-PDF med planen innebygd som vedlegg, `schemplan.json` (komprimert, MIME-type `application/json`).
+Vedlegget er planfilen i dette formatet, med appens valg lagret i `plan.layout`. Appen åpner PDF-en ved å lese vedlegget.
+Ekstern og Kompakt har ikke vedlegget og kan ikke åpnes igjen som plan.
+

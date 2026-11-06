@@ -1,3 +1,8 @@
+/* Carlito har samme mål som Calibri. Den pakkes inn i appen, så teksten måles og tegnes likt
+   på alle maskiner, og likt i PDF-en (samme skrift bygges inn der). Lisens: assets/fonts/OFL.txt */
+@font-face { font-family: 'Carlito'; font-weight: 400; font-style: normal; src: url('./assets/fonts/carlito-regular.woff2') format('woff2'); }
+@font-face { font-family: 'Carlito'; font-weight: 700; font-style: normal; src: url('./assets/fonts/carlito-bold.woff2') format('woff2'); }
+
 :root {
   --bg: #f6f6f4;
   --surface: #ffffff;

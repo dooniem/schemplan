@@ -9,6 +9,7 @@ import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
+import type { PdfVariant } from './pdf/export';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -27,6 +28,11 @@ checkOutboundBlocked().then((blocked) => {
 
 // Planen finnes bare i minnet så lenge fanen er åpen
 let plan: PlanFile | null = null;
+/** Filnavnet planen kom fra, uten endelse og uten _arbeidsfil, til forslag ved lagring. */
+let baseName = 'skjematisk-plan';
+let shown: { layout: ReturnType<typeof computeLayout>; svg: SVGSVGElement } | null = null;
+// Skriften må være lastet før teksten måles, ellers blir målene fra reserveskriften
+const fontsReady = Promise.all(['400 10px Carlito', '700 10px Carlito'].map((f) => document.fonts.load(f))).catch(() => []);
 const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3' };
 const measure = canvasMeasure();
 const host = $<HTMLDivElement>('#sheet');
@@ -40,6 +46,7 @@ $('#zoom-out').addEventListener('click', () => viewer.zoomOut());
 $('#zoom-fit').addEventListener('click', () => viewer.fit());
 $('#zoom-width').addEventListener('click', () => viewer.fitWidth());
 const status = el('p', '', 'muted small');
+const saveStatus = el('p', '', 'muted small');
 const suggest = el('div', '', 'suggest small');
 let suggestTimer = 0;
 const pt = (v: number) => v.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
@@ -57,7 +64,9 @@ function draw() {
   }
   const t0 = performance.now();
   const layout = computeLayout(plan, opts, measure);
-  viewer.show(renderPlan(layout), layout.width, layout.height);
+  const svg = renderPlan(layout);
+  shown = { layout, svg };
+  viewer.show(svg, layout.width, layout.height);
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
@@ -116,7 +125,21 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   if (!file) return;
   info.replaceChildren();
 
-  const result = validatePlan(await file.text());
+  // En arbeidsfil (PDF) har planen som vedlegg
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+  let text: string;
+  if (isPdf) {
+    const { readPlanFromPdf } = await import('./pdf/read');
+    const r = await readPlanFromPdf(bytes);
+    if ('error' in r) {
+      info.append(el('p', `Kunne ikke åpne ${file.name}. ${r.error}`, 'error'));
+      return;
+    }
+    text = r.json;
+  } else text = new TextDecoder().decode(bytes);
+  const result = validatePlan(text);
+  await fontsReady;
   if (!result.plan) {
     info.append(el('p', `Kunne ikke lese ${file.name}.`, 'error'));
     const ul = el('ul', undefined, 'messages');
@@ -130,6 +153,13 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   opts.orientation = plan.plan.layout.orientation;
   opts.heightMode = plan.plan.layout.heightMode;
   opts.textSizePt = plan.plan.layout.textSize;
+  // Valg som er lagret i en arbeidsfil
+  const lay = plan.plan.layout;
+  if (lay.paper) opts.paper = lay.paper;
+  if (lay.style) opts.style = lay.style;
+  if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
+  if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;
+  baseName = file.name.replace(/\.(pdf|json)$/i, '').replace(/_(arbeidsfil|kompakt)$/i, '') || 'skjematisk-plan';
   syncControls();
 
   const s = summarize(plan);
@@ -144,8 +174,9 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
     d.append(ul);
     info.append(d);
   }
-  info.append(status, suggest);
+  info.append(status, suggest, saveStatus);
   $<HTMLButtonElement>('#print').disabled = false;
+  $<HTMLButtonElement>('#save').disabled = false;
   draw();
 });
 
@@ -208,6 +239,58 @@ $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
 $<HTMLButtonElement>('#print').addEventListener('click', () => {
   setPrintPage(opts.paper ?? 'A3', opts.orientation);
   window.print();
+});
+// Lagre PDF: arbeidsfil med planen innebygd, eller ekstern/kompakt uten
+const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', ekstern: '', kompakt: '_kompakt' };
+$<HTMLButtonElement>('#save').addEventListener('click', async () => {
+  if (!plan || !shown) return;
+  const btn = $<HTMLButtonElement>('#save');
+  const variant = $<HTMLSelectElement>('#variant').value as PdfVariant;
+  const name = `${baseName}${SUFFIX[variant]}.pdf`;
+  // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
+  const saved: PlanFile = structuredClone(plan);
+  Object.assign(saved.plan.layout, {
+    orientation: opts.orientation,
+    heightMode: opts.heightMode,
+    textSize: opts.textSizePt,
+    paper: opts.paper ?? 'A3',
+    style: opts.style ?? 'excel',
+    fitToSheet: opts.fitToSheet,
+    minTextSize: opts.minTextPt ?? DEFAULT_MIN_TEXT_PT,
+  });
+  btn.disabled = true;
+  saveStatus.textContent = 'Lager PDF …';
+  saveStatus.className = 'muted small';
+  try {
+    // Velg fil først, mens klikket fortsatt gjelder (nettleseren krever det for Lagre som-dialogen)
+    const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+    const handle = picker ? await picker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }) : null;
+    const { exportPdf } = await import('./pdf/export');
+    const pdf = await exportPdf(shown.layout, shown.svg, saved, variant, __APP_VERSION__);
+    const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
+    if (handle) {
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+    const kb = Math.max(1, Math.round(pdf.length / 1024));
+    saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å fortsette.' : ''}`;
+    saveStatus.className = 'ok small';
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') saveStatus.textContent = '';
+    else {
+      saveStatus.textContent = `PDF-en ble ikke lagret: ${(e as Error).message}`;
+      saveStatus.className = 'error small';
+    }
+  } finally {
+    btn.disabled = false;
+  }
 });
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
