@@ -204,7 +204,8 @@ function keepOriginal(b: Box) {
   if (!b.original) b.original = { text: b.text, rotation: b.rotation };
 }
 
-function bounds(it: Item) {
+/** Ytterkantene til en boks eller milepæl, med callout og tekst. */
+export function bounds(it: Item) {
   if (it.kind === 'box') {
     const cb = it.callout?.box;
     return {
@@ -972,10 +973,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   // ---- Markeringer i tegningen (kommer ikke med i PDF eller utskrift) ----
   const overlay = () => {
     if (!svgNow || !layoutNow) return;
-    svgNow.querySelector('g.edit-overlay:not(.edit-ghost)')?.remove();
+    svgNow.querySelector('g.edit-overlay.edit-marks')?.remove();
     if (!active) return;
     const g = document.createElementNS(NS, 'g');
-    g.setAttribute('class', 'edit-overlay');
+    g.setAttribute('class', 'edit-overlay edit-marks');
     g.setAttribute('pointer-events', 'none');
     const plan = host.getPlan();
     for (const it of layoutNow.items) {

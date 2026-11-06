@@ -11,6 +11,7 @@ import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
 import { createSearch } from './search';
 import { createEditor } from './editor';
+import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
@@ -63,6 +64,7 @@ const editor = createEditor(
   $<HTMLElement>('#edit-tools'),
 );
 viewer.setIgnore((e) => editor.owns(e));
+const focus = createFocus(host, () => plan, $<HTMLElement>('#focus-bar'), () => editor.active);
 const search = createSearch($<HTMLInputElement>('#search'), $('#search-count'), () => plan);
 // Datafanen følger planen: tabellen tegnes på nytt etter hver tegning mens den vises
 const dataSection = $<HTMLElement>('#data-view');
@@ -151,6 +153,7 @@ function draw() {
   viewer.show(svg, layout.width, layout.height);
   editor.afterDraw(svg, layout);
   search.afterDraw(svg);
+  focus.afterDraw(svg, layout);
   if (!dataSection.hidden) dataView.refresh();
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
@@ -298,6 +301,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   if (!r) return;
   editor.reset();
   search.reset();
+  focus.reset();
   showPlan(r.plan, file.name, r.warnings);
 });
 
@@ -537,6 +541,7 @@ async function openFromAddress() {
     if (!r) return;
     editor.reset();
     search.reset();
+    focus.reset();
     showPlan(r.plan, name, r.warnings);
     if (params.get('modus') === 'oppdater') askForWorkFile();
   } catch {
