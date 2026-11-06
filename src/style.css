@@ -160,7 +160,8 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .ctx-item.danger, .ctx-item.danger .ctx-mark { color: var(--error); }
 .ctx-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .ctx-kbd { font-size: 12px; color: var(--muted); }
-.ctx-hint { display: block; min-height: calc(2 * 1.4em + 12px); padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4; color: var(--muted); }
+/* Forklaringen bestemmer ikke bredden: menyen er like bred som valgene, og en lang forklaring gjør den bare høyere */
+.ctx-hint { contain: inline-size; display: block; min-height: calc(2 * 1.4em + 12px); padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4; color: var(--muted); }
 /* Hjelp: arbeidsgangen som steg til venstre, tips til høyre */
 .help-btn { gap: 6px; border-color: var(--border); }
 dialog.help { width: min(860px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 12px 40px rgb(0 0 0 / 0.22); font-size: 14px; line-height: 1.5; }
