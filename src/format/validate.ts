@@ -49,6 +49,9 @@ export function validatePlan(input: string | unknown): ValidationResult {
   const needBool = (o: Obj, k: string, path: string) => {
     if (typeof o[k] !== 'boolean') err(`${path}.${k}`, 'må være true eller false');
   };
+  const optPos = (o: Obj, k: string, path: string) => {
+    if (o[k] !== undefined && !(typeof o[k] === 'number' && Number.isFinite(o[k]) && (o[k] as number) > 0)) err(`${path}.${k}`, 'må være et tall større enn 0');
+  };
   const needNum = (o: Obj, k: string, path: string) => {
     if (typeof o[k] !== 'number' || !Number.isFinite(o[k])) err(`${path}.${k}`, 'må være et tall');
   };
@@ -165,6 +168,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needStr(l, 'name', p);
       needColor(l, 'fill', p);
       needBool(l, 'shown', p);
+      optPos(l, 'height', p);
       if (typeof l.id === 'string') {
         if (laneIds.has(l.id)) err(`${p}.id`, `lane ${l.id} finnes flere ganger`);
         laneIds.add(l.id);
@@ -179,6 +183,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         needEnum(b, 'rotation', bp, [0, 90, -90]);
         if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
+        optPos(b, 'height', bp);
+        if (b.top !== undefined && !(typeof b.top === 'number' && Number.isFinite(b.top) && b.top >= 0)) err(`${bp}.top`, 'må være et tall, 0 eller større');
         for (const k of ['fill', 'textColor'] as const)
           if (b[k] !== undefined && !(typeof b[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b[k] as string))) err(`${bp}.${k}`, 'må være en farge som #RRGGBB');
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');

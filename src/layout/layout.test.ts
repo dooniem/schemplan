@@ -265,3 +265,60 @@ describe('farger valgt i appen', () => {
     expect(it.kind === 'box' && it.text?.color).toBe('#000000');
   });
 });
+
+describe('høyde og plass valgt i appen', () => {
+  const opts = (heightMode: 'fill' | 'compact' = 'compact') => ({ orientation: 'landscape' as const, heightMode, textSizePt: 9, fitToSheet: false });
+  const box = (L: ReturnType<typeof computeLayout>, id: string) => L.items.find((i) => i.id === id) as Extract<Item, { kind: 'box' }>;
+
+  it('høyere boks får teksten midt i, og blir aldri lavere enn teksten krever', () => {
+    const p = example();
+    const before = box(computeLayout(p, opts(), approxMeasure), '2_1');
+    p.lanes[1].boxes[0].height = 4;
+    const L = computeLayout(p, opts(), approxMeasure);
+    const after = box(L, '2_1');
+    expect(after.h).toBeCloseTo(4 * L.unit);
+    expect(after.minH).toBeCloseTo(before.h);
+    expect(after.text!.y - after.y).toBeCloseTo(before.text!.y - before.y + (after.h - before.h) / 2);
+    p.lanes[1].boxes[0].height = 0.1;
+    expect(box(computeLayout(p, opts(), approxMeasure), '2_1').h).toBeCloseTo(before.h);
+  });
+
+  it('boks med fast plass står der, og de andre pakkes rundt', () => {
+    const p = example();
+    // 2_1 går over hele året og ligger øverst; flytt den ned under 2_2
+    p.lanes[1].boxes[0].top = 3;
+    const L = computeLayout(p, opts(), approxMeasure);
+    const lane = L.lanes.find((l) => l.id === '2')!;
+    const b1 = box(L, '2_1');
+    const b2 = box(L, '2_2');
+    expect(b1.y - lane.top).toBeCloseTo(3 * L.unit);
+    expect(b2.y).toBeCloseTo(lane.top);
+    for (const a of L.items) for (const b of L.items) {
+      if (a === b) continue;
+      const fa = footprint(a), fb = footprint(b);
+      const overlap = fa.x0 < fb.x1 - 1e-6 && fb.x0 < fa.x1 - 1e-6 && fa.y0 < fb.y1 - 1e-6 && fb.y0 < fa.y1 - 1e-6;
+      expect(overlap, `${a.id} og ${b.id}`).toBe(false);
+    }
+  });
+
+  it('lane med valgt høyde: brukes når den er høy nok, ellers innholdets minimum', () => {
+    const p = example();
+    const auto = computeLayout(p, opts(), approxMeasure).lanes[0];
+    p.lanes[0].height = 20;
+    let L = computeLayout(p, opts(), approxMeasure);
+    expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(20 * L.unit);
+    expect(L.lanes[0].manual).toBe(true);
+    expect(L.lanes[0].minH).toBeCloseTo(auto.y1 - auto.y0);
+    p.lanes[0].height = 0.5;
+    L = computeLayout(p, opts(), approxMeasure);
+    expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(auto.y1 - auto.y0);
+  });
+
+  it('Fyll arket: ledig plass går bare til lanene med automatisk høyde', () => {
+    const p = example();
+    p.lanes[0].height = 6;
+    const L = computeLayout(p, opts('fill'), approxMeasure);
+    expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(Math.max(6 * L.unit, L.lanes[0].minH));
+    expect(L.lanes[1].y1 - L.lanes[1].y0).toBeGreaterThan(L.lanes[1].minH + 5);
+  });
+});

@@ -63,6 +63,21 @@ describe('validatePlan', () => {
   });
 });
 
+describe('høyde og plass valgt i appen', () => {
+  it('godtar gyldige verdier og avviser ugyldige', () => {
+    const ok = clone();
+    ok.lanes[0].height = 12.5;
+    ok.lanes[0].boxes[0].height = 3;
+    ok.lanes[0].boxes[0].top = 0;
+    expect(validatePlan(ok).errors).toEqual([]);
+    const bad = clone() as unknown as { lanes: { height: unknown; boxes: { height: unknown; top: unknown }[] }[] };
+    bad.lanes[0].height = 0;
+    bad.lanes[0].boxes[0].height = 'høy';
+    bad.lanes[0].boxes[0].top = -1;
+    expect(validatePlan(bad as never).errors).toHaveLength(3);
+  });
+});
+
 describe('parseBoxText', () => {
   it('tolker linjeskift, escape og tvunget callout', () => {
     expect(parseBoxText('A|B')).toEqual({ lines: ['A', 'B'], forcedCallout: false });
