@@ -254,6 +254,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
+    const label = toggle.querySelector('#edit-label');
+    if (label) label.textContent = active ? 'Ferdig' : 'Rediger';
+    toggle.title = active ? 'Avslutt redigering' : 'Velg bokser og endre tekst, farge, callout og rotasjon';
     tools.hidden = !active;
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
