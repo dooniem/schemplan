@@ -284,3 +284,9 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .focus-bar .icon { font: inherit; font-size: 18px; line-height: 1; width: 24px; height: 24px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .focus-bar .icon:hover { border-color: var(--border); color: var(--text); }
 .sheet-host g.calendar { cursor: pointer; }
+/* Fag i fokus: de andre tones ned eller skjules. Bare på skjermen. */
+.sheet-host g.focus-out { opacity: 0.15; }
+.sheet-host.focus-only g.items > g.focus-out { display: none; }
+.sheet-host g[data-trade] { cursor: pointer; }
+.sheet-host g[data-trade].focus-on rect { stroke: #1F5FBF; stroke-width: 0.6; }
+@media print { .sheet-host g.focus-out { opacity: 1 !important; display: inline !important; } }
