@@ -94,6 +94,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
 function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
+  document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'excel'))));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
   $<HTMLInputElement>('#fit').checked = opts.fitToSheet;
 }
@@ -108,6 +109,13 @@ document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn)
 document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((btn) =>
   btn.addEventListener('click', () => {
     opts.heightMode = btn.dataset.height as LayoutOptions['heightMode'];
+    syncControls();
+    draw();
+  }),
+);
+document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    opts.style = btn.dataset.style as LayoutOptions['style'];
     syncControls();
     draw();
   }),

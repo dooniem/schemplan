@@ -62,6 +62,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
   node('rect', { width: 0.55, height: 1.4, fill: '#D9D9D9' }, pat);
 
   const { x0, x1, y0, y1 } = L.plot;
+  const ny = L.style === 'ny';
+  const labelBg = 0.75;
   const left = L.laneTitleX;
 
   // Annenhver måned skyggelagt
@@ -93,7 +95,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const cal = node('g', { class: 'calendar' }, svg);
   [...L.calendarTop, ...L.calendarBottom].forEach((row) => {
     row.cells.forEach((c) => {
-      node('rect', { x: c.x0, y: row.y, width: c.x1 - c.x0, height: row.h, fill: c.fill, stroke: '#000000', 'stroke-width': 0.2 }, cal);
+      node('rect', { x: c.x0, y: row.y, width: c.x1 - c.x0, height: row.h, fill: c.fill, stroke: ny ? '#BFBFBF' : '#000000', 'stroke-width': ny ? 0.15 : 0.2 }, cal);
       if (!c.label) return;
       const bold = row.cells.length < 60 && c.strong;
       if (row.rotate) text({ x: (c.x0 + c.x1) / 2, y: row.y + row.h / 2, lines: [c.label], size: row.size, color: '#000000', anchor: 'middle', bold, rotate: 90 }, cal);
@@ -105,7 +107,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     if (!rows.length) continue;
     const top = rows[0].y;
     const bot = rows[rows.length - 1].y + rows[rows.length - 1].h;
-    node('rect', { x: x0, y: top, width: x1 - x0, height: bot - top, fill: 'none', stroke: '#000000', 'stroke-width': 0.5 }, cal);
+    node('rect', { x: x0, y: top, width: x1 - x0, height: bot - top, fill: 'none', stroke: '#000000', 'stroke-width': ny ? 0.35 : 0.5 }, cal);
     L.grid.forEach((g) => g.strong && node('line', { x1: g.x, x2: g.x, y1: top, y2: bot, stroke: '#000000', 'stroke-width': 0.45 }, cal));
   }
 
@@ -122,7 +124,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     if (it.kind === 'box') {
       if (it.callout) {
         const cb = it.callout.box;
-        node('rect', { x: cb.x, y: cb.y, width: cb.w, height: cb.h, fill: '#FFFFFF', 'fill-opacity': 0.75 }, g);
+        node('rect', { x: cb.x, y: cb.y, width: cb.w, height: cb.h, fill: '#FFFFFF', 'fill-opacity': ny ? 0.6 : 0.75 }, g);
         text(it.callout.text, g);
       }
       node('rect', {
@@ -149,7 +151,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     } else {
       const s = it.size / 2;
       const lb = it.labelBox;
-      node('rect', { x: lb.x, y: lb.y, width: lb.w, height: lb.h, fill: '#FFFFFF', 'fill-opacity': 0.75 }, g);
+      node('rect', { x: lb.x, y: lb.y, width: lb.w, height: lb.h, fill: '#FFFFFF', 'fill-opacity': labelBg }, g);
       const left = lb.x >= it.x;
       if (it.symbol === 'diamond') {
         // Ruter, strek bort til en loddrett strek foran teksten
@@ -181,8 +183,20 @@ export function renderPlan(L: Layout): SVGSVGElement {
   // Legend
   const leg = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {
-    node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: e.fill, stroke: e.border ?? '#7F7F7F', 'stroke-width': 0.2 }, leg);
-    text({ x: e.x + e.w / 2, y: e.label.y, lines: ['X'], size: e.label.size, color: e.textColor, anchor: 'middle' }, leg);
+    const cx = e.x + e.w / 2;
+    const cy = e.y + e.h / 2;
+    const s = e.h / 2;
+    if (e.symbol === 'diamond') {
+      node('path', { d: `M${r(cx)} ${r(cy - s)} L${r(cx + s)} ${r(cy)} L${r(cx)} ${r(cy + s)} L${r(cx - s)} ${r(cy)} Z`, fill: '#FF0000', stroke: '#000000', 'stroke-width': 0.3 }, leg);
+    } else if (e.symbol === 'flag') {
+      node('line', { x1: cx + s * 0.6, x2: cx + s * 0.6, y1: cy - s, y2: cy + s, stroke: '#404040', 'stroke-width': 0.3 }, leg);
+      node('path', { d: `M${r(cx + s * 0.6)} ${r(cy - s)} L${r(cx - s * 1.2)} ${r(cy - s * 0.45)} L${r(cx + s * 0.6)} ${r(cy + s * 0.1)} Z`, fill: '#008000' }, leg);
+    } else if (e.symbol === 'holiday') {
+      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
+    } else {
+      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: e.fill, stroke: e.border ?? '#7F7F7F', 'stroke-width': ny ? 0.25 : 0.2 }, leg);
+      if (!ny) text({ x: cx, y: e.label.y, lines: ['X'], size: e.label.size, color: e.textColor, anchor: 'middle' }, leg);
+    }
     text(e.label, leg);
   });
 
