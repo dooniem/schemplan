@@ -1,7 +1,7 @@
 import { sheetSize, type Orientation, type Paper } from './sheet';
 
 /**
- * Setter arkstørrelsen for utskrift (A3, A2 eller A1) i riktig retning.
+ * Setter arkstørrelsen for utskrift (A4, A3, A2 eller A1) i riktig retning.
  * Nettleserne ser bare på den vanlige @page-regelen når de velger papir i utskriftsdialogen,
  * så regelen skrives inn i stilarket rett før utskrift (CSSOM, tillatt av sikkerhetssperren).
  */

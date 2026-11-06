@@ -7,10 +7,11 @@ export interface SheetSize {
   height: number; // mm
 }
 
-export type Paper = 'A3' | 'A2' | 'A1';
+/** A3 er standard. A4 er for planer som skal limes inn i et dokument. */
+export type Paper = 'A4' | 'A3' | 'A2' | 'A1';
 
 /** Kort og lang side i mm (ISO 216). */
-const PAPER_MM: Record<Paper, [number, number]> = { A3: [297, 420], A2: [420, 594], A1: [594, 841] };
+const PAPER_MM: Record<Paper, [number, number]> = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841] };
 
 export function sheetSize(paper: Paper, orientation: Orientation): SheetSize {
   const [short, long] = PAPER_MM[paper];

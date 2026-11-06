@@ -40,7 +40,7 @@ export interface PlanSettings {
     /** Background size fra Excel-løpet. Brukes ikke av web-appen, tas med for sammenligning. */
     excelWidthMultiplier: number;
     /** Valgene fra appen, lagret i arbeidsfilen så planen åpnes likt igjen. */
-    paper?: 'A3' | 'A2' | 'A1';
+    paper?: 'A4' | 'A3' | 'A2' | 'A1';
     style?: 'excel' | 'ny';
     fitToSheet?: boolean;
     /** Minste tekststørrelse ved tilpasning til arket, i punkter. */
