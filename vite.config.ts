@@ -39,5 +39,7 @@ export default defineConfig({
   build: {
     // Ingen eksterne kilder: alt pakkes inn i appen
     assetsInlineLimit: 0,
+    // PDF-delen (pdf-lib, skrift) er stor, men lastes først når brukeren lagrer eller åpner en PDF
+    chunkSizeWarningLimit: 1000,
   },
 });
