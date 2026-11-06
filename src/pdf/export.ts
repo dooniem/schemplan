@@ -27,6 +27,12 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
   };
   const page = doc.addPage([L.width * MM_TO_PT, L.height * MM_TO_PT]);
   drawSvg(doc, page, svg, fonts, L.height);
+  if (L.logo) {
+    const bytes = Uint8Array.from(atob(L.logo.href.split(',')[1]), (ch) => ch.charCodeAt(0));
+    const img = L.logo.href.startsWith('data:image/png') ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const { x, y, w, h } = L.logo;
+    page.drawImage(img, { x: x * MM_TO_PT, y: (L.height - y - h) * MM_TO_PT, width: w * MM_TO_PT, height: h * MM_TO_PT });
+  }
 
   doc.setTitle(plan.plan.title, { showInWindowTitleBar: true });
   if (variant === 'arbeidsfil') {

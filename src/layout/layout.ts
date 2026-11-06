@@ -20,7 +20,11 @@ export interface LayoutOptions {
   paper?: Paper;
   /** 'excel' etterligner den gamle utskriften, 'ny' er lesbarhetsforslaget. */
   style?: PlanStyle;
+  /** Overskriftens størrelse i punkter. Følger ikke krympingen av resten av teksten. Standard 16. */
+  titleSizePt?: number;
 }
+
+export const DEFAULT_TITLE_PT = 16;
 
 export type PlanStyle = 'excel' | 'ny';
 
@@ -136,6 +140,8 @@ export interface Layout {
   /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
   belowMin: boolean;
   style: PlanStyle;
+  /** Logo øverst til venstre, i mm. */
+  logo: { x: number; y: number; w: number; h: number; href: string } | null;
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
   unit: number;
 }
@@ -285,9 +291,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const noneColor = colors.get('(none)') ?? { name: '(none)', fill: '#FFFAC8', border: '#000000', text: '#000000' };
 
   // ---- Overskrift ----
-  const titleSize = base * 1.5;
-  const title: TextBlock = { x: W / 2, y: MARGIN + titleSize * 0.85, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
-  const headerH = titleSize * 1.4;
+  // Overskriften har fast størrelse, som i Excel uten «Skaler med dokument»
+  const titleSize = (opts.titleSizePt ?? DEFAULT_TITLE_PT) * PT_TO_MM;
+  const lg = file.plan.layout.logo;
+  const logoH = lg ? Math.max(titleSize * 1.2, 6) : 0;
+  const headerH = Math.max(titleSize * 1.4, logoH + 1.5);
+  const title: TextBlock = { x: W / 2, y: MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
+  const logo = lg ? { x: MARGIN, y: MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown);
@@ -480,6 +490,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     overflow,
     belowMin: false,
     style: ny ? 'ny' : 'excel',
+    logo,
     unit: lh,
   };
 }
@@ -718,7 +729,9 @@ const monthIndex = (label: string) => Math.max(0, MONTHS_NB.indexOf(label));
 function monthBands(axis: TimeAxis, ny = false): Band[] {
   const bands: Band[] = [];
   for (const c of axis.columns) {
-    const fill = ny ? (monthIndex(c.monthLabel) % 2 === 0 ? '#F3F3F3' : '#FFFFFF') : monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
+    // Ny stil i ukesvisning: annenhver uke, etter ukenummeret
+    const shadeOn = ny && axis.mode === 'week' ? Number(c.label) % 2 === 1 : monthIndex(c.monthLabel) % 2 === 0;
+    const fill = ny ? (shadeOn ? '#F3F3F3' : '#FFFFFF') : monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
     const last = bands[bands.length - 1];
     if (last && last.fill === fill && Math.abs(last.x1 - c.x0) < 1e-6) last.x1 = c.x1;
     else bands.push({ x0: c.x0, x1: c.x1, fill });
@@ -796,7 +809,7 @@ function calendarRows(
           },
           {
             // Ny stil: annenhver uke. Excel-lik: ukene får månedens farge.
-            cells: fitLabel(axis.columns.map((c, i) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: ny ? (i % 2 === 0 ? '#F0F0F0' : '#FFFFFF') : shade(c.monthLabel) }))),
+            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: ny ? (Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF') : shade(c.monthLabel) }))),
             h: rowH,
             rotate: false,
             size,

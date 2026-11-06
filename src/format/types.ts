@@ -45,6 +45,10 @@ export interface PlanSettings {
     fitToSheet?: boolean;
     /** Minste tekststørrelse ved tilpasning til arket, i punkter. */
     minTextSize?: number;
+    /** Overskriftens størrelse i punkter. Krympes ikke når planen tilpasses arket. */
+    titleSize?: number;
+    /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
+    logo?: { data: string; aspect: number };
   };
   options: {
     legend: boolean;

@@ -322,3 +322,27 @@ describe('høyde og plass valgt i appen', () => {
     expect(L.lanes[1].y1 - L.lanes[1].y0).toBeGreaterThan(L.lanes[1].minH + 5);
   });
 });
+
+describe('overskrift, logo og ukeskravering', () => {
+  const o = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 9, fitToSheet: true };
+  it('overskriften krympes ikke når teksten tilpasses arket', () => {
+    const L = computeLayout(testform('mange-av-begge'), o, approxMeasure);
+    expect(L.textScale).toBeLessThan(1);
+    expect(L.title.size).toBeCloseTo(16 * 0.3528, 2);
+  });
+  it('logo øverst til venstre med riktig forhold', () => {
+    const p = example();
+    p.plan.layout.logo = { data: 'data:image/png;base64,AAAA', aspect: 4 };
+    const L = computeLayout(p, o, approxMeasure);
+    expect(L.logo).not.toBeNull();
+    expect(L.logo!.w / L.logo!.h).toBeCloseTo(4);
+    expect(L.logo!.y + L.logo!.h).toBeLessThan(L.plot.y0);
+  });
+  it('ny stil i ukesvisning: skraveringen følger annenhver uke', () => {
+    const p = example();
+    p.plan.calendar.mode = 'week';
+    const L = computeLayout(p, { ...o, style: 'ny' }, approxMeasure);
+    const weekW = (L.plot.x1 - L.plot.x0) / L.calendarTop[2].cells.length;
+    for (const b of L.bands) expect(b.x1 - b.x0).toBeLessThan(weekW * 1.5);
+  });
+});
