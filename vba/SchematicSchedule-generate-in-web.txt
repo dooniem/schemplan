@@ -1,0 +1,35 @@
+'=====================================================================================
+' Generate in Web: endringer i userformen SchematicSchedule
+'=====================================================================================
+
+' 1) Legg til en CommandButton i designeren ved siden av Generate:
+'      (Name) = cmdGenerateWeb      Caption = Generate in Web
+
+' 2) Legg til denne linjen ØVERST i kodevinduet til SchematicSchedule (sammen med de andre Private-linjene):
+
+Private webExportMode As Boolean 'True mens Generate in Web kjører cmdGenerate_Click
+
+' 3) Legg til denne prosedyren hvor som helst i SchematicSchedule:
+
+Private Sub cmdGenerateWeb_Click()
+    'Samme validering og innstillinger som Generate, men eksporterer til web-appen i stedet for Excel
+    webExportMode = True
+    On Error GoTo cleanUp
+    cmdGenerate_Click
+cleanUp:
+    webExportMode = False
+    cmdGenerate.Enabled = True
+    If Err.Number <> 0 Then MsgBox "Generate in Web stoppet: " & Err.Description, vbExclamation, "Generate in Web"
+End Sub
+
+' 4) I cmdGenerate_Click: bytt ut denne linjen
+
+SchemDataModule.CreateSchematic Array(startD, endD), CLng(config(6)), saveMultiplier, formTextSize
+
+'    med
+
+If webExportMode Then
+    SchemDataModule.ExportSchematicJson Array(startD, endD), CLng(config(6)), saveMultiplier, formTextSize
+Else
+    SchemDataModule.CreateSchematic Array(startD, endD), CLng(config(6)), saveMultiplier, formTextSize
+End If
