@@ -3,7 +3,7 @@ import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { addDays, formatShort, MONTHS_NB, parseIso } from './dates';
+import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 
@@ -57,6 +57,8 @@ export interface BoxItem {
   arrowRight: boolean;
   /** Høyden teksten krever, før en høyde valgt i appen. */
   minH?: number;
+  /** Overskriftsboks: tegnes bak de andre, og andre bokser kan ligge inne i den. */
+  header?: boolean;
 }
 
 export interface MilestoneItem {
@@ -140,6 +142,8 @@ export interface Layout {
   /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
   belowMin: boolean;
   style: PlanStyle;
+  /** Datoen (ÅÅÅÅ-MM-DD) som starter ved x, til nye bokser. */
+  dateAt(x: number): string;
   /** Logo øverst til venstre, i mm. */
   logo: { x: number; y: number; w: number; h: number; href: string } | null;
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
@@ -174,35 +178,41 @@ interface Piece extends Variant {
   alts?: Variant[];
   /** Fast plass i lanen (mm fra toppen), valgt i appen. */
   lock?: number;
+  /** Overskriftsboks: bare tekstfeltet øverst (mm) stenger for bokser med fast plass. */
+  band?: number;
 }
 
 /**
  * Som pack, men hver brikke kan ha flere varianter. Velger varianten som ender lavest i lanen,
  * og ved likt den med smalest fotavtrykk, så den sperrer minst for de neste brikkene.
  */
-export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number }[], gap = GAP): { y: number; k: number }[] {
+export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[], gap = GAP): { y: number; k: number }[] {
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
-  const lowest = (p: { fx0: number; fx1: number; h: number }, from = 0) => {
-    const overlapping = placed.filter((q) => p.fx0 < q.x1 - 1e-6 && q.x0 < p.fx1 - 1e-6);
+  // Overskriftsbokser: for bokser med fast plass er det bare tekstfeltet øverst som er opptatt
+  const inner: { x0: number; x1: number; y0: number; y1: number }[] = [];
+  const lowest = (p: { fx0: number; fx1: number; h: number }, from = 0, locked = false) => {
+    const overlapping = (locked ? inner : placed).filter((q) => p.fx0 < q.x1 - 1e-6 && q.x0 < p.fx1 - 1e-6);
     const candidates = [from, ...overlapping.map((q) => q.y1 + gap)].filter((c) => c >= from - 1e-6).sort((a, b) => a - b);
     return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? from;
   };
   const out: { y: number; k: number }[] = new Array(pieces.length);
   // Brikker med fast plass legges først, så de andre pakkes rundt dem
   const order = pieces.map((_, i) => i);
-  const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => pieces[a].lock! - pieces[b].lock!);
+  // Overskriftsbokser først ved lik plass, så boksene inne i dem legges oppå
+  const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => pieces[a].lock! - pieces[b].lock! || (pieces[b].band !== undefined ? 1 : 0) - (pieces[a].band !== undefined ? 1 : 0));
   const free = order.filter((i) => pieces[i].lock === undefined);
   for (const i of [...locked, ...free]) {
     const p = pieces[i];
     let best = { y: 0, k: 0, score: Infinity, w: Infinity };
     p.alts.forEach((v, k) => {
-      const y = lowest(v, p.lock ?? 0);
+      const y = lowest(v, p.lock ?? 0, p.lock !== undefined);
       const score = y + v.h;
       const w = v.fx1 - v.fx0;
       if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w };
     });
     const v = p.alts[best.k];
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
+    inner.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + (p.band ?? v.h) });
     out[i] = { y: best.y, k: best.k };
   }
   return out;
@@ -332,7 +342,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
   const contentH = lanes.map((_, i) => {
     const pieces = lanePieces[i];
-    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock })));
+    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
     pieces.forEach((p, j) => {
       const v = (p.alts ?? [p])[placed[j].k];
       Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
@@ -434,6 +444,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     });
     y += h;
   });
+  // Overskriftsbokser tegnes først, så boksene inne i dem ligger oppå
+  const isHeader = (i: Item) => (i.kind === 'box' && i.header ? 0 : 1);
+  items.sort((a, b) => isHeader(a) - isHeader(b));
   const plotBottom = y;
 
   // ---- Kalenderrader ----
@@ -492,6 +505,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     style: ny ? 'ny' : 'excel',
     logo,
     unit: lh,
+    dateAt(x: number) {
+      let best = axis.start;
+      for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
+        if (axis.xStart(t) <= x + 1e-9) best = t;
+        else break;
+      }
+      return toIso(best);
+    },
   };
 }
 
@@ -516,7 +537,7 @@ function setY(item: Item, y: number) {
 
 /** Gjør boksen høyere, med teksten (og callouten) midt i. */
 function grow(it: BoxItem, target: number) {
-  const d = (target - it.h) / 2;
+  const d = it.header ? 0 : (target - it.h) / 2;
   it.h = target;
   if (it.text) it.text.y += d;
   if (it.callout) {
@@ -543,7 +564,7 @@ function buildPieces(
   const calloutMax = Math.max(15, file.plan.layout.calloutMaxWidthCm * 6);
 
   for (const box of lane.boxes) {
-    if (!box.shown || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
+    if (!box.shown || box.hidden || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
     const r = box.resolved;
     const { lines: rawLines, forcedCallout } = parseBoxText(box.text);
     const s = parseIso(r.start);
@@ -580,8 +601,9 @@ function buildPieces(
 
     // Brukerens valg går foran forslaget. "*" først i teksten (fra Excel) betyr callout.
     const choice = box.callout ?? 'auto';
-    let useCallout = choice === 'on' || (choice === 'auto' && forcedCallout);
-    const neverCallout = choice === 'off';
+    // Overskriftsboks: teksten står alltid øverst i boksen, aldri i callout
+    let useCallout = !box.header && (choice === 'on' || (choice === 'auto' && forcedCallout));
+    const neverCallout = choice === 'off' || !!box.header;
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst: én linje per tekstlinje, boksen blir høy nok til teksten
@@ -654,6 +676,11 @@ function buildPieces(
     if (!box) continue;
     if (box.top !== undefined) p.lock = box.top * lh;
     if (p.item.kind !== 'box') continue;
+    if (box.header) {
+      (p.item as BoxItem).header = true;
+      // Uten tekst stenger bare kanten øverst
+      p.band = box.text.trim() ? p.item.h : PAD_Y * 2;
+    }
     const target = (box.height ?? 0) * lh;
     for (const v of p.alts ?? [p]) {
       const it = v.item as BoxItem;

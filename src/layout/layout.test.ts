@@ -346,3 +346,26 @@ describe('overskrift, logo og ukeskravering', () => {
     for (const b of L.bands) expect(b.x1 - b.x0).toBeLessThan(weekW * 1.5);
   });
 });
+
+describe('overskriftsboks', () => {
+  const o = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: false };
+  it('teksten står øverst, boksen tegnes først, og en boks med fast plass kan ligge inne i den', () => {
+    const p = example();
+    // 2_1 går over nesten hele året; gjør den til overskriftsboks og legg 2_2 inne i den
+    const head = p.lanes[1].boxes[0];
+    head.header = true;
+    head.height = 5;
+    head.top = 0;
+    p.lanes[1].boxes[1].top = 1.5;
+    const L = computeLayout(p, o, approxMeasure);
+    const hi = L.items.findIndex((i) => i.id === '2_1');
+    const h = L.items[hi] as Extract<Item, { kind: 'box' }>;
+    const c = L.items.find((i) => i.id === '2_2') as Extract<Item, { kind: 'box' }>;
+    expect(h.header).toBe(true);
+    expect(h.callout).toBeNull();
+    expect(h.text!.y - h.y).toBeLessThan(L.unit);
+    expect(c.y).toBeGreaterThan(h.y);
+    expect(c.y + c.h).toBeLessThanOrEqual(h.y + h.h + 1e-6);
+    expect(hi).toBeLessThan(L.items.findIndex((i) => i.id === '2_2'));
+  });
+});
