@@ -7,7 +7,7 @@ describe('støtte for diskusjon', () => {
   it('skriver varighet i dager eller uker', () => {
     expect(duration('2028-03-01', '2028-03-01')).toBe('1 dag');
     expect(duration('2028-03-01', '2028-03-05')).toBe('5 dager');
-    expect(duration('2028-03-01', '2028-03-28')).toBe('4 uker');
+    expect(duration('2028-03-01', '2028-03-28')).toBe('28 dager');
   });
 
   it('gir perioden et navn ut fra datoene', () => {

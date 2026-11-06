@@ -93,6 +93,7 @@ export function createDataView(
       frag.append(tr);
     }
     tbody.replaceChildren(frag);
+    mark();
     if (plan && !rows.length) {
       const tr = tbody.insertRow();
       const td = tr.insertCell();
@@ -102,10 +103,38 @@ export function createDataView(
     }
   }
 
+  // Klikk markerer bare raden. «Vis i planen» ligger i høyreklikkmenyen, så et feilklikk ikke tar deg ut av tabellen.
+  let picked = '';
+  const mark = () => tbody.querySelectorAll<HTMLTableRowElement>('tr[data-id]').forEach((tr) => tr.classList.toggle('is-selected', tr.dataset.id === picked));
   tbody.addEventListener('click', (e) => {
     const tr = (e.target as Element).closest<HTMLTableRowElement>('tr[data-id]');
-    if (tr && !tr.classList.contains('is-hidden')) onPick(tr.dataset.id!);
+    picked = tr?.dataset.id ?? '';
+    mark();
   });
+  const menu = root.querySelector<HTMLElement>('#data-menu')!;
+  const showInPlan = menu.querySelector<HTMLButtonElement>('button')!;
+  const closeMenu = () => menu.matches(':popover-open') && menu.hidePopover();
+  tbody.addEventListener('contextmenu', (e) => {
+    const tr = (e.target as Element).closest<HTMLTableRowElement>('tr[data-id]');
+    if (!tr) return;
+    e.preventDefault();
+    picked = tr.dataset.id!;
+    mark();
+    const hidden = tr.classList.contains('is-hidden');
+    showInPlan.disabled = hidden;
+    showInPlan.querySelector('span')!.textContent = hidden ? 'Boksen er skjult og vises ikke i planen.' : 'Går til planen og viser boksen, klar til å redigere.';
+    if (!menu.matches(':popover-open')) menu.showPopover();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    menu.style.left = `${Math.max(8, Math.min(e.clientX, vw - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(e.clientY, vh - menu.offsetHeight - 8))}px`;
+  });
+  showInPlan.addEventListener('click', () => {
+    closeMenu();
+    if (picked) onPick(picked);
+  });
+  document.addEventListener('pointerdown', (e) => !menu.contains(e.target as Node) && closeMenu());
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
   filter.addEventListener('input', refresh);
   onlyEdited.addEventListener('change', refresh);
   showHidden.addEventListener('change', refresh);
