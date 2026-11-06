@@ -75,4 +75,46 @@ describe('kritisk linje', () => {
     expect(merged.lanes[0].boxes[0].critical).toBe(true);
     expect(merged.plan.layout.criticalLine).toEqual({ width: 1.2, color: '#0050D0' });
   });
+
+  const withCallout = (id: string, x0: number, x1: number, y: number, h: number, cw = 20): BoxItem => ({
+    ...box(id, x0, x1, y, h, 0),
+    callout: { box: { x: x1 + 0.5, y, w: cw, h }, text: { x: x1 + 1, y: y + h / 2 + 0.7, lines: ['T'], size: 2, color: '#000000', anchor: 'start' }, leader: [] },
+  });
+
+  it('går langs kanten som er fri, ikke i fugen mot teksten over', () => {
+    // «Gulv på grunn» med tekst til høyre som ligger rett over «Vegger»; «Maskinsalvegg» under
+    const gulv = withCallout('g', 10, 14, 10, 3, 18);
+    const vegger = box('v', 14, 30, 13, 3);
+    const maskin = box('m', 22, 40, 17, 3);
+    const l = criticalLine([gulv, vegger, maskin], new Set(['g', 'v', 'm']), style)!;
+    const p = pairs(l.points);
+    // Gjennom «Vegger» langs bunnen (16), ikke toppen (13) der teksten over ligger
+    expect(p.some(([x, y]) => y === 16 && x >= 14 && x <= 30)).toBe(true);
+    expect(p.some(([x, y]) => y === 13 && x > 14 && x < 30)).toBe(false);
+  });
+
+  it('stryker ikke over sin egen callout-tekst på vei ned til neste boks', () => {
+    // Boks med tekst til høyre, en stabel tekstbokser rett under, og neste boks langt nede til høyre
+    const a = withCallout('a', 10, 14, 10, 3, 12);
+    const stack = [0, 1, 2, 3, 4].map((k) => box(`s${k}`, 12, 30, 14 + k * 4, 3.5));
+    const b = box('b', 50, 60, 36, 3);
+    const l = criticalLine([a, ...stack, b], new Set(['a', 'b']), style)!;
+    const p = pairs(l.points);
+    const c = a.callout!.box;
+    // Ingen vannrett bit inne i callout-teksten
+    for (let i = 1; i < p.length; i++) {
+      const [x0, y0] = p[i - 1];
+      const [x1, y1] = p[i];
+      if (y0 !== y1) continue;
+      const inside = y0 > c.y + 1e-6 && y0 < c.y + c.h - 1e-6 && Math.min(x1, c.x + c.w) > Math.max(x0, c.x) + 1e-6;
+      expect(inside).toBe(false);
+    }
+    // Og den loddrette streken går ikke gjennom stabelen
+    for (let i = 1; i < p.length; i++) if (p[i][0] === p[i - 1][0] && p[i][1] !== p[i - 1][1]) expect(p[i][0] < 12 || p[i][0] > 30).toBe(true);
+  });
+
+  it('kan stiples', () => {
+    const l = criticalLine([box('a', 10, 30, 10, 3)], new Set(['a']), { ...style, dash: 'dashed' })!;
+    expect(l.dash).toBe('dashed');
+  });
 });

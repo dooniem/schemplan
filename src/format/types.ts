@@ -52,7 +52,7 @@ export interface PlanSettings {
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
     /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */
-    criticalLine?: { width: number; color: HexColor };
+    criticalLine?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
   };
   options: {
     legend: boolean;

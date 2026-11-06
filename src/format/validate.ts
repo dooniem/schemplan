@@ -110,6 +110,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         const c = lay.criticalLine;
         if (!isObj(c) || !(typeof c.width === 'number' && c.width > 0 && c.width <= 10) || !(typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color)))
           err('plan.layout.criticalLine', 'må ha width (mm, over 0 og høyst 10) og color som #RRGGBB');
+        else if (c.dash !== undefined && !['solid', 'dashed', 'dotted'].includes(c.dash as string))
+          err('plan.layout.criticalLine.dash', 'må være solid, dashed eller dotted');
       }
     }
     const opt = plan.options;

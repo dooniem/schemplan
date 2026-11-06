@@ -5,6 +5,7 @@ import {
   LineCapStyle,
   LineJoinStyle,
   setLineCap,
+  setDashPattern,
   setLineJoin,
   PDFDocument,
   PDFFont,
@@ -104,6 +105,8 @@ function paint(c: Ctx, el: Element): 'f' | 's' | 'b' | null {
   if (strokeC && sw > 0) c.ops.push(setStrokingRgbColor(...strokeC), setLineWidth(sw));
   if (strokeC && attr(el, 'stroke-linejoin') === 'round') c.ops.push(setLineJoin(LineJoinStyle.Round));
   if (strokeC && attr(el, 'stroke-linecap') === 'round') c.ops.push(setLineCap(LineCapStyle.Round));
+  const dash = attr(el, 'stroke-dasharray');
+  if (strokeC && dash && dash !== 'none') c.ops.push(setDashPattern(dash.split(/[\s,]+/).map(Number).filter((v) => v >= 0), 0));
   if (fo < 1) c.ops.push(setGraphicsState(alphaState(c, fo)));
   const s = !!strokeC && sw > 0;
   return fillC && s ? 'b' : fillC ? 'f' : s ? 's' : null;
