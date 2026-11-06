@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 
 // Sikkerhetssperre: nettleseren nekter appen å sende data noe sted (connect-src 'none'),
@@ -29,13 +30,30 @@ function cspMeta(): Plugin {
   };
 }
 
+// Service worker for installert app: listen over filer som skal lagres for bruk uten nett
+// fylles inn fra bygget, så den alltid stemmer med filnavnene som har versjon i seg.
+function serviceWorker(): Plugin {
+  return {
+    name: 'service-worker',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
+      const extra = ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'favicon-32.png'];
+      const source = readFileSync('sw-template.js', 'utf8')
+        .replace('__VERSION__', process.env.npm_package_version ?? '0.0.0')
+        .replace('__FILES__', JSON.stringify([...files, ...extra]));
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+    },
+  };
+}
+
 export default defineConfig({
   // Appen ligger på https://dooniem.github.io/schemplan/
   base: '/schemplan/',
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
   },
-  plugins: [cspMeta()],
+  plugins: [cspMeta(), serviceWorker()],
   build: {
     // Ingen eksterne kilder: alt pakkes inn i appen
     assetsInlineLimit: 0,

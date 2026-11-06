@@ -197,6 +197,10 @@ dialog.help::backdrop { background: rgb(0 0 0 / 0.3); }
 .help-tips ul { margin: 2px 0 0; padding-left: 18px; color: var(--text); }
 .help-tips li { margin-bottom: 2px; }
 .help kbd { padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 12px; }
+.help-install { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); }
+.help-install[hidden] { display: none; }
+.help-install p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.help-install button { flex: none; }
 .help-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 24px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .help-foot span:first-child { color: var(--text); font-weight: 600; }
 @media (max-width: 640px) {

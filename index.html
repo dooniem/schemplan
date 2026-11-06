@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#1f5fbf" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Skjematisk plan</title>
   </head>
   <body>
@@ -197,6 +201,13 @@
             <li>Filene leses bare i nettleseren din og sendes ingen steder. Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
           </ul>
         </section>
+      </div>
+      <div class="help-install" id="help-install" hidden>
+        <div>
+          <strong>Installer appen</strong>
+          <p>Gir eget ikon på skrivebordet og i startmenyen, eget vindu, og virker uten nett. Arbeidsfiler kan åpnes med høyreklikk → Åpne med → Skjematisk plan. Planene lagres fortsatt bare i PDF-ene dine.</p>
+        </div>
+        <button type="button" class="button primary" id="install-app">Installer</button>
       </div>
       <footer class="help-foot">
         <span>Laget av Magnus Petersen</span>
