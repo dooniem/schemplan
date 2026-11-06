@@ -9,6 +9,7 @@ import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
+import { createSearch } from './search';
 import { createEditor } from './editor';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
@@ -60,6 +61,7 @@ const editor = createEditor(
   $<HTMLElement>('#edit-tools'),
 );
 viewer.setIgnore((e) => editor.owns(e));
+const search = createSearch($<HTMLInputElement>('#search'), $('#search-count'), () => plan);
 const status = el('p', '', 'muted small');
 const saveStatus = el('p', '', 'muted small');
 const suggest = el('div', '', 'suggest small');
@@ -83,6 +85,7 @@ function draw() {
   shown = { layout, svg };
   viewer.show(svg, layout.width, layout.height);
   editor.afterDraw(svg, layout);
+  search.afterDraw(svg);
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
@@ -216,7 +219,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input']) $<HTMLButtonElement>(id).disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input', '#search']) $<HTMLButtonElement>(id).disabled = false;
   draw();
 }
 
@@ -228,6 +231,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
   if (!r) return;
   editor.reset();
+  search.reset();
   showPlan(r.plan, file.name, r.warnings);
 });
 
@@ -466,6 +470,7 @@ async function openFromAddress() {
     const r = await readPlan(bytes, name);
     if (!r) return;
     editor.reset();
+    search.reset();
     showPlan(r.plan, name, r.warnings);
     if (params.get('modus') === 'oppdater') askForWorkFile();
   } catch {
