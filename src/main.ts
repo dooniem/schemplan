@@ -621,6 +621,41 @@ if (missing.length) {
 openFromAddress();
 window.addEventListener('hashchange', openFromAddress);
 
+// ---- Installert app ----
+// Service workeren lagrer bare appens egne filer, så den kan startes uten nett (se sw-template.js)
+if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+// Nettleseren sier fra når appen kan installeres; da vises knappen i Hjelp
+type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+let installPrompt: InstallPrompt | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e as InstallPrompt;
+  $<HTMLElement>('#help-install').hidden = false;
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  $<HTMLElement>('#help-install').hidden = true;
+});
+$<HTMLButtonElement>('#install-app').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  await installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $<HTMLElement>('#help-install').hidden = true;
+});
+// Åpne med → Skjematisk plan: filen kommer inn her når appen er installert
+type LaunchQueue = { setConsumer: (fn: (p: { files: FileSystemFileHandle[] }) => void) => void };
+(window as unknown as { launchQueue?: LaunchQueue }).launchQueue?.setConsumer(async (p) => {
+  const handle = p.files[0];
+  if (!handle) return;
+  const file = await handle.getFile();
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const input = $<HTMLInputElement>('#file-input');
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+});
+
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
 draw();
