@@ -68,7 +68,8 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
   white-space: nowrap;
 }
 .tb:hover:not(:disabled) { background: var(--bg); border-color: var(--border); }
-.tb:disabled { opacity: 0.4; cursor: default; }
+.tb:disabled, .tb:has(input:disabled) { opacity: 0.4; cursor: default; }
+.tb:has(input:disabled):hover { background: none; border-color: transparent; }
 .tb:focus-visible, .tb:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tb.icon { width: 28px; padding: 0; justify-content: center; font-size: 16px; }
 .tb.primary { color: var(--accent); font-weight: 600; border-color: var(--accent); }
