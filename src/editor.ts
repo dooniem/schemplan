@@ -3,6 +3,7 @@
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
+import { createCtxMenu } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -1450,18 +1451,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
 
-  // Høyreklikk på en lane: automatisk eller fast høyde
-  // Lukkes av koden: på Mac og Linux kommer høyreklikket før museknappen slippes,
-  // og nettleserens egen lukking ville da lukke menyen med en gang.
-  const menu = el('div', { class: 'pop pop-menu no-print', popover: 'manual' });
-  document.body.append(menu);
-  const closeMenu = () => menu.matches(':popover-open') && menu.hidePopover();
-  document.addEventListener('pointerdown', (e) => !menu.contains(e.target as Node) && closeMenu(), true);
-  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
-  window.addEventListener('blur', closeMenu);
-  menu.addEventListener('click', (e) => {
-    if ((e.target as Element).closest('button')) menu.hidePopover();
-  });
+  // Høyreklikkmenyen følger det du høyreklikket: lane-navnet gir lanevalg, en boks gir
+  // boksvalg, og tomt sted i lanen gir ny boks og skjulte bokser.
+  const ctx = createCtxMenu();
+  const plain = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim();
+  const fmtDate = (d: string) => d.split('-').reverse().join('.');
   sheet.addEventListener('contextmenu', (e) => {
     if (!active || !layoutNow) return;
     const plan = host.getPlan();
@@ -1492,68 +1486,92 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }
     }
     const box = hitId ? findBox(plan, hitId) : null;
-    const item = (label: string, note: string, pressed: boolean | null, fn: () => void, disabled = false) => {
-      const b = el('button', { type: 'button' });
-      if (pressed !== null) b.setAttribute('aria-pressed', String(pressed));
-      b.append(el('strong', {}, `${pressed ? '✓ ' : ''}${label}`), el('span', {}, note));
-      b.disabled = disabled;
-      b.addEventListener('click', fn);
-      menu.append(b);
-    };
-    // Menyen følger det du høyreklikket: lane-navnet gir lanevalg, en boks gir boksvalg,
-    // og tomt sted i lanen gir ny boks og skjulte bokser
     const onTitle = p.x < L.plot.x0;
     if (onTitle) {
-      menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
-      item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
-      item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
-      item('Ny lane under', 'Lanen er laget i appen og følger ikke Project.', null, () => addLane(ln.id));
-      item('Endre navn og farge', 'Åpner lanen i panelet. Dobbeltklikk navnet gjør det samme.', null, () => selectLane(ln.id));
-      item(lane.manual ? 'Slett lane' : 'Skjul lane', lane.manual ? 'Lanen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => removeLaneById(ln.id), L.lanes.length <= 1);
-      for (const hl of plan.lanes.filter((x) => x.shown && x.hidden)) {
-        const hid = hl.id;
-        item(`Vis lane igjen: ${hl.name.replace(/\/?\|/g, ' ')}`, 'Skjult lane. Den kommer tilbake på samme plass.', null, () => commit((pl) => delete findLane(pl, hid)!.hidden));
-      }
+      const hiddenLanes = plan.lanes.filter((x) => x.shown && x.hidden);
+      ctx.open(e.clientX, e.clientY, plain(lane.name), [
+        {
+          heading: 'Høyde',
+          items: [
+            { label: 'Automatisk', radio: true, checked: !lane.height, hint: 'Så høy som innholdet krever, og fyller ledig plass.', onSelect: () => commit((pl) => delete findLane(pl, ln.id)!.height) },
+            { label: 'Fast', radio: true, checked: !!lane.height, hint: 'Beholder høyden. Dra i nederste kant av lane-navnet for å endre den.', onSelect: () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))) },
+          ],
+        },
+        {
+          items: [
+            { label: 'Endre navn og farge', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner lanen i panelet til høyre.', onSelect: () => selectLane(ln.id) },
+            { label: 'Ny lane under', icon: 'laneAdd', hint: 'Lanen lages i appen og følger ikke Project.', onSelect: () => addLane(ln.id) },
+          ],
+        },
+        {
+          items: [
+            lane.manual
+              ? { label: 'Slett lane', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Lanen er laget i appen og blir borte. Angre med Ctrl+Z.', disabled: L.lanes.length <= 1, onSelect: () => removeLaneById(ln.id) }
+              : { label: 'Skjul lane', icon: 'hide', kbd: 'Delete', hint: 'Lanen skjules. Vis den igjen fra denne menyen.', disabled: L.lanes.length <= 1, onSelect: () => removeLaneById(ln.id) },
+          ],
+        },
+        {
+          heading: hiddenLanes.length ? 'Skjulte lanes' : undefined,
+          items: hiddenLanes.map((hl) => ({ label: plain(hl.name), icon: 'show' as const, hint: 'Vis lanen igjen på samme plass.', onSelect: () => commit((pl) => delete findLane(pl, hl.id)!.hidden) })),
+        },
+      ], 'Lane');
     } else if (box) {
       const id = box.id;
-      menu.replaceChildren(el('p', { class: 'pop-title' }, box.resolved?.isMilestone ? 'Milepæl' : 'Boks'));
-      if (!box.resolved?.isMilestone) item('Overskriftsboks', 'Teksten øverst, og andre bokser kan ligge inne i den.', !!box.header, () => setHeader(id, !box.header));
-      item('Kopier', 'Kopi rett under, som følger ikke Project.', null, () => {
-        selected = id;
-        copySelected();
-      });
-      item(box.manual ? 'Slett' : 'Skjul', box.manual ? 'Boksen er laget i appen.' : 'Vis den igjen fra høyreklikk i lanen.', null, () => {
-        selected = id;
-        removeSelected();
-      });
-      if (!box.resolved?.isMilestone) item('Standard høyde', 'Så høy som teksten krever.', null, () => commit((pl) => delete findBox(pl, id)!.height), !box.height);
-      item('Løsne', 'La appen velge plassen i lanen igjen.', null, () => commit((pl) => delete findBox(pl, id)!.top), box.top === undefined);
+      const ms = !!box.resolved?.isMilestone;
+      const dates = box.resolved ? (ms ? fmtDate(box.resolved.start) : `${fmtDate(box.resolved.start)} – ${fmtDate(box.resolved.finish)}`) : '';
+      ctx.open(e.clientX, e.clientY, plain(box.text) || (ms ? 'Milepæl' : 'Boks'), [
+        {
+          items: ms
+            ? []
+            : [{ label: 'Overskriftsboks', icon: 'header', checked: !!box.header, hint: 'Teksten øverst, og andre bokser kan ligge inne i boksen.', onSelect: () => setHeader(id, !box.header) }],
+        },
+        {
+          items: [
+            { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
+            ...(ms ? [] : [{ label: 'Standard høyde', icon: 'height' as const, hint: box.height ? 'Så høy som teksten krever.' : 'Boksen har allerede standard høyde.', disabled: !box.height, onSelect: () => commit((pl) => delete findBox(pl, id)!.height) }]),
+            { label: 'Løsne', icon: 'pin', hint: box.top === undefined ? 'Boksen er ikke festet. Den festes når du drar den opp eller ned.' : 'Appen velger plassen i lanen igjen.', disabled: box.top === undefined, onSelect: () => commit((pl) => delete findBox(pl, id)!.top) },
+          ],
+        },
+        {
+          items: [
+            box.manual
+              ? { label: 'Slett', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Boksen er laget i appen og blir borte. Angre med Ctrl+Z.', onSelect: () => { selected = id; removeSelected(); } }
+              : { label: 'Skjul', icon: 'hide', kbd: 'Delete', hint: 'Vis den igjen ved å høyreklikke på et tomt sted i lanen.', onSelect: () => { selected = id; removeSelected(); } },
+          ],
+        },
+      ], dates);
     } else {
-      menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
       // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
       const start = L.dateAt(Math.max(p.x, L.plot.x0));
       const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
       const finishT = new Date(`${start}T00:00:00Z`);
       finishT.setUTCDate(finishT.getUTCDate() + days);
       const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];
-      item('Ny boks her', `Fra ${start.split('-').reverse().join('.')}. Følger ikke Project.`, null, () => {
-        let made: Box | null = null;
-        commit((pl) => {
-          made = newBox(pl, ln.id, start, finish);
-          if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
-        });
-        if (made) select((made as Box).id);
-      });
-      for (const hb of lane.boxes.filter((b) => b.hidden)) {
-        const hid = hb.id;
-        item(`Vis igjen: ${hb.text.replace(/\/?\|/g, ' ').replace(/^\*/, '')}`, 'Skjult boks i denne lanen.', null, () => commit((pl) => delete findBox(pl, hid)!.hidden));
-      }
+      const hiddenBoxes = lane.boxes.filter((b) => b.hidden);
+      ctx.open(e.clientX, e.clientY, plain(lane.name), [
+        {
+          items: [
+            {
+              label: `Ny boks fra ${fmtDate(start)}`,
+              icon: 'plus',
+              hint: 'Boksen lages i appen og følger ikke Project.',
+              onSelect: () => {
+                let made: Box | null = null;
+                commit((pl) => {
+                  made = newBox(pl, ln.id, start, finish);
+                  if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
+                });
+                if (made) select((made as Box).id);
+              },
+            },
+          ],
+        },
+        {
+          heading: hiddenBoxes.length ? 'Skjulte bokser' : undefined,
+          items: hiddenBoxes.map((hb) => ({ label: plain(hb.text) || '(uten tekst)', icon: 'show' as const, hint: 'Vis boksen igjen på samme plass.', onSelect: () => commit((pl) => delete findBox(pl, hb.id)!.hidden) })),
+        },
+      ], 'Lane');
     }
-    if (!menu.matches(':popover-open')) menu.showPopover();
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
-    menu.style.left = `${Math.max(8, Math.min(e.clientX, vw - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(e.clientY, vh - menu.offsetHeight - 8))}px`;
   });
 
   toggle.addEventListener('click', () => {
