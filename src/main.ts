@@ -300,7 +300,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
   draw();
 }
 
@@ -317,20 +317,17 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   showPlan(r.plan, file.name, r.warnings);
 });
 
-// Oppdater fra Project: velg en ny plan fra Project (.json) når en arbeidsfil er åpen,
-// eller arbeidsfilen (.pdf) når en ny plan fra Project er åpen. Redigeringene i arbeidsfilen beholdes.
-async function updateFrom(file: File, pdfOnly = false): Promise<boolean> {
+// Oppdater fra Project: en ny plan fra Project er åpen, og redigeringene hentes fra
+// arbeidsfilen (.pdf) brukeren velger. Redigeringene i arbeidsfilen beholdes.
+async function updateFrom(file: File): Promise<boolean> {
   if (!plan) return false;
   const current = plan;
-  const currentName = baseName;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (pdfOnly && String.fromCharCode(...bytes.subarray(0, 4)) !== '%PDF') return false;
+  if (String.fromCharCode(...bytes.subarray(0, 4)) !== '%PDF') return false;
   const r = await readPlan(bytes, file.name);
   if (!r) return false;
   const { mergePlans, summarizeMerge } = await import('./merge');
-  const work = r.isPdf ? r.plan : current;
-  const fresh = r.isPdf ? current : r.plan;
-  const { plan: merged, report } = mergePlans(work, fresh);
+  const { plan: merged, report } = mergePlans(r.plan, current);
   editor.replacePlan(merged);
   const note = details(summarizeMerge(report), [
     ['Nye bokser:', report.newBoxes],
@@ -343,16 +340,9 @@ async function updateFrom(file: File, pdfOnly = false): Promise<boolean> {
     ['Project har endret navnet på lanes du hadde gitt nytt navn (navnet fra Project gjelder):', report.laneNameChanged],
   ]);
   note.classList.add('small');
-  showPlan(merged, r.isPdf ? file.name : `${currentName}.pdf`, r.warnings, note);
+  showPlan(merged, file.name, r.warnings, note);
   return true;
 }
-
-$<HTMLInputElement>('#update-input').addEventListener('change', async (e) => {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (file) await updateFrom(file);
-});
 
 // Åpnet med «Oppdater i Web»: be om arbeidsfilen med en gang.
 const updateDialog = $<HTMLDialogElement>('#update-dialog');
@@ -368,7 +358,7 @@ $<HTMLInputElement>('#update-pick').addEventListener('change', async (e) => {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
-  if (await updateFrom(file, true)) {
+  if (await updateFrom(file)) {
     updateDialog.close();
     return;
   }
