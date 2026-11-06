@@ -94,14 +94,7 @@ export function createViewer(host: HTMLElement): Viewer {
   };
   host.addEventListener('pointerup', end);
   host.addEventListener('pointercancel', end);
-  // Dobbeltklikk zoomer inn der du klikker; med Shift tilbake til hele arket
-  host.addEventListener('dblclick', (e) => {
-    if (!svg || ignore(e)) return;
-    const hr = host.getBoundingClientRect();
-    if (e.shiftKey) setZoom(1);
-    else setZoom(zoom * 2, e.clientX - hr.left, e.clientY - hr.top);
-  });
-
+  // Dobbeltklikk zoomer ikke: raske klikk på fag, kalender og bokser ga uønsket zoom
   new ResizeObserver(() => apply()).observe(host);
 
   return {

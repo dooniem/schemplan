@@ -249,7 +249,8 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .linkish:hover { text-decoration: underline; }
 .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sheet-host.editing g[data-trade] { cursor: pointer; }
-.sheet-host.editing svg { user-select: none; -webkit-user-select: none; }
+/* Teksten i planen skal ikke markeres av raske klikk */
+.sheet-host svg { user-select: none; -webkit-user-select: none; }
 
 /* Søk i topplinjen */
 .search { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); }
