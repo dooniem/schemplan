@@ -27,7 +27,7 @@
         <button type="button" id="view-data" class="tb" aria-pressed="false" disabled title="Tabell over alle bokser med datoer og lane, kan eksporteres til Excel">Data</button>
       </div>
       <span class="sep" aria-hidden="true"></span>
-      <button type="button" id="edit" class="tb" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon">Rediger</button>
+      <button type="button" id="edit" class="tb cta" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span id="edit-label">Rediger</span></button>
       <div class="tbgroup" id="edit-tools" role="group" aria-label="Redigering" hidden>
         <button type="button" id="undo" class="tb icon" title="Angre (Ctrl+Z)" aria-label="Angre" disabled>↶</button>
         <button type="button" id="redo" class="tb icon" title="Gjør om (Ctrl+Y)" aria-label="Gjør om" disabled>↷</button>
@@ -114,6 +114,10 @@
       <button type="button" id="save-share" disabled>
         <strong>Lagre PDF for deling</strong>
         <span>Vanlig PDF til å sende ut og legge ved. Kan ikke redigeres videre.</span>
+      </button>
+      <button type="button" id="save-trades" hidden>
+        <strong>Lagre PDF med bare valgte fag</strong>
+        <span id="save-trades-text">Bare boksene i fagene du har valgt i forklaringen.</span>
       </button>
       <button type="button" id="print" disabled>
         <strong>Skriv ut</strong>

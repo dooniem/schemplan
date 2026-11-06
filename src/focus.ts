@@ -12,6 +12,8 @@ export interface Focus {
   afterDraw(svg: SVGSVGElement, layout: Layout): void;
   /** Ny plan: fjern perioden. */
   reset(): void;
+  /** Fagene i fokus (tom når ingen er valgt). */
+  readonly trades: string[];
 }
 
 export interface Period {
@@ -87,7 +89,6 @@ export function createFocus(
   tip.hidden = true;
   document.body.append(tip);
   let tipId = '';
-  let pressed = false;
 
   const tipFor = (id: string) => {
     const plan = getPlan();
@@ -149,7 +150,9 @@ export function createFocus(
     tip.style.top = `${Math.max(8, y)}px`;
   };
   host.addEventListener('pointermove', (e) => {
-    if (pressed || e.pointerType === 'touch') return hideTip();
+    // Knapp nede (dra eller panorer) eller berøring: ingen detaljer. Leses fra hendelsen selv, så et
+    // tapt «slipp» (f.eks. etter høyreklikkmenyen) ikke stopper detaljene for godt.
+    if (e.buttons !== 0 || e.pointerType === 'touch') return hideTip();
     const g = (e.target as Element | null)?.closest?.('g[data-id]');
     const id = g?.getAttribute('data-id') ?? '';
     if (!id) return hideTip();
@@ -163,11 +166,7 @@ export function createFocus(
     place(e);
   });
   host.addEventListener('pointerleave', hideTip);
-  host.addEventListener('pointerdown', () => {
-    pressed = true;
-    hideTip();
-  });
-  window.addEventListener('pointerup', () => (pressed = false));
+  host.addEventListener('pointerdown', hideTip);
   host.addEventListener('wheel', hideTip, { passive: true });
   host.addEventListener('scroll', hideTip, { passive: true });
 
@@ -335,6 +334,9 @@ export function createFocus(
   bar.querySelector<HTMLButtonElement>('.icon')?.addEventListener('click', clearAll);
 
   return {
+    get trades() {
+      return [...trades];
+    },
     afterDraw(s, layout) {
       svg = s;
       L = layout;

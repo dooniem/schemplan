@@ -472,9 +472,12 @@ $<HTMLButtonElement>('#print').addEventListener('click', () => {
 });
 // Lagre PDF: arbeidsfil med planen innebygd, eller vanlig PDF til deling uten
 const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', deling: '' };
-async function save(variant: PdfVariant, btn: HTMLButtonElement) {
+/** Navnene på fagene i fokus, slik de står i forklaringen. */
+const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : x));
+async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: string[] = []) {
   if (!plan || !shown) return;
-  const name = `${baseName}${SUFFIX[variant]}.pdf`;
+  const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}` : '';
+  const name = `${baseName}${SUFFIX[variant]}${fileTag}.pdf`;
   // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
   const saved: PlanFile = structuredClone(plan);
   Object.assign(saved.plan.layout, {
@@ -495,7 +498,16 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
     const handle = picker ? await picker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }) : null;
     const { exportPdf } = await import('./pdf/export');
-    const pdf = await exportPdf(shown.layout, shown.svg, saved, variant, __APP_VERSION__);
+    // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
+    let target = shown;
+    if (onlyTrades.length) {
+      const keep = new Set(onlyTrades);
+      for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
+      saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
+      const layout = computeLayout(saved, opts, measure);
+      target = { layout, svg: renderPlan(layout) };
+    }
+    const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
     if (handle) {
       const w = await handle.createWritable();
@@ -524,6 +536,14 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
 }
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
+$<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, focus.trades));
+// Valget for bare valgte fag vises når et fag er i fokus
+$<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
+  if ((e as ToggleEvent).newState !== 'open') return;
+  const t = focus.trades;
+  $<HTMLButtonElement>('#save-trades').hidden = !t.length || !plan;
+  $('#save-trades-text').textContent = `${tradeNames(t).join(', ')}. Vanlig PDF til deling, uten de andre fagene.`;
+});
 // Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
 // Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.
 async function openFromAddress() {
