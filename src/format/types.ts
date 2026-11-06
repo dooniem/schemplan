@@ -47,6 +47,10 @@ export interface PlanSettings {
     minTextSize?: number;
     /** Overskriftens størrelse i punkter. Krympes ikke når planen tilpasses arket. */
     titleSize?: number;
+    /** Overskrift skrevet i appen. Går foran `plan.title` fra Project. */
+    title?: string;
+    /** Tekst øverst til høyre, høyrejustert. | gir linjeskift. */
+    headerRight?: string;
     /** Vis forklaringen. Mangler den, gjelder valget fra Project. */
     showLegend?: boolean;
     /** Vis kalenderen også under planen. Mangler den, gjelder valget fra Project. */

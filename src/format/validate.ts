@@ -95,6 +95,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.fitToSheet !== undefined) needBool(lay, 'fitToSheet', 'plan.layout');
       if (lay.minTextSize !== undefined) needNum(lay, 'minTextSize', 'plan.layout');
       if (lay.titleSize !== undefined) optPos(lay, 'titleSize', 'plan.layout');
+      for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
       if (lay.logo !== undefined) {

@@ -230,6 +230,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selected: string | null = null;
   /** Valgt lane (klikk i lane-kolonnen). Bare én av boks og lane er valgt om gangen. */
   let selectedLane: string | null = null;
+  /** Toppfeltet med overskrift og tekst til høyre er valgt. */
+  let selectedHeader = false;
   /** Flere valgte bokser (Shift-klikk eller rektangel). Når den har to eller flere, er `selected` null. */
   let group: string[] = [];
   /** Valgt fag (klikk i legenden). */
@@ -421,6 +423,57 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return wrap;
   };
 
+  /** Overskrift og tekst øverst til høyre. Lagres i planen og beholdes ved oppdatering fra Project. */
+  const changeHeader = (fn: (lay: PlanFile['plan']['layout']) => void, typing: boolean) => {
+    const plan = host.getPlan();
+    if (!plan) return;
+    if (!typing || !typingSession) snapshot();
+    if (typing) typingSession = true;
+    fn(plan.plan.layout);
+    window.clearTimeout(redrawTimer);
+    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else {
+      host.redraw();
+      buildPanel();
+    }
+    syncTools();
+  };
+
+  const buildHeaderPanel = (plan: PlanFile) => {
+    const head = el('div', { class: 'panel-head' });
+    head.append(el('h2', {}, 'Topptekst'));
+    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
+    close.addEventListener('click', () => select(null));
+    head.append(close);
+    panel.append(head);
+    const lay = plan.plan.layout;
+    const field = (id: string, label: string, value: string, rows: string, set: (v: string) => void, hint: string) => {
+      const w = el('label', { class: 'prop' });
+      w.append(el('span', { class: 'prop-label' }, label));
+      const ta = el('textarea', { id, rows, spellcheck: 'true' }) as HTMLTextAreaElement;
+      ta.value = value;
+      ta.addEventListener('focus', () => (typingSession = false));
+      ta.addEventListener('input', () => changeHeader(() => set(ta.value), true));
+      ta.addEventListener('blur', () => {
+        typingSession = false;
+        syncTools();
+      });
+      w.append(ta, el('span', { class: 'hint' }, hint));
+      panel.append(w);
+    };
+    field('header-title', 'Overskrift', lay.title ?? plan.plan.title, '2', (v) => (lay.title = v), 'Midt øverst på arket.');
+    if (lay.title !== undefined && lay.title !== plan.plan.title) {
+      const reset = el('button', { type: 'button', class: 'linkish' }, 'Bruk navnet fra Project');
+      reset.addEventListener('click', () => changeHeader((l) => delete l.title, false));
+      panel.append(reset);
+    }
+    field('header-right', 'Tekst til høyre', lay.headerRight ?? '', '3', (v) => {
+      if (v.trim()) lay.headerRight = v;
+      else delete lay.headerRight;
+    }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Skriv | for linjeskift.');
+    panel.append(el('p', { class: 'hint' }, 'Begge beholdes når du oppdaterer fra Project.'));
+  };
+
   const buildLanePanel = (plan: PlanFile, l: Lane) => {
     const head = el('div', { class: 'panel-head' });
     head.append(el('h2', {}, 'Lane'));
@@ -604,6 +657,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     criticalMode = on;
     selected = null;
     selectedLane = null;
+    selectedHeader = false;
     selectedTrade = null;
     group = [];
     buildPanel();
@@ -769,6 +823,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !active) return;
     if (criticalMode) return buildCriticalPanel(plan);
     if (!b && group.length > 1) return buildGroupPanel(plan);
+    if (!b && selectedHeader) return buildHeaderPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
     if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
@@ -782,6 +837,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Dra i nederste kant av en lane for å gi den fast høyde.',
         'Dra en boks til en annen lane for å flytte den dit.',
         'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
+        'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
         'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
         'Høyreklikk et lane-navn for ny lane, lanehøyde og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
         'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
@@ -1019,6 +1075,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
     const L = layoutNow;
     const le = selectedTrade ? L.legend.find((x) => x.trade === selectedTrade) : null;
+    if (selectedHeader) {
+      const rect = document.createElementNS(NS, 'rect');
+      for (const [k, v] of Object.entries({ x: 1, y: 1, width: L.width - 2, height: L.headerBottom - 1.5, fill: 'none', stroke: ACCENT, 'stroke-width': 0.5, rx: 0.8 })) rect.setAttribute(k, String(v));
+      g.append(rect);
+    }
     if (le) {
       const rect = document.createElementNS(NS, 'rect');
       for (const [k, v] of Object.entries({ x: le.x - 0.8, y: le.y - 0.8, width: le.w + 1.6, height: le.h + 1.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.5, rx: 0.5 })) rect.setAttribute(k, String(v));
@@ -1264,6 +1325,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = id;
     group = [];
     selectedLane = null;
+    selectedHeader = false;
     selectedTrade = null;
     typingSession = false;
     buildPanel();
@@ -1274,6 +1336,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = [];
     selected = null;
     selectedLane = null;
+    selectedHeader = false;
     selectedTrade = t;
     typingSession = false;
     buildPanel();
@@ -1284,9 +1347,27 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedTrade = null;
     selectedLane = id;
+    selectedHeader = false;
     typingSession = false;
     buildPanel();
     overlay();
+  };
+
+  const selectHeader = () => {
+    group = [];
+    selected = null;
+    selectedLane = null;
+    selectedTrade = null;
+    selectedHeader = true;
+    typingSession = false;
+    buildPanel();
+    overlay();
+  };
+  /** Klikk i toppfeltet over kalenderen (overskrift, logo og tekst til høyre). */
+  const inHeader = (e: MouseEvent) => {
+    if (!active || !layoutNow) return false;
+    const p = toMm(e.clientX, e.clientY);
+    return p.y < layoutNow.headerBottom && p.x >= 0 && p.x <= layoutNow.width;
   };
 
   /** Shift-klikk: legg til eller ta bort en boks fra valget. */
@@ -1296,6 +1377,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (i >= 0) cur.splice(i, 1);
     else cur.push(id);
     selectedLane = null;
+    selectedHeader = false;
     selectedTrade = null;
     typingSession = false;
     if (cur.length > 1) {
@@ -1313,6 +1395,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = ids;
     selected = null;
     selectedLane = null;
+    selectedHeader = false;
     selectedTrade = null;
     buildPanel();
     overlay();
@@ -1405,6 +1488,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
+    if (!g && inHeader(e)) return selectHeader();
     const id = g ? boxAt(e) : null;
     if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(id);
     const ln = id ? null : titleLaneOf(e);
@@ -1413,6 +1497,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   });
   sheet.addEventListener('dblclick', (e) => {
     const g = itemOf(e);
+    if (!g && inHeader(e)) {
+      selectHeader();
+      const ta = panel.querySelector<HTMLTextAreaElement>('#header-title');
+      ta?.focus();
+      ta?.select();
+      return;
+    }
     const ln = g ? null : titleLaneOf(e);
     if (ln) {
       selectLane(ln.id);
@@ -1494,6 +1585,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const p = toMm(e.clientX, e.clientY);
     const L = layoutNow;
+    if (plan && inHeader(e)) {
+      e.preventDefault();
+      ctx.open(e.clientX, e.clientY, 'Topptekst', [
+        { items: [{ label: 'Endre overskrift og tekst til høyre', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner toppteksten i panelet til høyre.', onSelect: () => selectHeader() }] },
+      ]);
+      return;
+    }
     if (!plan || p.x < L.laneTitleX || p.x > L.plot.x1) return;
     const ln = laneAt(p.y);
     const lane = ln && findLane(plan, ln.id);
@@ -1595,6 +1693,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       criticalMode = false;
       selected = null;
       selectedLane = null;
+      selectedHeader = false;
       group = [];
     }
     buildPanel();
@@ -1674,11 +1773,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       dirty = false;
       selected = null;
       selectedLane = null;
+      selectedHeader = false;
       group = [];
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
+    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
     get active() {
       return active;
     },
@@ -1697,6 +1797,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       host.setPlan(p);
       selected = null;
       selectedLane = null;
+      selectedHeader = false;
       group = [];
       typingSession = false;
       host.redraw();
