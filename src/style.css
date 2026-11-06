@@ -78,6 +78,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .sheet .sheet-label { fill: #6b6b66; font-size: 8px; text-anchor: middle; }
 
 /* Utskrift: bare arket, i ekte A3-mål */
+/* Standard A3 liggende. main.ts skriver om regelen til valgt retning før utskrift. */
+@page { size: A3 landscape; margin: 0; }
 @page a3-landscape { size: A3 landscape; margin: 0; }
 @page a3-portrait { size: A3 portrait; margin: 0; }
 

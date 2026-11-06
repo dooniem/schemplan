@@ -3,6 +3,7 @@ import { checkOutboundBlocked } from './csp';
 import { renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile } from './format/types';
+import { setPrintPage } from './print';
 import { computeLayout, type LayoutOptions } from './layout/layout';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
@@ -122,6 +123,11 @@ $<HTMLInputElement>('#fit').addEventListener('change', (e) => {
   opts.fitToSheet = (e.target as HTMLInputElement).checked;
   draw();
 });
-$<HTMLButtonElement>('#print').addEventListener('click', () => window.print());
+// Utskrift: A3 i samme retning som i appen, både fra knappen og fra Ctrl+P
+$<HTMLButtonElement>('#print').addEventListener('click', () => {
+  setPrintPage(opts.orientation);
+  window.print();
+});
+window.addEventListener('beforeprint', () => setPrintPage(opts.orientation));
 
 draw();
