@@ -117,4 +117,22 @@ describe('kritisk linje', () => {
     const l = criticalLine([box('a', 10, 30, 10, 3)], new Set(['a']), { ...style, dash: 'dashed' })!;
     expect(l.dash).toBe('dashed');
   });
+
+  it('runder tekst og legger seg inntil en høy boks i stedet for å gå langt unna', () => {
+    // Liten boks med lang tekst til høyre; neste boks er høy med stående tekst og starter under teksten
+    const a = withCallout('a', 10, 14, 10, 2, 40);
+    const tall: BoxItem = { ...box('t', 30, 36, 14, 30), text: { x: 33, y: 29, lines: ['Stående tekst'], size: 2, color: '#FFFFFF', anchor: 'middle', rotate: -90 } };
+    const l = criticalLine([a, tall], new Set(['a', 't']), style)!;
+    const p = pairs(l.points);
+    // Den siste loddrette streken ned mot den høye boksen ligger langs kanten av den
+    const verts = p.slice(1).map((q, i) => [p[i], q]).filter(([u, v]) => u[0] === v[0] && u[1] !== v[1]);
+    expect(verts[verts.length - 1][0][0]).toBeCloseTo(30);
+    // Og ingen vannrett bit stryker over teksten til den første boksen
+    const c = a.callout!.box;
+    for (let i = 1; i < p.length; i++) {
+      const [x0, y0] = p[i - 1];
+      const [x1, y1] = p[i];
+      if (y0 === y1) expect(y0 > c.y + 1e-6 && y0 < c.y + c.h - 1e-6 && Math.min(x1, c.x + c.w) > Math.max(x0, c.x) + 1e-6).toBe(false);
+    }
+  });
 });

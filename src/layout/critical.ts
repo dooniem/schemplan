@@ -120,9 +120,11 @@ export function criticalLine(items: Item[], ids: Set<string>, style: { width: nu
     const [lo0, hi0] = span(a, b);
     const lo = Math.max(x, lo0);
     const hi = Math.max(lo, hi0);
-    const xm = Math.abs(ys[i + 1] - ys[i]) > 1e-6 ? route(lo, hi, ys[i], ys[i + 1], obstacles, [a, b]).x : lo;
-    if (Math.abs(ys[i + 1] - ys[i]) > 1e-6) pts.push(xm, ys[i], xm, ys[i + 1]);
-    x = xm;
+    if (Math.abs(ys[i + 1] - ys[i]) > 1e-6) {
+      const r = route(lo, hi, ys[i], ys[i + 1], obstacles, [a, b]);
+      pts.push(...r.bends);
+      x = r.x;
+    } else x = lo;
   }
   const last = stops[stops.length - 1];
   pts.push(Math.max(x, last.x1), ys[ys.length - 1]);
@@ -155,37 +157,64 @@ function textAreas(items: Item[]): Rect[] {
   return out;
 }
 
-/** x for overgangen fra ya til yb mellom lo og hi, og hva den koster: tekst som den loddrette
- *  streken krysser, og tekst som den vannrette streken fram til og fra den stryker over.
- *  Boksene linjen skal gjennom, teller ikke. */
-function route(lo: number, hi: number, ya: number, yb: number, obstacles: Rect[], ends: Stop[]): { x: number; cost: number } {
+/** Straff for et ekstra knekk i trappen. */
+const BEND_COST = 0.3;
+/** Linjen skal se ut til å gå gjennom neste boks: en loddrett strek langt fra boksen koster litt per mm. */
+const HUG_WEIGHT = 0.1;
+
+/** Overgangen fra ya til yb mellom lo og hi, og hva den koster: tekst som de loddrette strekene
+ *  krysser, og tekst som de vannrette strekene stryker over. Enten ett loddrett hopp, eller to
+ *  med en vannrett bit mellom, så streken kan runde en tekst og legge seg inntil neste boks.
+ *  Boksene linjen skal gjennom, teller ikke. bends er knekkpunktene x,y,… i rekkefølge. */
+function route(lo: number, hi: number, ya: number, yb: number, obstacles: Rect[], ends: Stop[]): { x: number; cost: number; bends: number[] } {
   const ownIds = new Set(ends.map((e) => e.id));
-  const y0 = Math.min(ya, yb) + 0.3;
-  const y1 = Math.max(ya, yb) - 0.3;
   const near = obstacles.filter((o) => !(o.own && ownIds.has(o.id)) && o.x1 > lo - 1 && o.x0 < hi + 1);
   const across = (o: Rect, y: number) => y > o.y0 + 1e-6 && y < o.y1 - 1e-6;
   const overlap = (o: Rect, a: number, b: number) => Math.max(0, Math.min(o.x1, b) - Math.max(o.x0, a));
+  /** Vannrett fra a til b i høyde y. */
+  const horiz = (y: number, a: number, b: number) => {
+    let c = 0;
+    if (b - a > 1e-9) for (const o of near) if (across(o, y)) c += STRIKE_WEIGHT * overlap(o, a, b);
+    return c;
+  };
+  /** Loddrett i x fra y1 til y2. */
+  const vert = (x: number, y1: number, y2: number) => {
+    const t = Math.min(y1, y2) + 0.3;
+    const u = Math.max(y1, y2) - 0.3;
+    let c = 0;
+    if (u > t) for (const o of near) if (x > o.x0 + 1e-6 && x < o.x1 - 1e-6 && o.y1 > t && o.y0 < u) c += Math.min(o.y1, u) - Math.max(o.y0, t);
+    return c;
+  };
   // Samme høyde: ingen trapp, bare den vannrette streken
-  if (Math.abs(ya - yb) <= 1e-6) {
-    let cost = 0;
-    for (const o of near) if (across(o, ya)) cost += STRIKE_WEIGHT * overlap(o, lo, hi);
-    return { x: lo, cost };
-  }
-  const mid = (lo + hi) / 2;
-  const cand = new Set([lo, hi, mid, ...ends.flatMap((e) => [e.x0, e.x1])]);
+  if (Math.abs(ya - yb) <= 1e-6) return { x: lo, cost: horiz(ya, lo, hi), bends: [] };
+  const xs = new Set([lo, hi, (lo + hi) / 2, ...ends.flatMap((e) => [e.x0, e.x1])]);
   // Rett utenfor kantene av det som er i veien
-  for (const o of near) cand.add(o.x0 - 0.4), cand.add(o.x1 + 0.4);
-  let best = mid;
-  let bestCost = Infinity;
+  for (const o of near) xs.add(o.x0 - 0.4), xs.add(o.x1 + 0.4);
+  const cand = [...xs].filter((c) => c >= lo - 1e-9 && c <= hi + 1e-9);
+  const hug = (c: number) => HUG_WEIGHT * (hi - c);
+  // Ett hopp
+  let best = { x: hi, cost: Infinity, bends: [] as number[] };
   for (const c of cand) {
-    if (c < lo - 1e-9 || c > hi + 1e-9) continue;
-    let cost = Math.abs(c - mid) * 1e-3;
-    for (const o of near) {
-      if (c > o.x0 + 1e-6 && c < o.x1 - 1e-6 && o.y1 > y0 && o.y0 < y1) cost += Math.min(o.y1, y1) - Math.max(o.y0, y0);
-      if (across(o, ya)) cost += STRIKE_WEIGHT * overlap(o, lo, c);
-      if (across(o, yb)) cost += STRIKE_WEIGHT * overlap(o, c, hi);
-    }
-    if (cost < bestCost) (bestCost = cost), (best = c);
+    const cost = horiz(ya, lo, c) + vert(c, ya, yb) + horiz(yb, c, hi) + hug(c);
+    if (cost < best.cost - 1e-9) best = { x: c, cost, bends: [c, ya, c, yb] };
   }
-  return { x: best, cost: bestCost };
+  // To hopp: ned (eller opp) i xa til en ledig høyde ym, bort til xb, og videre til yb
+  const yLo = Math.min(ya, yb);
+  const yHi = Math.max(ya, yb);
+  const ysMid = new Set<number>();
+  for (const o of near) for (const y of [o.y0 - 0.4, o.y1 + 0.4]) if (y > yLo + 0.3 && y < yHi - 0.3) ysMid.add(y);
+  if (ysMid.size) {
+    const xbs = cand.filter((c) => c >= hi - 1e-9 || ends.some((e) => Math.abs(e.x0 - c) < 1e-9));
+    for (const ym of ysMid)
+      for (const xa of cand) {
+        const first = horiz(ya, lo, xa) + vert(xa, ya, ym);
+        if (first + BEND_COST >= best.cost) continue;
+        for (const xb of xbs) {
+          if (xb <= xa + 1e-6) continue;
+          const cost = first + horiz(ym, xa, xb) + vert(xb, ym, yb) + horiz(yb, xb, hi) + hug(xb) + BEND_COST;
+          if (cost < best.cost - 1e-9) best = { x: xb, cost, bends: [xa, ya, xa, ym, xb, ym, xb, yb] };
+        }
+      }
+  }
+  return best;
 }
