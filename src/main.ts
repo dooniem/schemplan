@@ -570,6 +570,19 @@ async function openFromAddress() {
     $('#file-info').replaceChildren(el('p', 'Planen i adressen kunne ikke leses. Prøv Generer Web på nytt, eller åpne planfilen.', 'error'));
   }
 }
+// Appen bygger på nettleserfunksjoner som kom i 2023–2024. I eldre nettlesere sier vi det
+// rett ut i stedet for at menyer og knapper ikke gjør noe.
+const missing = [
+  !('popover' in HTMLElement.prototype) && 'menyer (Popover)',
+  typeof DecompressionStream === 'undefined' && '«Generer Web» fra Project (DecompressionStream)',
+  !CSS.supports('selector(:has(a))') && 'deler av utseendet (:has)',
+  !CSS.supports('color', 'color-mix(in srgb, red, blue)') && 'farger (color-mix)',
+].filter(Boolean);
+if (missing.length) {
+  const note = el('p', `Nettleseren er for gammel for noe av appen: ${missing.join(', ')} virker ikke. Oppdater nettleseren, eller bruk en nyere versjon av Edge, Chrome, Firefox eller Safari.`, 'compat-note no-print');
+  note.setAttribute('role', 'alert');
+  document.querySelector('.topbar')?.after(note);
+}
 openFromAddress();
 window.addEventListener('hashchange', openFromAddress);
 
