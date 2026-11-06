@@ -6,6 +6,11 @@ export interface BoxText {
 
 const PIPE = '\u0000';
 
+/** Lane-navn: "|" er linjeskift og "/|" en loddrett strek, som i boksteksten. */
+export function splitLines(raw: string): string[] {
+  return raw.replaceAll('/|', PIPE).split('|').map((l) => l.replaceAll(PIPE, '|').trim());
+}
+
 export function parseBoxText(raw: string): BoxText {
   let s = raw;
   let forcedCallout = false;

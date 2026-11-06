@@ -56,6 +56,7 @@ Fra fase 3 bygges den samme planen inn som vedlegg i PDF-arbeidsfilen.
 ]}
 ```
 
+- Lane-navn (`name`) bruker samme regel: `|` er linjeskift og `/|` en loddrett strek.
 - `text` er lagret som i VBA: `|` er linjeskift, `/|` er en loddrett strek, `*` først betyr tvunget callout.
 - `rotation` er `0`, `90` eller `-90`.
 - `callout` (valgfri): `auto` (standard), `on` eller `off`. Settes av brukeren i appen. Uten feltet bestemmer appen, og `*` først i teksten betyr callout.

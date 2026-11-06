@@ -1,5 +1,5 @@
 import type { Box, Lane, PlanFile, TradeColor } from '../format/types';
-import { parseBoxText } from '../format/text';
+import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
@@ -273,8 +273,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown);
   const titlePad = 2 * PAD_X + 2;
-  const longestWord = Math.max(0, ...lanes.flatMap((l) => l.name.split(/\s+/).map((w) => measure(w, base, true))));
-  const widestName = Math.max(0, ...lanes.map((l) => measure(l.name, base, true)));
+  // "|" i lane-navnet er linjeskift, som i boksteksten
+  const laneRaw = lanes.map((l) => splitLines(l.name));
+  const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, base, true))));
+  const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, base, true)));
   const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
   // Luft i lanene følger tekststørrelsen
   const LANE_PAD = Math.max(0.5, base * 0.3);
@@ -298,7 +300,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - titlePad, base, measure, true));
+  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
   const contentH = lanes.map((_, i) => {
     const pieces = lanePieces[i];
     const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p] })));
