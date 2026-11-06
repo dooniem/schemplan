@@ -368,7 +368,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Legend ----
   const usedTrades = new Set<string>();
   lanePieces.flat().forEach((p) => p.item.kind === 'box' && usedTrades.add((p.item as BoxItem & { trade?: string }).trade ?? ''));
-  const legendSize = base * (ny ? 1 : 0.85);
+  // Som overskriften krymper ikke bunnteksten (legend og dato) når planen skaleres ned
+  // for å få plass, ellers blir den uleselig på store planer
+  const legendSize = opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (file.plan.options.legend) {

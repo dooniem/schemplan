@@ -167,9 +167,18 @@ describe('tilpasning til arket', () => {
     expect(L.overflow).toBe(false);
     expect((L.textSizePt * 4) % 1).toBeCloseTo(0);
     if (L.textSizePt < 12) {
-      const bigger = computeLayout(shape('middels'), { ...opts, textSizePt: L.textSizePt + 0.25, fitToSheet: false }, approxMeasure);
-      expect(bigger.overflow).toBe(true);
+      // Med minimum ett trinn høyere må planen under minimum for å få plass
+      const bigger = computeLayout(shape('middels'), { ...opts, minTextPt: L.textSizePt + 0.25 }, approxMeasure);
+      expect(bigger.belowMin).toBe(true);
     }
+  });
+
+  it('bunnteksten krymper ikke når planen skaleres ned', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 12, fitToSheet: true, minTextPt: 4 };
+    const L = computeLayout(shape('middels'), opts, approxMeasure);
+    expect(L.textSizePt).toBeLessThan(12);
+    const sizes = [...L.legend.map((e) => e.label.size), L.subtitle.size];
+    for (const s of sizes) expect(s).toBeCloseTo(12 * 0.3528 * 0.85, 2);
   });
 
   it('større ark gir større tekst', () => {
