@@ -63,7 +63,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
 
   const { x0, x1, y0, y1 } = L.plot;
   const ny = L.style === 'ny';
-  const labelBg = ny ? 0.92 : 0.75;
+  const labelBg = 0.75;
   const left = L.laneTitleX;
 
   // Annenhver måned skyggelagt
@@ -124,7 +124,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     if (it.kind === 'box') {
       if (it.callout) {
         const cb = it.callout.box;
-        node('rect', { x: cb.x, y: cb.y, width: cb.w, height: cb.h, fill: '#FFFFFF', 'fill-opacity': labelBg }, g);
+        node('rect', { x: cb.x, y: cb.y, width: cb.w, height: cb.h, fill: '#FFFFFF', 'fill-opacity': ny ? 0.6 : 0.75 }, g);
         text(it.callout.text, g);
       }
       node('rect', {

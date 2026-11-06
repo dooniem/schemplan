@@ -224,11 +224,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
     let lx = MARGIN;
     let row = 0;
-    const usedSymbols = new Set(lanePieces.flat().map((p) => (p.item.kind === 'milestone' ? p.item.symbol : '')));
     const symbolEntries: { name: string; symbol: 'diamond' | 'flag' | 'holiday' }[] = ny
       ? [
-          ...(usedSymbols.has('diamond') ? [{ name: 'Milepæl', symbol: 'diamond' as const }] : []),
-          ...(usedSymbols.has('flag') ? [{ name: 'Delmilepæl', symbol: 'flag' as const }] : []),
+          // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
           ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
         ]
       : [];
@@ -561,8 +559,11 @@ function calendarRows(
   rotateMonths = true,
   ny = false,
 ): CalendarRow[] {
-  const DARK = ny ? '#FFFFFF' : MONTH_DARK;
+  // Ny stil: lysere veksling, men fortsatt annenhvert år, annenhver måned og annenhver uke
+  const DARK = ny ? '#E4E4E4' : MONTH_DARK;
   const LIGHT = ny ? '#FFFFFF' : MONTH_LIGHT;
+  const YEAR_A = ny ? '#D9D9D9' : MONTH_DARK;
+  const YEAR_B = ny ? '#F0F0F0' : MONTH_DARK;
   const group = (key: (c: (typeof axis.columns)[number]) => string) => {
     const cells: CalendarRow['cells'] = [];
     for (const c of axis.columns) {
@@ -582,7 +583,7 @@ function calendarRows(
       return { ...c, label: '' };
     });
 
-  const years = fitLabel(group((c) => String(c.year)));
+  const years = fitLabel(group((c) => String(c.year)).map((c, i) => ({ ...c, fill: i % 2 === 0 ? YEAR_A : YEAR_B })));
   const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
   const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number }[] =
     axis.mode === 'month'
@@ -603,7 +604,13 @@ function calendarRows(
             rotate: false,
             size,
           },
-          { cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: shade(c.monthLabel) }))), h: rowH, rotate: false, size },
+          {
+            // Ny stil: annenhver uke. Excel-lik: ukene får månedens farge.
+            cells: fitLabel(axis.columns.map((c, i) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: ny ? (i % 2 === 0 ? '#F0F0F0' : '#FFFFFF') : shade(c.monthLabel) }))),
+            h: rowH,
+            rotate: false,
+            size,
+          },
         ];
   const ordered = bottom ? [...rows].reverse() : rows;
   let y = top;
