@@ -45,7 +45,7 @@
       </div>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="save-menu" class="tb primary menu" popovertarget="menu-save" disabled>Lagre</button>
-      <button type="button" class="tb icon" popovertarget="menu-help" title="Hjelp" aria-label="Hjelp">?</button>
+      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg>Hjelp</button>
     </header>
 
     <div id="menu-sheet" class="pop no-print" popover>
@@ -120,15 +120,68 @@
       </button>
     </div>
 
-    <div id="menu-help" class="pop pop-text no-print" popover>
-      <p>Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen.</p>
-      <p><strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument.<br /><strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved.</p>
-      <p>Zoom med Ctrl + hjul eller knappene + og −, og dra for å flytte. Prosenten mellom knappene viser hele arket.</p>
-      <p>Hold musen over en boks for datoer og detaljer. Klikk et år, en måned eller en uke i kalenderen for å fremheve perioden, eller et fag i forklaringen for å fremheve faget. Shift-klikk utvider til flere.</p>
-      <p>Redigering: klikk en boks for å velge den, dobbeltklikk for å skrive. Ctrl+Z angrer, Ctrl+Y gjør om, Esc fjerner valget.</p>
-      <p><strong>Data</strong>: tabell over alle bokser med lane, tekst og datoer slik planen er nå. Filtrer, sorter, klikk en rad for å finne boksen, og eksporter til Excel.</p>
-      <p class="muted">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
-    </div>
+    <dialog id="help" class="help no-print" aria-labelledby="help-title">
+      <header class="help-head">
+        <h2 id="help-title">Hjelp</h2>
+        <button type="button" class="help-close" id="help-close" aria-label="Lukk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </header>
+      <div class="help-body">
+        <section class="help-flow" aria-labelledby="help-flow-title">
+          <h3 id="help-flow-title">Slik jobber du med planen</h3>
+          <ol class="help-steps">
+            <li>
+              <h4>Lag planen fra Project</h4>
+              <p>Trykk <span class="ui-name">Generate New file</span>. Planen åpnes her i nettleseren.</p>
+            </li>
+            <li>
+              <h4>Gjør endringene dine</h4>
+              <p>Trykk <span class="ui-name">Rediger</span> for å flytte og skjule bokser, endre tekst og farge, lage overskriftsbokser og tegne kritisk linje.</p>
+            </li>
+            <li>
+              <h4>Lagre som arbeidsfil</h4>
+              <p>Velg <span class="ui-name">Lagre</span> → <span class="ui-name">Lagre arbeidsfil</span>. Alt appen trenger, også endringene dine, lagres inne i PDF-en. Ta vare på denne filen.</p>
+              <dl class="help-compare">
+                <div><dt>Lagre arbeidsfil</dt><dd>Kan åpnes og redigeres igjen. Til deg selv.</dd></div>
+                <div><dt>Lagre PDF for deling</dt><dd>Vanlig PDF til å sende ut og skrive ut. Kan ikke redigeres igjen.</dd></div>
+              </dl>
+            </li>
+            <li>
+              <h4>Oppdater når Project endrer seg</h4>
+              <p>Trykk <span class="ui-name">Update Existing file</span> og velg arbeidsfilen din. Ny framdrift hentes fra Project, og alt du har endret beholdes.</p>
+            </li>
+          </ol>
+          <p class="help-aside">Du kan også åpne en arbeidsfil direkte med <span class="ui-name">Åpne</span> for å fortsette der du slapp.</p>
+        </section>
+        <section class="help-tips" aria-labelledby="help-tips-title">
+          <h3 id="help-tips-title">Tips</h3>
+          <h4>Se planen</h4>
+          <ul>
+            <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
+            <li>Hold musen over en boks for datoer.</li>
+            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Shift-klikk velger flere.</li>
+          </ul>
+          <h4>Rediger</h4>
+          <ul>
+            <li>Klikk for å velge, dobbeltklikk for å skrive.</li>
+            <li>Høyreklikk en boks eller et lane-navn for flere valg.</li>
+            <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> angrer, <kbd>Ctrl</kbd>+<kbd>Y</kbd> gjør om, <kbd>Esc</kbd> fjerner valget.</li>
+          </ul>
+          <h4>Data</h4>
+          <ul>
+            <li>Alle bokser som tabell. Filtrer, sorter, klikk en rad for å finne boksen, og eksporter til Excel.</li>
+          </ul>
+          <h4>Personvern</h4>
+          <ul>
+            <li>Filene leses bare i nettleseren din og sendes ingen steder. Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="help-foot">
+        <span>Laget av Magnus Petersen</span>
+        <span id="help-version"></span>
+      </footer>
+    </dialog>
+
 
     <dialog id="update-dialog" class="ask no-print" aria-labelledby="update-dialog-title">
       <h2 id="update-dialog-title">Velg arbeidsfilen som skal oppdateres</h2>

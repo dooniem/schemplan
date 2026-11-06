@@ -126,8 +126,48 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .ctx-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .ctx-kbd { font-size: 12px; color: var(--muted); }
 .ctx-hint { display: block; min-height: calc(2 * 1.4em + 12px); padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4; color: var(--muted); }
-.pop-text { width: 340px; line-height: 1.45; }
-.pop-text p { margin: 4px 4px 8px; }
+/* Hjelp: arbeidsgangen som steg til venstre, tips til høyre */
+.help-btn { gap: 6px; border-color: var(--border); }
+dialog.help { width: min(860px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 12px 40px rgb(0 0 0 / 0.22); font-size: 14px; line-height: 1.5; }
+dialog.help[open] { display: flex; flex-direction: column; }
+dialog.help::backdrop { background: rgb(0 0 0 / 0.3); }
+.help-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px 24px; border-bottom: 1px solid var(--border); }
+.help-head h2 { margin: 0; font-size: 20px; }
+.help-close { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.help-close svg { width: 18px; height: 18px; }
+.help-close:hover { background: var(--bg); color: var(--text); }
+.help-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.help-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); overflow: auto; }
+.help-body section { padding: 20px 24px 24px; }
+.help-tips { background: var(--bg); border-left: 1px solid var(--border); }
+.help h3 { margin: 0 0 14px; font-size: 15px; }
+.help h4 { margin: 0 0 2px; font-size: 14px; }
+.help p { margin: 0; }
+.help-steps { margin: 0; padding: 0; list-style: none; counter-reset: steg; }
+.help-steps li { position: relative; padding: 0 0 18px 40px; counter-increment: steg; }
+.help-steps li::before { content: counter(steg); position: absolute; left: 0; top: -1px; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--surface); font-size: 13px; font-weight: 700; }
+/* Linjen mellom stegene */
+.help-steps li:not(:last-child)::after { content: ''; position: absolute; left: 12.5px; top: 30px; bottom: 4px; width: 1px; background: var(--border); }
+.help-steps li:last-child { padding-bottom: 0; }
+.ui-name { display: inline-block; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.help-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 0; }
+.help-compare div { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.help-compare div:first-child { border-color: var(--accent); }
+.help-compare dt { font-weight: 600; font-size: 13px; }
+.help-compare dd { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.help .help-aside { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); }
+.help-tips h4 { margin-top: 14px; }
+.help-tips h3 + h4 { margin-top: 0; }
+.help-tips ul { margin: 2px 0 0; padding-left: 18px; color: var(--text); }
+.help-tips li { margin-bottom: 2px; }
+.help kbd { padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 12px; }
+.help-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 24px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+.help-foot span:first-child { color: var(--text); font-weight: 600; }
+@media (max-width: 640px) {
+  .help-body { grid-template-columns: 1fr; }
+  .help-tips { border-left: 0; border-top: 1px solid var(--border); }
+  .help-compare { grid-template-columns: 1fr; }
+}
 
 main { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; }
 
