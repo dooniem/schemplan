@@ -117,3 +117,22 @@ describe('milepæler i appen', () => {
     expect(ms.milestoneStyle).toBeUndefined();
   });
 });
+
+describe('fagfarger i appen', () => {
+  it('farge for et fag gjelder alle boksene uten egen farge og følger med ved oppdatering', async () => {
+    const { mergePlans } = await import('./merge');
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true } as const;
+    const boxes = p.lanes.flatMap((l) => l.boxes).filter((b) => b.resolved?.trade === 'Betong' && !b.resolved.isMilestone);
+    expect(boxes.length).toBeGreaterThan(0);
+    boxes[0].fill = '#123456';
+    p.plan.layout.tradeColors = { Betong: { fill: '#8DCDF8' } };
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+    const L = computeLayout(p, opts, approxMeasure);
+    const fills = boxes.map((b) => { const it = L.items.find((i) => i.id === b.id); return it?.kind === 'box' ? it.fill : null; });
+    expect(fills[0]).toBe('#123456');
+    if (fills.length > 1) expect(fills[1]).toBe('#8DCDF8');
+    expect(L.legend.find((e) => e.trade === 'Betong')?.fill).toBe('#8DCDF8');
+    expect(mergePlans(p, testplan()).plan.plan.layout.tradeColors).toEqual({ Betong: { fill: '#8DCDF8' } });
+  });
+});

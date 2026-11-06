@@ -182,8 +182,10 @@ export function renderPlan(L: Layout): SVGSVGElement {
   node('line', { x1: x0, x2: x0, y1: yTop, y2: y1, stroke: '#000000', 'stroke-width': 0.35 }, svg);
 
   // Legend
-  const leg = node('g', { class: 'legend' }, svg);
+  const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {
+    // Hvert fag i sin egen gruppe, så det kan velges ved redigering
+    const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : legG;
     const cx = e.x + e.w / 2;
     const cy = e.y + e.h / 2;
     const s = e.h / 2;
