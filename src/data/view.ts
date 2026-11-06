@@ -84,7 +84,7 @@ export function createDataView(
         if (c.key === 'edited' && r.edited) td.className = 'yes';
         if (c.key === 'fill' && r.fill) {
           const sw = document.createElement('span');
-          sw.className = 'swatch';
+          sw.className = 'data-swatch';
           sw.style.background = r.fill;
           td.prepend(sw);
         }

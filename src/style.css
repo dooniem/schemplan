@@ -263,5 +263,5 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .data-table td.yes { color: var(--accent); font-weight: 600; }
 .data-table td.empty { color: var(--muted); padding: 16px 8px; }
 .data-table td:nth-child(3), .data-table td:nth-child(4) { font-variant-numeric: tabular-nums; }
-.swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 1px solid var(--border); border-radius: 2px; vertical-align: -1px; }
+.data-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 1px solid var(--border); border-radius: 2px; vertical-align: -1px; }
 .work[hidden] { display: none; }
