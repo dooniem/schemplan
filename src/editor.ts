@@ -584,6 +584,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     cw.append(sw);
     panel.append(cw);
+    panel.append(
+      segmented('Strek', style.dash ?? 'solid', [['solid', 'Hel'], ['dashed', 'Stiplet'], ['dotted', 'Prikket']], (v) =>
+        commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), dash: v })),
+      ),
+    );
 
     const clear = el('button', { type: 'button', class: 'button', title: 'Tar alle boksene ut av linjen' }, 'Fjern linjen');
     clear.disabled = !marked.length;

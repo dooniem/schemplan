@@ -1,5 +1,6 @@
 import type { Layout, TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
+import { dashArray } from '../layout/critical';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -180,7 +181,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.critical && L.critical.points.length >= 4) {
     const pts = L.critical.points;
     const d = pts.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
-    node('path', { class: 'critical-line', d, fill: 'none', stroke: L.critical.color, 'stroke-width': L.critical.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg);
+    const dash = dashArray(L.critical.dash, L.critical.width);
+    node('path', { class: 'critical-line', d, fill: 'none', stroke: L.critical.color, 'stroke-width': L.critical.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...(dash ? { 'stroke-dasharray': dash.map(r).join(' ') } : {}), 'pointer-events': 'none' }, svg);
   }
 
   // Ramme rundt planen og lane-kolonnen
