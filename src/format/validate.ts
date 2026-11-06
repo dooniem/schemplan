@@ -94,6 +94,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.style !== undefined) needEnum(lay, 'style', 'plan.layout', ['excel', 'ny']);
       if (lay.fitToSheet !== undefined) needBool(lay, 'fitToSheet', 'plan.layout');
       if (lay.minTextSize !== undefined) needNum(lay, 'minTextSize', 'plan.layout');
+      if (lay.titleSize !== undefined) optPos(lay, 'titleSize', 'plan.layout');
+      if (lay.logo !== undefined) {
+        const lg = lay.logo as Obj;
+        if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))
+          err('plan.layout.logo', 'må være et PNG- eller JPEG-bilde som data-URL, med forholdet mellom bredde og høyde');
+      }
     }
     const opt = plan.options;
     if (!isObj(opt)) err('plan.options', 'mangler');

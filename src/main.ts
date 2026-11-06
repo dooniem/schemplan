@@ -4,7 +4,7 @@ import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile } from './format/types';
 import { setPrintPage } from './print';
-import { computeLayout, DEFAULT_MIN_TEXT_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
+import { computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
@@ -188,6 +188,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   if (lay.style) opts.style = lay.style;
   if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
   if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;
+  opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
   baseName = file.name.replace(/\.(pdf|json)$/i, '').replace(/_(arbeidsfil|kompakt)$/i, '') || 'skjematisk-plan';
   syncControls();
 
@@ -222,7 +223,10 @@ function syncControls() {
   $<HTMLSelectElement>('#paper').value = opts.paper ?? 'A3';
   $<HTMLInputElement>('#min-text').value = String(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
   $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
-  $('#sheet-summary').textContent = sheetName(opts.paper ?? 'A3', opts.orientation);
+  $<HTMLElement>('#settings').title = `${sheetName(opts.paper ?? 'A3', opts.orientation)}. Ark, retning, stil, tekst og logo.`;
+  $<HTMLInputElement>('#title-size').value = String(opts.titleSizePt ?? DEFAULT_TITLE_PT);
+  $<HTMLButtonElement>('#logo-remove').disabled = !plan?.plan.layout.logo;
+  $<HTMLInputElement>('#logo-input').disabled = !plan;
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn) =>
@@ -270,6 +274,47 @@ $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
     draw();
   }
 });
+$<HTMLInputElement>('#title-size').addEventListener('input', (e) => {
+  const v = Number((e.target as HTMLInputElement).value.replace(',', '.'));
+  if (v >= 8 && v <= 40) {
+    opts.titleSizePt = v;
+    draw();
+  }
+});
+// Logo: gjøres om til en liten PNG, så arbeidsfilen ikke blir stor og alle bildetyper virker i PDF-en
+const LOGO_MAX_PX = 360;
+$<HTMLInputElement>('#logo-input').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !plan) return;
+  try {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    URL.revokeObjectURL(url);
+    const w0 = img.naturalWidth || 300;
+    const h0 = img.naturalHeight || 100;
+    const k = Math.min(1, LOGO_MAX_PX / h0, (LOGO_MAX_PX * 4) / w0);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w0 * k));
+    canvas.height = Math.max(1, Math.round(h0 * k));
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    plan.plan.layout.logo = { data: canvas.toDataURL('image/png'), aspect: canvas.width / canvas.height };
+    syncControls();
+    draw();
+  } catch {
+    saveStatus.textContent = `Kunne ikke lese bildet ${file.name}. Bruk PNG, JPEG eller SVG.`;
+    saveStatus.className = 'error small';
+  }
+});
+$<HTMLButtonElement>('#logo-remove').addEventListener('click', () => {
+  if (!plan) return;
+  delete plan.plan.layout.logo;
+  syncControls();
+  draw();
+});
 // Utskrift: A3 i samme retning som i appen, både fra knappen og fra Ctrl+P
 $<HTMLButtonElement>('#print').addEventListener('click', () => {
   setPrintPage(opts.paper ?? 'A3', opts.orientation);
@@ -290,6 +335,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
     style: opts.style ?? 'excel',
     fitToSheet: opts.fitToSheet,
     minTextSize: opts.minTextPt ?? DEFAULT_MIN_TEXT_PT,
+    titleSize: opts.titleSizePt ?? DEFAULT_TITLE_PT,
   });
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';
