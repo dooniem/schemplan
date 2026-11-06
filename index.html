@@ -117,6 +117,17 @@
       <p class="muted">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
     </div>
 
+    <dialog id="update-dialog" class="ask no-print" aria-labelledby="update-dialog-title">
+      <h2 id="update-dialog-title">Velg arbeidsfilen som skal oppdateres</h2>
+      <p>Den nye planen fra Project er lastet inn. Velg arbeidsfilen (.pdf) du har jobbet i, så legges redigeringene dine inn i de nye tallene.</p>
+      <p id="update-dialog-error" class="error small" hidden></p>
+      <div class="ask-actions">
+        <button type="button" id="update-skip" class="button">Vis ny plan uten redigeringer</button>
+        <button type="button" id="update-choose" class="button primary" autofocus>Velg arbeidsfil …</button>
+        <input type="file" id="update-pick" accept=".pdf,application/pdf" hidden />
+      </div>
+    </dialog>
+
     <main>
       <div id="file-info" class="statusbar no-print" aria-live="polite"></div>
       <div class="work">
