@@ -26,6 +26,14 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: 
 };
 
 $('#version').textContent = `v${__APP_VERSION__}`;
+$('#help-version').textContent = `Versjon ${__APP_VERSION__}`;
+{
+  const help = $('#help') as HTMLDialogElement;
+  $('#help-open').addEventListener('click', () => help.showModal());
+  $('#help-close').addEventListener('click', () => help.close());
+  // Klikk utenfor vinduet lukker det
+  help.addEventListener('click', (e) => e.target === help && help.close());
+}
 placePopovers();
 checkOutboundBlocked().then((blocked) => {
   const s = $('#csp-status');
