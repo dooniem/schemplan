@@ -125,6 +125,8 @@ export interface Layout {
   legend: LegendEntry[];
   /** Planen er høyere enn arket, selv etter krymping. */
   overflow: boolean;
+  /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
+  belowMin: boolean;
   style: PlanStyle;
 }
 
@@ -194,11 +196,14 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
 }
 
 export const DEFAULT_MIN_TEXT_PT = 6;
+/** Lenger ned krymper vi aldri, heller ikke for å få plass. */
+export const ABS_MIN_TEXT_PT = 3;
 
 /**
  * Tegner planen. Med fitToSheet finner den største tekststørrelsen (i trinn på 0,25 pt) mellom
- * minTextPt og valgt størrelse der planen får plass. Får den ikke plass ved minTextPt,
- * tegnes den ved minTextPt og merkes overflow, så appen kan foreslå annet ark.
+ * minTextPt og valgt størrelse der planen får plass. Får den ikke plass ved minTextPt, krympes
+ * teksten videre (ned til ABS_MIN_TEXT_PT) og merkes belowMin, så hele planen alltid er synlig
+ * og appen kan foreslå annet ark. Bare om den ikke får plass selv da, merkes den overflow.
  */
 export function computeLayout(file: PlanFile, opts: LayoutOptions, measure: Measure): Layout {
   const full = layoutAt(file, opts, measure, 1);
@@ -209,7 +214,24 @@ export function computeLayout(file: PlanFile, opts: LayoutOptions, measure: Meas
   let lo = Math.ceil(minPt / STEP);
   let hi = Math.floor(opts.textSizePt / STEP) - 1;
   const floor = at(lo * STEP);
-  if (floor.overflow) return floor;
+  if (floor.overflow) {
+    // Hellere liten tekst enn en plan som kuttes: krymp videre under minimum, og merk det
+    let a = Math.ceil(ABS_MIN_TEXT_PT / STEP);
+    let b = lo - 1;
+    const bottom = at(a * STEP);
+    if (bottom.overflow) return { ...bottom, belowMin: true };
+    let best = bottom;
+    while (a < b) {
+      const mid = Math.ceil((a + b + 1) / 2);
+      const L = at(mid * STEP);
+      if (L.overflow) b = mid - 1;
+      else {
+        a = mid;
+        best = L;
+      }
+    }
+    return { ...best, belowMin: true };
+  }
   let best = floor;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi + 1) / 2);
@@ -230,7 +252,7 @@ export function fitAlternatives(file: PlanFile, opts: LayoutOptions, measure: Me
     for (const orientation of ['landscape', 'portrait'] as Orientation[]) {
       if (paper === (opts.paper ?? 'A3') && orientation === opts.orientation) continue;
       const L = computeLayout(file, { ...opts, paper, orientation, fitToSheet: true }, measure);
-      out.push({ paper, orientation, textSizePt: L.textSizePt, fits: !L.overflow });
+      out.push({ paper, orientation, textSizePt: L.textSizePt, fits: !L.overflow && !L.belowMin });
     }
   return out;
 }
@@ -425,6 +447,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     items,
     legend,
     overflow,
+    belowMin: false,
     style: ny ? 'ny' : 'excel',
   };
 }
@@ -514,7 +537,10 @@ function buildPieces(
     }
     if (!useCallout) {
       const inner = Math.max(w - 2 * PAD_X, 0.5);
-      if (inner < base * 1.6 && !neverCallout) useCallout = true;
+      // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
+      // så like bokser med samme tekst behandles likt
+      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, base)));
+      if (inner < longestWord && !neverCallout) useCallout = true;
       else {
         lines = wrapLines(rawLines, inner, base, measure);
         const h = lines.length * lh + 2 * PAD_Y;

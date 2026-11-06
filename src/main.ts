@@ -1,6 +1,6 @@
 import './style.css';
 import { checkOutboundBlocked } from './csp';
-import { renderSheet, type Orientation } from './sheet';
+import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile } from './format/types';
 import { setPrintPage } from './print';
@@ -8,6 +8,7 @@ import { computeLayout, DEFAULT_MIN_TEXT_PT, fitAlternatives, type LayoutOptions
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
+import { createViewer } from './viewer';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -29,6 +30,15 @@ let plan: PlanFile | null = null;
 const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3' };
 const measure = canvasMeasure();
 const host = $<HTMLDivElement>('#sheet');
+const viewer = createViewer(host);
+viewer.onChange((z) => {
+  $('#zoom-level').textContent = `${Math.round(z * 100)} %`;
+  $<HTMLButtonElement>('#zoom-out').disabled = z <= 1;
+});
+$('#zoom-in').addEventListener('click', () => viewer.zoomIn());
+$('#zoom-out').addEventListener('click', () => viewer.zoomOut());
+$('#zoom-fit').addEventListener('click', () => viewer.fit());
+$('#zoom-width').addEventListener('click', () => viewer.fitWidth());
 const status = el('p', '', 'muted small');
 const suggest = el('div', '', 'suggest small');
 let suggestTimer = 0;
@@ -36,29 +46,35 @@ const pt = (v: number) => v.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? 'liggende' : 'stående'}`;
 
 function draw() {
+  // Utskriftsarket følger alltid det som vises, også når dialogen åpnes fra nettleserens meny
+  setPrintPage(opts.paper ?? 'A3', opts.orientation);
   host.classList.toggle('landscape', opts.orientation === 'landscape');
   host.classList.toggle('portrait', opts.orientation === 'portrait');
   if (!plan) {
-    host.replaceChildren(renderSheet(opts.orientation));
+    const a3 = a3Size(opts.orientation);
+    viewer.show(renderSheet(opts.orientation), a3.width, a3.height);
     return;
   }
   const t0 = performance.now();
   const layout = computeLayout(plan, opts, measure);
-  host.replaceChildren(renderPlan(layout));
+  viewer.show(renderPlan(layout), layout.width, layout.height);
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
-  status.textContent = layout.overflow
+  const tight = layout.overflow || layout.belowMin;
+  status.textContent = layout.belowMin && !layout.overflow
+    ? `Planen får bare plass på ${here} med ${pt(layout.textSizePt)} pt tekst, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men teksten kan bli vanskelig å lese på papir.`
+    : layout.overflow
     ? opts.fitToSheet
-      ? `Planen får ikke plass på ${here} med minst ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
+      ? `Planen får ikke plass på ${here}, selv med ${pt(layout.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
       : `Planen får ikke plass på ${here} med ${pt(opts.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
     : `Tegnet på ${ms} ms.${shrunk}`;
-  status.className = layout.overflow ? 'error small' : 'muted small';
+  status.className = tight ? 'error small' : 'muted small';
 
   // Forslag til annet ark når planen er trang. Regnes ut litt etterpå, så tegningen ikke venter.
   suggest.replaceChildren();
   window.clearTimeout(suggestTimer);
-  if (!layout.overflow && layout.textScale >= 0.999) return;
+  if (!tight && layout.textScale >= 0.999) return;
   const current = plan;
   suggestTimer = window.setTimeout(() => {
     if (plan !== current) return;
@@ -66,7 +82,7 @@ function draw() {
     const order: Paper[] = ['A3', 'A2', 'A1'];
     const alts = fitAlternatives(current, opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
     const better: typeof alts = [];
-    let bestSoFar = layout.overflow ? 0 : layout.textSizePt;
+    let bestSoFar = tight ? 0 : layout.textSizePt;
     for (const paper of order) {
       const top = alts.filter((a) => a.paper === paper).sort((a, b) => b.textSizePt - a.textSizePt)[0];
       if (top && top.textSizePt > bestSoFar + 0.2) {
@@ -75,7 +91,7 @@ function draw() {
       }
     }
     if (!better.length) return;
-    suggest.append(el('span', layout.overflow ? 'Får plass på: ' : 'Større tekst med: '));
+    suggest.append(el('span', tight ? 'Får plass uten å gå under minimum på: ' : 'Større tekst med: '));
     for (const a of better) {
       const b = el('button', `${sheetName(a.paper, a.orientation)} (${pt(a.textSizePt)} pt)`, 'button') as HTMLButtonElement;
       b.type = 'button';

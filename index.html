@@ -52,9 +52,15 @@
             <input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt
           </label>
           <span class="spacer"></span>
+          <div class="group" role="group" aria-label="Zoom">
+            <button type="button" id="zoom-out" title="Zoom ut" aria-label="Zoom ut" disabled>−</button>
+            <button type="button" id="zoom-fit" title="Vis hele arket (Shift + dobbeltklikk)"><span id="zoom-level">100 %</span></button>
+            <button type="button" id="zoom-width" title="La arket fylle bredden av vinduet">Fyll bredden</button>
+            <button type="button" id="zoom-in" title="Zoom inn (eller Ctrl + hjul, dobbeltklikk)" aria-label="Zoom inn">+</button>
+          </div>
           <button type="button" id="print" class="button" disabled>Skriv ut / lagre PDF</button>
         </div>
-        <p class="muted small">Filen leses bare lokalt i nettleseren og lagres ingen steder. Ved PDF: velg «Lagre som PDF» i utskriftsdialogen. Arkstørrelsen er forhåndsvalgt.</p>
+        <p class="muted small">Filen leses bare lokalt i nettleseren og lagres ingen steder. Ved PDF: velg «Lagre som PDF» i utskriftsdialogen. Arkstørrelsen er forhåndsvalgt. Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte.</p>
         <div id="file-info" aria-live="polite"></div>
       </section>
       <div id="sheet" class="sheet-host landscape"></div>

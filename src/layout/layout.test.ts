@@ -131,10 +131,19 @@ describe('Excel-utseende', () => {
 const shape = (name: string): PlanFile => JSON.parse(readFileSync(new URL(`../../examples/former/${name}.json`, import.meta.url), 'utf8'));
 
 describe('tilpasning til arket', () => {
-  it('krymper aldri under minste tekststørrelse, og sier fra når planen ikke får plass', () => {
+  it('krymper under minimum heller enn å kutte planen, og sier fra', () => {
     const L = computeLayout(shape('mange-av-begge'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: true, minTextPt: 7 }, approxMeasure);
-    expect(L.textSizePt).toBeGreaterThanOrEqual(7 - 1e-9);
-    expect(L.overflow).toBe(true);
+    expect(L.textSizePt).toBeLessThan(7);
+    expect(L.overflow).toBe(false);
+    expect(L.belowMin).toBe(true);
+    // Forslag regnes bare som "får plass" når minimum holdes
+    const alts = fitAlternatives(shape('mange-av-begge'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: true, minTextPt: 7 }, approxMeasure);
+    expect(alts.find((a) => a.paper === 'A3')?.fits).toBe(false);
+  });
+
+  it('får plass ved minimum: ikke merket under minimum', () => {
+    const L = computeLayout(shape('middels'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: true, minTextPt: 6 }, approxMeasure);
+    expect(L.belowMin).toBe(false);
   });
 
   it('fast tekststørrelse krymper ikke', () => {
@@ -199,6 +208,14 @@ describe('brukerens callout-valg', () => {
   it('smal boks får callout når appen bestemmer', () => {
     const it = withBox({});
     expect(it.kind === 'box' && it.callout).toBeTruthy();
+  });
+  it('kort tekst som får plass blir stående i boksen, selv i en smal boks', () => {
+    // Bredden avgjør ikke alene; bare om teksten faktisk får plass
+    const it = withBox({ text: 'L2', resolved: { start: '2026-03-02', finish: '2026-03-07', isMilestone: false, trade: '(none)' } });
+    const inner = it.kind === 'box' ? it.x1 - it.x0 - 1.4 : 0;
+    expect(inner).toBeGreaterThan(approxMeasure('L2', 9 * 0.3528));
+    expect(inner).toBeLessThan(9 * 0.3528 * 1.6); // den gamle faste grensen ville gitt callout
+    expect(it.kind === 'box' && it.callout).toBeNull();
   });
   it('callout av: teksten står i boksen', () => {
     const it = withBox({ callout: 'off' });
