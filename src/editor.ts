@@ -224,6 +224,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selected: string | null = null;
   /** Valgt lane (klikk i lane-kolonnen). Bare én av boks og lane er valgt om gangen. */
   let selectedLane: string | null = null;
+  /** Valgt fag (klikk i legenden). */
+  let selectedTrade: string | null = null;
   let past: PlanFile[] = [];
   let future: PlanFile[] = [];
   let dirty = false;
@@ -246,7 +248,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
   };
 
@@ -502,6 +504,67 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
+  /** Endrer fargen for et helt fag. undefined fjerner fargen fra appen. */
+  const setTradeColor = (trade: string, v: { fill: string; text?: string } | undefined) =>
+    commit((pl) => {
+      const all = { ...pl.plan.layout.tradeColors };
+      if (v) all[trade] = v;
+      else delete all[trade];
+      if (Object.keys(all).length) pl.plan.layout.tradeColors = all;
+      else delete pl.plan.layout.tradeColors;
+    });
+
+  const buildTradePanel = (plan: PlanFile, trade: string) => {
+    const head = el('div', { class: 'panel-head' });
+    head.append(el('h2', {}, 'Fag'));
+    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
+    close.addEventListener('click', () => select(null));
+    head.append(close);
+    panel.append(head);
+    const pc = plan.colors.find((c) => c.name === trade)!;
+    const own = plan.plan.layout.tradeColors?.[trade];
+    const fill = (own?.fill ?? pc.fill ?? '#FFFFFF').toUpperCase();
+    const count = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && !b.resolved.isMilestone).length, 0);
+    const own1 = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && b.fill).length, 0);
+    panel.append(el('p', { class: 'prop-label' }, trade === '(none)' ? 'Uten fag' : trade));
+    panel.append(el('p', { class: 'muted small' }, `${count} bokser${own1 ? `, ${own1} av dem med egen farge som ikke endres` : ''}.`));
+
+    const cw = el('div', { class: 'prop' });
+    cw.append(el('span', { class: 'prop-label' }, 'Farge for hele faget'));
+    const sw = el('div', { class: 'swatches' });
+    const seen = new Set<string>();
+    const swatch = (f: string, name: string) => {
+      const key = f.toUpperCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(fill === key) });
+      s.style.background = f;
+      s.addEventListener('click', () => setTradeColor(trade, { fill: key, ...(own?.text ? { text: own.text } : {}) }));
+      sw.append(s);
+    };
+    plan.colors.filter((c) => c.fill).forEach((c) => swatch(c.fill!, c.name === '(none)' ? 'Uten fag' : c.name));
+    LANE_COLORS.forEach((c) => swatch(c, 'Lys farge'));
+    cw.append(sw);
+    const row = el('div', { class: 'row' });
+    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
+    custom.value = fill.toLowerCase();
+    custom.addEventListener('change', () => setTradeColor(trade, { fill: custom.value.toUpperCase(), ...(own?.text ? { text: own.text } : {}) }));
+    row.append(custom, el('span', { class: 'small' }, 'Egen farge'));
+    const back = el('button', { type: 'button', class: 'button small' }, 'Fargen fra Project');
+    back.disabled = !own;
+    back.addEventListener('click', () => setTradeColor(trade, undefined));
+    row.append(back);
+    cw.append(row);
+    panel.append(cw);
+    const tc = own?.text === '#000000' ? 'black' : own?.text === '#FFFFFF' ? 'white' : 'auto';
+    const tcw = segmented('Tekstfarge', tc, [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']], (v) =>
+      setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
+    );
+    if (!own) tcw.querySelectorAll('button').forEach((x) => (x.disabled = true));
+    panel.append(tcw);
+    panel.append(el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'));
+  };
+
   const buildPanel = () => {
     const plan = host.getPlan();
     const b = active && plan && selected ? findBox(plan, selected) : null;
@@ -511,6 +574,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !active) return;
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
+    if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
       const tips = el('ul', { class: 'tips' });
@@ -520,6 +584,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Dra i den blå streken under valgt boks for å endre høyden.',
         'Dra i nederste kant av en lane for å gi den fast høyde.',
         'Dra en boks til en annen lane for å flytte den dit.',
+        'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
         'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
         'Høyreklikk en lane for ny boks, ny lane, lanehøyde og skjulte bokser.',
         'Ctrl+D kopierer valgt boks. Delete skjuler den.',
@@ -640,6 +705,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       tradeBtn.addEventListener('click', () => change((x) => delete x.fill));
       row.append(custom, el('span', { class: 'small' }, 'Egen farge'), tradeBtn);
       cw.append(row);
+      const trade = b.resolved?.trade;
+      if (trade && plan.colors.some((c) => c.name === trade)) {
+        const tb = el('button', { type: 'button', class: 'linkish small' }, `Endre fargen for hele faget «${trade === '(none)' ? 'Uten fag' : trade}» …`);
+        tb.addEventListener('click', () => selectTrade(trade));
+        cw.append(tb);
+      }
       panel.append(cw);
 
       const tc = b.textColor === '#000000' ? 'black' : b.textColor === '#FFFFFF' ? 'white' : 'auto';
@@ -742,6 +813,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return l;
     };
     const L = layoutNow;
+    const le = selectedTrade ? L.legend.find((x) => x.trade === selectedTrade) : null;
+    if (le) {
+      const rect = document.createElementNS(NS, 'rect');
+      for (const [k, v] of Object.entries({ x: le.x - 0.8, y: le.y - 0.8, width: le.w + 1.6, height: le.h + 1.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.5, rx: 0.5 })) rect.setAttribute(k, String(v));
+      g.append(rect);
+    }
     for (const ln of L.lanes) {
       const pl = plan ? findLane(plan, ln.id) : null;
       if (ln.id === selectedLane) {
@@ -977,13 +1054,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const select = (id: string | null) => {
     selected = id;
     selectedLane = null;
+    selectedTrade = null;
     typingSession = false;
     buildPanel();
     overlay();
   };
 
+  const selectTrade = (t: string) => {
+    selected = null;
+    selectedLane = null;
+    selectedTrade = t;
+    typingSession = false;
+    buildPanel();
+    overlay();
+  };
   const selectLane = (id: string | null) => {
     selected = null;
+    selectedTrade = null;
     selectedLane = id;
     typingSession = false;
     buildPanel();
@@ -1006,6 +1093,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     const g = itemOf(e);
+    const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
+    if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
     const ln = g ? null : titleLaneOf(e);
     if (ln) selectLane(ln.id);
     else select(g ? g.getAttribute('data-id') : null);
@@ -1179,6 +1268,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const ids = plan.lanes.flatMap((l) => l.boxes.map((b) => b.id));
     ids.forEach((id) => resetBoxInPlan(plan, id));
     plan.lanes.forEach((l) => resetLane(l));
+    delete plan.plan.layout.tradeColors;
     host.redraw();
     buildPanel();
     syncTools();
@@ -1237,7 +1327,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
+    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
     get active() {
       return active;
     },

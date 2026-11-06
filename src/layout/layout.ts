@@ -114,6 +114,8 @@ export interface LegendEntry {
   fill: string;
   border: string | null;
   textColor: string;
+  /** Faget oppføringen viser (ikke for symboler). */
+  trade?: string;
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
   symbol?: 'diamond' | 'flag' | 'holiday';
@@ -297,7 +299,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const ny = opts.style === 'ny';
   const base = opts.textSizePt * PT_TO_MM * scale;
   const lh = base * LINE_HEIGHT;
-  const colors = new Map<string, TradeColor>(file.colors.map((c) => [c.name, c]));
+  // Fagfarger fra appen går foran fargene fra Project
+  const tc = file.plan.layout.tradeColors ?? {};
+  const fileColors: TradeColor[] = file.colors.map((c) => (tc[c.name] ? { ...c, fill: tc[c.name].fill, text: tc[c.name].text ?? autoTextColor(tc[c.name].fill) } : c));
+  const colors = new Map<string, TradeColor>(fileColors.map((c) => [c.name, c]));
   const noneColor = colors.get('(none)') ?? { name: '(none)', fill: '#FFFAC8', border: '#000000', text: '#000000' };
 
   // ---- Overskrift ----
@@ -377,9 +382,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
           ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
         ]
       : [];
-    const tradeEntries = file.colors.filter((c) => usedTrades.has(c.name));
-    const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol }))];
-    for (const { c, symbol } of entries) {
+    const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name));
+    const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined }))];
+    for (const { c, symbol, trade } of entries) {
       const name = ny && c.name === '(none)' ? 'Uten fag' : c.name;
       const w = sw + 1.5 + measure(name, legendSize) + 5;
       if (lx + w > lxMax && lx > MARGIN) {
@@ -395,6 +400,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         border: ny ? derivedBorder(c.fill ?? '#FFFFFF') : c.border,
         textColor: c.text ?? '#000000',
         symbol,
+        trade,
         label: { x: lx + sw + 1.5, y: row * rowStep + sh * 0.8, lines: [name], size: legendSize, color: '#000000', anchor: 'start' },
       });
       lx += w;

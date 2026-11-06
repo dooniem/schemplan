@@ -100,6 +100,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))
           err('plan.layout.logo', 'må være et PNG- eller JPEG-bilde som data-URL, med forholdet mellom bredde og høyde');
       }
+      if (lay.tradeColors !== undefined) {
+        const tc = lay.tradeColors;
+        const hex = (v: unknown) => typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v);
+        if (!isObj(tc) || !Object.values(tc).every((v) => isObj(v) && hex(v.fill) && (v.text === undefined || hex(v.text))))
+          err('plan.layout.tradeColors', 'må ha fill (og eventuelt text) som farge #RRGGBB for hvert fag');
+      }
     }
     const opt = plan.options;
     if (!isObj(opt)) err('plan.options', 'mangler');

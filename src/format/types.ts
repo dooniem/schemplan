@@ -49,6 +49,8 @@ export interface PlanSettings {
     titleSize?: number;
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
+    /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
+    tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
   };
   options: {
     legend: boolean;
