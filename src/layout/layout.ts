@@ -502,9 +502,10 @@ function buildPieces(
     }
 
     const c = colors.get(r.trade) ?? noneColor;
-    const fill = c.fill ?? '#FFFFFF';
-    // Ny stil: svart eller hvit tekst etter kontrast, kant i mørkere utgave av fyllet
-    const textColor = ny ? autoTextColor(fill) : (c.text ?? '#000000');
+    // Farge valgt i appen går foran fagets farge
+    const fill = box.fill ?? c.fill ?? '#FFFFFF';
+    // Ny stil, eller egen farge: svart eller hvit tekst etter kontrast. Kant i mørkere utgave av fyllet.
+    const textColor = box.textColor ?? (ny || box.fill ? autoTextColor(fill) : (c.text ?? '#000000'));
     const bx0 = axis.xStart(Math.max(s, axis.start));
     const bx1 = Math.max(bx0 + 0.6, axis.xEnd(Math.min(f, addDays(axis.end, -1))));
     const w = bx1 - bx0;
@@ -517,7 +518,7 @@ function buildPieces(
       y: 0,
       h: 0,
       fill,
-      border: ny ? derivedBorder(fill) : c.border,
+      border: ny || box.fill ? derivedBorder(fill) : c.border,
       text: null,
       callout: null,
       arrowLeft: s < axis.start,

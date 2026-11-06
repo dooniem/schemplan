@@ -93,6 +93,12 @@ export interface Box {
   calloutSide?: 'auto' | 'left' | 'right';
   /** Det som tegnes. null = tegnes ikke. */
   resolved: ResolvedBox | null;
+  /** Bakgrunnsfarge valgt i appen (valgfritt). Uten den brukes fagets farge. */
+  fill?: HexColor;
+  /** Tekstfarge valgt i appen (valgfritt). Uten den velges svart eller hvit etter kontrast når fill er satt. */
+  textColor?: HexColor;
+  /** Tekst og rotasjon før første endring i appen, så de kan tilbakestilles (valgfritt). */
+  original?: { text: string; rotation: Rotation };
 }
 
 export interface MilestoneStyle {

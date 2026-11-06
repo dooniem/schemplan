@@ -51,6 +51,12 @@
           <label class="field" id="min-text-field">Minst
             <input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt
           </label>
+          <button type="button" id="edit" class="button" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon">Rediger</button>
+          <div class="group" id="edit-tools" role="group" aria-label="Redigering" hidden>
+            <button type="button" id="undo" title="Angre (Ctrl+Z)" disabled>Angre</button>
+            <button type="button" id="redo" title="Gjør om (Ctrl+Y)" disabled>Gjør om</button>
+            <button type="button" id="reset-all" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
+          </div>
           <span class="spacer"></span>
           <div class="group" role="group" aria-label="Zoom">
             <button type="button" id="zoom-out" title="Zoom ut" aria-label="Zoom ut" disabled>−</button>
@@ -65,7 +71,10 @@
         <p class="muted small">Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen. <strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument. <strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved. Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte.</p>
         <div id="file-info" aria-live="polite"></div>
       </section>
-      <div id="sheet" class="sheet-host landscape"></div>
+      <div class="work">
+        <div id="sheet" class="sheet-host landscape"></div>
+        <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
+      </div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

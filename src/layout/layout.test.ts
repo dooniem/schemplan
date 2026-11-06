@@ -241,3 +241,27 @@ describe('brukerens callout-valg', () => {
     expect(it.kind === 'box' && it.callout).toBeTruthy();
   });
 });
+
+describe('farger valgt i appen', () => {
+  const firstBox = (p: ReturnType<typeof example>) => p.lanes.flatMap((l) => l.boxes).find((b) => b.resolved && !b.resolved.isMilestone)!;
+  const draw = (p: ReturnType<typeof example>, id: string) =>
+    computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false }, approxMeasure).items.find((i) => i.id === id)!;
+  it('egen bakgrunn går foran faget, og teksten får kontrast av seg selv', () => {
+    const p = example();
+    const b = firstBox(p);
+    b.fill = '#000080';
+    b.callout = 'off';
+    const it = draw(p, b.id);
+    expect(it.kind === 'box' && it.fill).toBe('#000080');
+    expect(it.kind === 'box' && it.text?.color).toBe('#FFFFFF');
+  });
+  it('valgt tekstfarge går foran kontrastvalget', () => {
+    const p = example();
+    const b = firstBox(p);
+    b.fill = '#000080';
+    b.textColor = '#000000';
+    b.callout = 'off';
+    const it = draw(p, b.id);
+    expect(it.kind === 'box' && it.text?.color).toBe('#000000');
+  });
+});
