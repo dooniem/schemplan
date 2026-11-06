@@ -512,7 +512,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     const add = el('button', { type: 'button', class: 'button', title: 'Ny lane rett under denne' }, 'Ny lane');
     add.addEventListener('click', () => addLane(l.id));
-    const del = el('button', { type: 'button', class: 'button', title: l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk en lane for å vise den igjen. (Delete)' }, l.manual ? 'Slett' : 'Skjul');
+    const del = el('button', { type: 'button', class: 'button', title: l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk et lane-navn for å vise den igjen. (Delete)' }, l.manual ? 'Slett' : 'Skjul');
     del.disabled = vis.length <= 1 && pos >= 0;
     del.addEventListener('click', () => removeLaneById(l.id));
     const reset = el('button', { type: 'button', class: 'button', title: 'Navn og farge fra Project, og automatisk høyde' }, 'Tilbakestill lane');
@@ -774,7 +774,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Dra en boks til en annen lane for å flytte den dit.',
         'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
         'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
-        'Høyreklikk en lane for ny boks, ny lane, lanehøyde og skjulte bokser.',
+        'Høyreklikk et lane-navn for ny lane, lanehøyde og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
         'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
         'Ctrl+D kopierer valgt boks. Delete skjuler den.',
         'Ctrl+Z angrer, Ctrl+Y gjør om.',
@@ -1479,49 +1479,54 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       b.addEventListener('click', fn);
       menu.append(b);
     };
-    menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
-    item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
-    item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
-    item('Ny lane under', 'Lanen er laget i appen og følger ikke Project.', null, () => addLane(ln.id));
-    item('Endre navn og farge', 'Åpner lanen i panelet. Dobbeltklikk navnet gjør det samme.', null, () => selectLane(ln.id));
-    item(lane.manual ? 'Slett lane' : 'Skjul lane', lane.manual ? 'Lanen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => removeLaneById(ln.id), L.lanes.length <= 1);
-    for (const hl of plan.lanes.filter((x) => x.shown && x.hidden)) {
-      const hid = hl.id;
-      item(`Vis lane igjen: ${hl.name.replace(/\/?\|/g, ' ')}`, 'Skjult lane. Den kommer tilbake på samme plass.', null, () => commit((pl) => delete findLane(pl, hid)!.hidden));
-    }
-    // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
-    const start = L.dateAt(Math.max(p.x, L.plot.x0));
-    const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
-    const finishT = new Date(`${start}T00:00:00Z`);
-    finishT.setUTCDate(finishT.getUTCDate() + days);
-    const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];
-    item('Ny boks her', `Fra ${start.split('-').reverse().join('.')}. Følger ikke Project.`, null, () => {
-      let made: Box | null = null;
-      commit((pl) => {
-        made = newBox(pl, ln.id, start, finish);
-        if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
-      });
-      if (made) select((made as Box).id);
-    });
-    const hiddenBoxes = lane.boxes.filter((b) => b.hidden);
-    for (const hb of hiddenBoxes) {
-      const hid = hb.id;
-      item(`Vis igjen: ${hb.text.replace(/\/?\|/g, ' ').replace(/^\*/, '')}`, 'Skjult boks i denne lanen.', null, () => commit((pl) => delete findBox(pl, hid)!.hidden));
-    }
-    if (box) {
+    // Menyen følger det du høyreklikket: lane-navnet gir lanevalg, en boks gir boksvalg,
+    // og tomt sted i lanen gir ny boks og skjulte bokser
+    const onTitle = p.x < L.plot.x0;
+    if (onTitle) {
+      menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
+      item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
+      item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
+      item('Ny lane under', 'Lanen er laget i appen og følger ikke Project.', null, () => addLane(ln.id));
+      item('Endre navn og farge', 'Åpner lanen i panelet. Dobbeltklikk navnet gjør det samme.', null, () => selectLane(ln.id));
+      item(lane.manual ? 'Slett lane' : 'Skjul lane', lane.manual ? 'Lanen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => removeLaneById(ln.id), L.lanes.length <= 1);
+      for (const hl of plan.lanes.filter((x) => x.shown && x.hidden)) {
+        const hid = hl.id;
+        item(`Vis lane igjen: ${hl.name.replace(/\/?\|/g, ' ')}`, 'Skjult lane. Den kommer tilbake på samme plass.', null, () => commit((pl) => delete findLane(pl, hid)!.hidden));
+      }
+    } else if (box) {
       const id = box.id;
-      menu.append(el('p', { class: 'pop-title' }, 'Boks'));
+      menu.replaceChildren(el('p', { class: 'pop-title' }, box.resolved?.isMilestone ? 'Milepæl' : 'Boks'));
       if (!box.resolved?.isMilestone) item('Overskriftsboks', 'Teksten øverst, og andre bokser kan ligge inne i den.', !!box.header, () => setHeader(id, !box.header));
       item('Kopier', 'Kopi rett under, som følger ikke Project.', null, () => {
         selected = id;
         copySelected();
       });
-      item(box.manual ? 'Slett' : 'Skjul', box.manual ? 'Boksen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => {
+      item(box.manual ? 'Slett' : 'Skjul', box.manual ? 'Boksen er laget i appen.' : 'Vis den igjen fra høyreklikk i lanen.', null, () => {
         selected = id;
         removeSelected();
       });
       if (!box.resolved?.isMilestone) item('Standard høyde', 'Så høy som teksten krever.', null, () => commit((pl) => delete findBox(pl, id)!.height), !box.height);
       item('Løsne', 'La appen velge plassen i lanen igjen.', null, () => commit((pl) => delete findBox(pl, id)!.top), box.top === undefined);
+    } else {
+      menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
+      // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
+      const start = L.dateAt(Math.max(p.x, L.plot.x0));
+      const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
+      const finishT = new Date(`${start}T00:00:00Z`);
+      finishT.setUTCDate(finishT.getUTCDate() + days);
+      const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];
+      item('Ny boks her', `Fra ${start.split('-').reverse().join('.')}. Følger ikke Project.`, null, () => {
+        let made: Box | null = null;
+        commit((pl) => {
+          made = newBox(pl, ln.id, start, finish);
+          if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
+        });
+        if (made) select((made as Box).id);
+      });
+      for (const hb of lane.boxes.filter((b) => b.hidden)) {
+        const hid = hb.id;
+        item(`Vis igjen: ${hb.text.replace(/\/?\|/g, ' ').replace(/^\*/, '')}`, 'Skjult boks i denne lanen.', null, () => commit((pl) => delete findBox(pl, hid)!.hidden));
+      }
     }
     if (!menu.matches(':popover-open')) menu.showPopover();
     const vw = document.documentElement.clientWidth;
