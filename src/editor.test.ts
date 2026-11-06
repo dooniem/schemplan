@@ -98,3 +98,22 @@ describe('lanes i appen', () => {
     expect(isLaneEdited(l)).toBe(false);
   });
 });
+
+describe('milepæler i appen', () => {
+  it('utseende fra appen går foran Project og følger med ved oppdatering', async () => {
+    const { mergePlans } = await import('./merge');
+    const p = testplan();
+    const ms = p.lanes.flatMap((l) => l.boxes).find((b) => b.resolved?.isMilestone)!;
+    expect(ms).toBeTruthy();
+    ms.milestoneStyle = { symbol: 'flag', color: 'red', verticalLine: true };
+    expect(isEdited(ms)).toBe(true);
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true }, approxMeasure);
+    const it = L.items.find((i) => i.id === ms.id)!;
+    expect(it.kind === 'milestone' && it.symbol === 'flag' && it.color === '#FF0000' && it.verticalLine).toBe(true);
+    const merged = mergePlans(p, testplan()).plan.lanes.flatMap((l) => l.boxes).find((b) => b.id === ms.id)!;
+    expect(merged.milestoneStyle).toEqual(ms.milestoneStyle);
+    resetBox(ms);
+    expect(ms.milestoneStyle).toBeUndefined();
+  });
+});
