@@ -124,7 +124,7 @@
       <p>Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen.</p>
       <p><strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument.<br /><strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved.</p>
       <p>Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte. Shift + dobbeltklikk viser hele arket.</p>
-      <p>Hold musen over en boks for datoer og detaljer. Klikk et år, en måned eller en uke i kalenderen for å fremheve perioden; Shift-klikk utvider den.</p>
+      <p>Hold musen over en boks for datoer og detaljer. Klikk et år, en måned eller en uke i kalenderen for å fremheve perioden, eller et fag i forklaringen for å fremheve faget. Shift-klikk utvider til flere.</p>
       <p>Redigering: klikk en boks for å velge den, dobbeltklikk for å skrive. Ctrl+Z angrer, Ctrl+Y gjør om, Esc fjerner valget.</p>
       <p><strong>Data</strong>: tabell over alle bokser med lane, tekst og datoer slik planen er nå. Filtrer, sorter, klikk en rad for å finne boksen, og eksporter til Excel.</p>
       <p class="muted">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
@@ -147,6 +147,7 @@
         <div id="sheet" class="sheet-host landscape"></div>
         <div id="focus-bar" class="focus-bar no-print" role="status" hidden>
           <span class="focus-text"></span>
+          <button type="button" class="tb focus-only-btn" aria-pressed="false" hidden title="Skjuler boksene i de andre fagene. Gjelder bare visningen, ikke PDF-en.">Vis bare dette faget</button>
           <button type="button" class="icon" title="Fjern fremhevingen (Esc)" aria-label="Fjern fremhevingen">×</button>
         </div>
         <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
