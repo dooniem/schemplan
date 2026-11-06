@@ -216,3 +216,10 @@ details summary { cursor: pointer; font-size: 13px; }
   .brand { display: none; }
   #reset-all { display: none; }
 }
+
+/* Spørsmål ved åpning fra Project */
+dialog.ask { max-width: 440px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 8px 28px rgb(0 0 0 / 0.18); }
+dialog.ask::backdrop { background: rgb(0 0 0 / 0.25); }
+dialog.ask h2 { margin: 0 0 8px; font-size: 16px; }
+dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.ask-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; }
