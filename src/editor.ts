@@ -135,6 +135,62 @@ export function removeBox(plan: PlanFile, id: string): void {
   else b.hidden = true;
 }
 
+// ---- Lanes ----
+/** Lysere farger til lanes, i tillegg til fargene planen alt bruker. */
+export const LANE_COLORS = ['#FFFFFF', '#DDDDDD', '#8DCDF8', '#BEE5B0', '#FCC781', '#D7B4F3', '#98DEDE', '#F8F1AE', '#D7CAB7', '#EA8183', '#CEE5ED', '#F6CDC7', '#FFC5D3'];
+
+/** Har brukeren endret lanen? */
+export function isLaneEdited(l: Lane): boolean {
+  return !!(l.original || l.height || l.hidden || l.manual);
+}
+
+/** Tar vare på navn og farge fra Project før første endring. */
+export function keepLaneOriginal(l: Lane): void {
+  if (!l.original && !l.manual) l.original = { name: l.name, fill: l.fill };
+}
+
+/** Setter navn og farge tilbake og fjerner fast høyde og skjuling. */
+export function resetLane(l: Lane): void {
+  if (l.original) {
+    l.name = l.original.name;
+    l.fill = l.original.fill;
+  }
+  delete l.original;
+  delete l.height;
+  delete l.hidden;
+}
+
+/** Ny lane laget i appen, rett etter lanen med id `afterId` (eller først). */
+export function newLane(plan: PlanFile, afterId: string | null): Lane {
+  const used = new Set(plan.lanes.map((l) => l.id));
+  let n = 1;
+  while (used.has(`app_lane_${n}`)) n++;
+  const lane: Lane = { id: `app_lane_${n}`, name: 'Ny lane', fill: null, shown: true, boxes: [], manual: true };
+  const i = afterId === null ? -1 : plan.lanes.findIndex((l) => l.id === afterId);
+  plan.lanes.splice(i + 1, 0, lane);
+  return lane;
+}
+
+/** Flytter lanen til plass `to` i rekkefølgen (regnet etter at den er tatt ut). */
+export function moveLane(plan: PlanFile, id: string, to: number): void {
+  const i = plan.lanes.findIndex((l) => l.id === id);
+  if (i < 0) return;
+  const [l] = plan.lanes.splice(i, 1);
+  plan.lanes.splice(Math.max(0, Math.min(plan.lanes.length, to)), 0, l);
+}
+
+/** Lanes laget i appen slettes; bokser som er flyttet dit, flyttes tilbake. Lanes fra Project skjules. */
+export function removeLane(plan: PlanFile, id: string): void {
+  const lane = plan.lanes.find((l) => l.id === id);
+  if (!lane) return;
+  if (!lane.manual) {
+    lane.hidden = true;
+    return;
+  }
+  for (const b of [...lane.boxes]) if (!b.manual && b.fromLane) moveBox(plan, b.id, b.fromLane);
+  plan.lanes.splice(plan.lanes.indexOf(lane), 1);
+}
+
 /** Runder av til hundredeler av en tekstlinje, så filen ikke fylles med lange desimaltall. */
 const lines = (mm: number, unit: number) => Math.round((mm / unit) * 100) / 100;
 
@@ -165,6 +221,8 @@ function bounds(it: Item) {
 export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLElement, toggle: HTMLButtonElement, tools: HTMLElement): Editor {
   let active = false;
   let selected: string | null = null;
+  /** Valgt lane (klikk i lane-kolonnen). Bare én av boks og lane er valgt om gangen. */
+  let selectedLane: string | null = null;
   let past: PlanFile[] = [];
   let future: PlanFile[] = [];
   let dirty = false;
@@ -187,7 +245,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || !plan.lanes.some((l) => l.height || l.boxes.some(isEdited));
+    resetAllBtn.disabled = !plan || !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited));
     sheet.classList.toggle('editing', active);
   };
 
@@ -209,6 +267,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (opts.typing) typingSession = true;
     fn(b);
     // Under skriving tegnes planen litt etterpå, så store planer ikke henger etter tastetrykkene
+    window.clearTimeout(redrawTimer);
+    if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else host.redraw();
+    if (opts.rebuild !== false) buildPanel();
+    syncTools();
+  };
+
+  const changeLane = (fn: (l: Lane) => void, opts: { typing?: boolean; rebuild?: boolean } = {}) => {
+    const plan = host.getPlan();
+    const l = plan && selectedLane ? findLane(plan, selectedLane) : null;
+    if (!l) return;
+    if (!opts.typing || !typingSession) snapshot();
+    if (opts.typing) typingSession = true;
+    fn(l);
     window.clearTimeout(redrawTimer);
     if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
     else host.redraw();
@@ -248,6 +320,35 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
   };
 
+  const addLane = (afterId: string | null) => {
+    let made: Lane | null = null;
+    commit((pl) => (made = newLane(pl, afterId)));
+    if (made) {
+      selectLane((made as Lane).id);
+      const inp = panel.querySelector<HTMLTextAreaElement>('#lane-name');
+      inp?.focus();
+      inp?.select();
+    }
+  };
+  const removeLaneById = (id: string) => {
+    const plan = host.getPlan();
+    // Siste synlige lane kan ikke skjules
+    if (!plan || plan.lanes.filter((l) => l.shown && !l.hidden).length <= 1) return;
+    if (selectedLane === id) selectedLane = null;
+    commit((pl) => removeLane(pl, id));
+    overlay();
+  };
+  /** Flytter lanen ett hakk opp eller ned blant lanene som vises. */
+  const stepLane = (id: string, dir: -1 | 1) =>
+    commit((pl) => {
+      const vis = pl.lanes.filter((l) => l.shown && !l.hidden);
+      const i = vis.findIndex((l) => l.id === id);
+      const other = vis[i + dir];
+      if (i < 0 || !other) return;
+      const j = pl.lanes.indexOf(other);
+      moveLane(pl, id, j);
+    });
+
   const copySelected = () => {
     if (!selected) return;
     let made: Box | null = null;
@@ -272,6 +373,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     dirty = true;
     typingSession = false;
     if (selected && !findBox(prev, selected)) selected = null;
+    if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
     host.redraw();
     buildPanel();
     syncTools();
@@ -293,6 +395,112 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return wrap;
   };
 
+  const buildLanePanel = (plan: PlanFile, l: Lane) => {
+    const head = el('div', { class: 'panel-head' });
+    head.append(el('h2', {}, 'Lane'));
+    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
+    close.addEventListener('click', () => select(null));
+    head.append(close);
+    panel.append(head);
+    if (l.manual) panel.append(el('p', { class: 'muted small' }, 'Laget i appen, følger ikke Project.'));
+
+    const nw = el('label', { class: 'prop' });
+    nw.append(el('span', { class: 'prop-label' }, 'Navn'));
+    const ta = el('textarea', { id: 'lane-name', rows: '2', spellcheck: 'true' }) as HTMLTextAreaElement;
+    ta.value = l.name;
+    ta.addEventListener('focus', () => (typingSession = false));
+    ta.addEventListener('input', () =>
+      changeLane((x) => {
+        keepLaneOriginal(x);
+        x.name = ta.value;
+      }, { typing: true, rebuild: false }),
+    );
+    ta.addEventListener('blur', () => {
+      typingSession = false;
+      syncTools();
+    });
+    nw.append(ta, el('span', { class: 'hint' }, 'Skriv | for linjeskift.'));
+    panel.append(nw);
+
+    const cw = el('div', { class: 'prop' });
+    cw.append(el('span', { class: 'prop-label' }, 'Farge'));
+    const sw = el('div', { class: 'swatches' });
+    const now = (l.fill ?? '#FFFFFF').toUpperCase();
+    const seen = new Set<string>();
+    const swatch = (fill: string, name: string) => {
+      const key = fill.toUpperCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(now === key) });
+      s.style.background = fill;
+      s.addEventListener('click', () =>
+        changeLane((x) => {
+          keepLaneOriginal(x);
+          x.fill = key;
+        }),
+      );
+      sw.append(s);
+    };
+    LANE_COLORS.forEach((c) => swatch(c, c === '#FFFFFF' ? 'Hvit' : 'Lanefarge'));
+    plan.lanes.filter((x) => x.fill).forEach((x) => swatch(x.fill!, 'Brukt i planen'));
+    cw.append(sw);
+    const row = el('div', { class: 'row' });
+    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
+    custom.value = now.toLowerCase();
+    custom.addEventListener('change', () =>
+      changeLane((x) => {
+        keepLaneOriginal(x);
+        x.fill = custom.value.toUpperCase();
+      }),
+    );
+    row.append(custom, el('span', { class: 'small' }, 'Egen farge'));
+    if (l.original) {
+      const back = el('button', { type: 'button', class: 'button small' }, 'Fargen fra Project');
+      back.disabled = (l.original.fill ?? '').toUpperCase() === (l.fill ?? '').toUpperCase();
+      back.addEventListener('click', () => changeLane((x) => (x.fill = x.original ? x.original.fill : x.fill)));
+      row.append(back);
+    }
+    cw.append(row);
+    panel.append(cw);
+
+    panel.append(
+      segmented('Høyde', l.height ? 'fixed' : 'auto', [['auto', 'Automatisk'], ['fixed', 'Fast']], (v) => {
+        const ln = layoutNow?.lanes.find((x) => x.id === l.id);
+        const unit = layoutNow?.unit;
+        changeLane((x) => {
+          if (v === 'auto') delete x.height;
+          else if (ln && unit) x.height = lines(ln.y1 - ln.y0, unit);
+        });
+      }),
+    );
+    const vis = plan.lanes.filter((x) => x.shown && !x.hidden);
+    const pos = vis.findIndex((x) => x.id === l.id);
+    const ow = el('div', { class: 'prop' });
+    ow.append(el('span', { class: 'prop-label' }, 'Rekkefølge'));
+    const orow = el('div', { class: 'row' });
+    const up = el('button', { type: 'button', class: 'button small' }, '↑ Flytt opp');
+    up.disabled = pos <= 0;
+    up.addEventListener('click', () => stepLane(l.id, -1));
+    const down = el('button', { type: 'button', class: 'button small' }, '↓ Flytt ned');
+    down.disabled = pos < 0 || pos >= vis.length - 1;
+    down.addEventListener('click', () => stepLane(l.id, 1));
+    orow.append(up, down);
+    ow.append(orow, el('p', { class: 'hint' }, 'Du kan også dra lane-navnet opp eller ned.'));
+    panel.append(ow);
+
+    const add = el('button', { type: 'button', class: 'button', title: 'Ny lane rett under denne' }, 'Ny lane');
+    add.addEventListener('click', () => addLane(l.id));
+    const del = el('button', { type: 'button', class: 'button', title: l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk en lane for å vise den igjen. (Delete)' }, l.manual ? 'Slett' : 'Skjul');
+    del.disabled = vis.length <= 1 && pos >= 0;
+    del.addEventListener('click', () => removeLaneById(l.id));
+    const reset = el('button', { type: 'button', class: 'button', title: 'Navn og farge fra Project, og automatisk høyde' }, 'Tilbakestill lane');
+    reset.disabled = l.manual || !isLaneEdited(l);
+    reset.addEventListener('click', () => changeLane((x) => resetLane(x)));
+    const foot = el('div', { class: 'panel-foot row' });
+    foot.append(add, del, reset);
+    panel.append(foot);
+  };
+
   const buildPanel = () => {
     const plan = host.getPlan();
     const b = active && plan && selected ? findBox(plan, selected) : null;
@@ -300,6 +508,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.hidden = !active || !plan;
     panel.replaceChildren();
     if (!plan || !active) return;
+    const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
+    if (lane) return buildLanePanel(plan, lane);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
       const tips = el('ul', { class: 'tips' });
@@ -309,7 +519,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Dra i den blå streken under valgt boks for å endre høyden.',
         'Dra i nederste kant av en lane for å gi den fast høyde.',
         'Dra en boks til en annen lane for å flytte den dit.',
-        'Høyreklikk en lane for ny boks, lanehøyde og skjulte bokser.',
+        'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
+        'Høyreklikk en lane for ny boks, ny lane, lanehøyde og skjulte bokser.',
         'Ctrl+D kopierer valgt boks. Delete skjuler den.',
         'Ctrl+Z angrer, Ctrl+Y gjør om.',
       ])
@@ -498,6 +709,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       g.append(l);
       return l;
     };
+    const L = layoutNow;
+    for (const ln of L.lanes) {
+      const pl = plan ? findLane(plan, ln.id) : null;
+      if (ln.id === selectedLane) {
+        const rect = document.createElementNS(NS, 'rect');
+        for (const [k, v] of Object.entries({ x: L.laneTitleX + 0.3, y: ln.y0 + 0.3, width: L.plot.x0 - L.laneTitleX - 0.6, height: ln.y1 - ln.y0 - 0.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.6 }))
+          rect.setAttribute(k, String(v));
+        g.append(rect);
+      }
+      if (showMarks && pl && (pl.original || pl.manual)) {
+        const c = document.createElementNS(NS, 'circle');
+        for (const [k, v] of Object.entries({ cx: L.plot.x0 - 1.4, cy: ln.y0 + 1.4, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
+        g.append(c);
+      }
+    }
     for (const ln of layoutNow.lanes) {
       if (ln.manual) line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { stroke: ACCENT, 'stroke-width': 3 });
       line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
@@ -670,8 +896,63 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
 
+  /** Dra lane-navnet opp eller ned for å endre rekkefølgen. */
+  const startLaneMove = (ln: LaneLayout): Drag | null => {
+    if (!layoutNow) return null;
+    const L = layoutNow;
+    const others = L.lanes.filter((x) => x !== ln);
+    let g: SVGGElement | null = null;
+    let rect: SVGRectElement | null = null;
+    let mark: SVGLineElement | null = null;
+    let k = L.lanes.indexOf(ln);
+    const h = ln.y1 - ln.y0;
+    return {
+      startY: ln.y0,
+      startClient: 0,
+      moved: false,
+      move(dy) {
+        if (!g) {
+          g = ghostLayer();
+          rect = shape(g, 'rect', { x: L.laneTitleX, y: ln.y0, width: L.plot.x0 - L.laneTitleX, height: h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+          mark = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 3, 'vector-effect': 'non-scaling-stroke' });
+        }
+        const mid = ln.y0 + dy + h / 2;
+        // Ny plass: foran den første lanen som har midten sin under midten av den som dras
+        k = others.findIndex((o) => (o.y0 + o.y1) / 2 > mid);
+        if (k < 0) k = others.length;
+        const at = k < others.length ? others[k].y0 : others[others.length - 1]?.y1 ?? ln.y1;
+        set(rect!, { y: clamp(ln.y0 + dy, L.lanes[0].y0, L.lanes[L.lanes.length - 1].y1 - h) });
+        set(mark!, { y1: at, y2: at });
+      },
+      end() {
+        g?.remove();
+        if (k === L.lanes.indexOf(ln)) return;
+        const before = others[k]?.id;
+        const last = others[others.length - 1]?.id;
+        selectedLane = ln.id;
+        selected = null;
+        commit((plan) => {
+          const i = plan.lanes.findIndex((x) => x.id === ln.id);
+          if (i < 0) return;
+          const [lane] = plan.lanes.splice(i, 1);
+          const j = before ? plan.lanes.findIndex((x) => x.id === before) : plan.lanes.findIndex((x) => x.id === last) + 1;
+          plan.lanes.splice(Math.max(0, j), 0, lane);
+        });
+      },
+    };
+  };
+
   const select = (id: string | null) => {
     selected = id;
+    selectedLane = null;
+    typingSession = false;
+    buildPanel();
+    overlay();
+  };
+
+  const selectLane = (id: string | null) => {
+    selected = null;
+    selectedLane = id;
     typingSession = false;
     buildPanel();
     overlay();
@@ -679,6 +960,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   // ---- Hendelser ----
   const itemOf = (e: Event) => (active ? ((e.target as Element | null)?.closest?.('g[data-id]') as SVGGElement | null) : null);
+  /** Lanen hvis hendelsen er i lane-kolonnen (navnet), ellers ingenting. */
+  const titleLaneOf = (e: MouseEvent): LaneLayout | null => {
+    if (!active || !layoutNow || (e.target as Element | null)?.closest?.('.edit-handle')) return null;
+    const p = toMm(e.clientX, e.clientY);
+    if (p.x < layoutNow.laneTitleX || p.x >= layoutNow.plot.x0) return null;
+    return laneAt(p.y) ?? null;
+  };
   sheet.addEventListener('click', (e) => {
     if (!active) return;
     if (suppressClick) {
@@ -686,10 +974,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     const g = itemOf(e);
-    select(g ? g.getAttribute('data-id') : null);
+    const ln = g ? null : titleLaneOf(e);
+    if (ln) selectLane(ln.id);
+    else select(g ? g.getAttribute('data-id') : null);
   });
   sheet.addEventListener('dblclick', (e) => {
     const g = itemOf(e);
+    const ln = g ? null : titleLaneOf(e);
+    if (ln) {
+      selectLane(ln.id);
+      const inp = panel.querySelector<HTMLTextAreaElement>('#lane-name');
+      inp?.focus();
+      inp?.select();
+      return;
+    }
     if (!g) return;
     select(g.getAttribute('data-id'));
     const ta = panel.querySelector<HTMLTextAreaElement>('#box-text');
@@ -710,6 +1008,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const g = itemOf(e);
       const it = g && layoutNow.items.find((i) => i.id === g.getAttribute('data-id'));
       if (it) d = startMove(it);
+      else {
+        const ln = titleLaneOf(e);
+        if (ln) d = startLaneMove(ln);
+      }
     }
     if (!d) return;
     e.preventDefault();
@@ -773,6 +1075,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
     item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
     item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
+    item('Ny lane under', 'Lanen er laget i appen og følger ikke Project.', null, () => addLane(ln.id));
+    item('Endre navn og farge', 'Åpner lanen i panelet. Dobbeltklikk navnet gjør det samme.', null, () => selectLane(ln.id));
+    item(lane.manual ? 'Slett lane' : 'Skjul lane', lane.manual ? 'Lanen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => removeLaneById(ln.id), L.lanes.length <= 1);
+    for (const hl of plan.lanes.filter((x) => x.shown && x.hidden)) {
+      const hid = hl.id;
+      item(`Vis lane igjen: ${hl.name.replace(/\/?\|/g, ' ')}`, 'Skjult lane. Den kommer tilbake på samme plass.', null, () => commit((pl) => delete findLane(pl, hid)!.hidden));
+    }
     // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
     const start = L.dateAt(Math.max(p.x, L.plot.x0));
     const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
@@ -816,7 +1125,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   toggle.addEventListener('click', () => {
     active = !active;
-    if (!active) selected = null;
+    if (!active) {
+      selected = null;
+      selectedLane = null;
+    }
     buildPanel();
     overlay();
     syncTools();
@@ -834,7 +1146,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     snapshot();
     const ids = plan.lanes.flatMap((l) => l.boxes.map((b) => b.id));
     ids.forEach((id) => resetBoxInPlan(plan, id));
-    plan.lanes.forEach((l) => delete l.height);
+    plan.lanes.forEach((l) => resetLane(l));
     host.redraw();
     buildPanel();
     syncTools();
@@ -849,9 +1161,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       else select(null);
       return;
     }
-    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && selected) {
+    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane)) {
       e.preventDefault();
-      removeSelected();
+      if (selected) removeSelected();
+      else if (selectedLane) removeLaneById(selectedLane);
       return;
     }
     if (inField || !mod) return;
@@ -888,10 +1201,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       future = [];
       dirty = false;
       selected = null;
+      selectedLane = null;
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')),
+    owns: (e) => !!itemOf(e) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && !!titleLaneOf(e)),
     get active() {
       return active;
     },
@@ -905,6 +1219,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       snapshot();
       host.setPlan(p);
       selected = null;
+      selectedLane = null;
       typingSession = false;
       host.redraw();
       buildPanel();

@@ -254,6 +254,7 @@ async function updateFrom(file: File, pdfOnly = false): Promise<boolean> {
     ['Lanes borte fra Project, men beholdt fordi de har egne bokser:', report.keptLanes],
     ['Project har endret teksten du hadde redigert (teksten fra Project gjelder):', report.textChanged],
     ['Project har flyttet bokser du hadde flyttet (Project gjelder):', report.moveDropped],
+    ['Project har endret navnet på lanes du hadde gitt nytt navn (navnet fra Project gjelder):', report.laneNameChanged],
   ]);
   note.classList.add('small');
   showPlan(merged, r.isPdf ? file.name : `${currentName}.pdf`, r.warnings, note);

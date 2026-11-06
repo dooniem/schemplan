@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, isEdited, laneOf, moveBox, newBox, removeBox, resetBox, resetBoxInPlan } from './editor';
+import { copyBox, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
 import { validatePlan } from './format/validate';
 import { computeLayout } from './layout/layout';
 import { approxMeasure } from './layout/text';
@@ -57,5 +57,44 @@ describe('nye, kopierte, flyttede og skjulte bokser', () => {
     expect(L.items.some((i) => i.id === n.id)).toBe(true);
     expect(L.items.some((i) => i.id === '1_1')).toBe(false);
     expect(L.dateAt(L.plot.x0)).toBe('2026-01-01');
+  });
+});
+
+describe('lanes i appen', () => {
+  it('ny lane kommer rett under, og kan flyttes og slettes', () => {
+    const p = testplan();
+    const first = p.lanes[0].id;
+    const l = newLane(p, first);
+    expect(p.lanes[1]).toBe(l);
+    expect(l.manual).toBe(true);
+    expect(isLaneEdited(l)).toBe(true);
+    moveLane(p, l.id, 0);
+    expect(p.lanes[0]).toBe(l);
+    // En boks fra Project flyttet inn i den nye lanen går tilbake når lanen slettes
+    const b = p.lanes[1].boxes[0];
+    moveBox(p, b.id, l.id);
+    newBox(p, l.id, '2026-02-01', '2026-02-20');
+    removeLane(p, l.id);
+    expect(p.lanes.some((x) => x.id === l.id)).toBe(false);
+    expect(laneOf(p, b.id)!.id).toBe(first);
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
+
+  it('lane fra Project skjules, og nytt navn og farge kan tilbakestilles', () => {
+    const p = testplan();
+    const l = p.lanes[1];
+    const name = l.name;
+    keepLaneOriginal(l);
+    l.name = 'Nytt navn';
+    l.fill = '#8DCDF8';
+    removeLane(p, l.id);
+    expect(l.hidden).toBe(true);
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true }, approxMeasure);
+    expect(L.lanes.some((x) => x.id === l.id)).toBe(false);
+    resetLane(l);
+    expect(l.name).toBe(name);
+    expect(l.fill).toBe(null);
+    expect(isLaneEdited(l)).toBe(false);
   });
 });

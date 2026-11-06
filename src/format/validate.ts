@@ -175,6 +175,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needColor(l, 'fill', p);
       needBool(l, 'shown', p);
       optPos(l, 'height', p);
+      for (const k of ['hidden', 'manual'] as const) if (l[k] !== undefined && typeof l[k] !== 'boolean') err(`${p}.${k}`, 'må være true eller false');
+      if (l.original !== undefined) {
+        const o = l.original;
+        if (!isObj(o) || typeof o.name !== 'string' || !(o.fill === null || (typeof o.fill === 'string' && /^#[0-9A-Fa-f]{6}$/.test(o.fill))))
+          err(`${p}.original`, 'må ha name (tekst) og fill (farge eller null)');
+      }
       if (typeof l.id === 'string') {
         if (laneIds.has(l.id)) err(`${p}.id`, `lane ${l.id} finnes flere ganger`);
         laneIds.add(l.id);
