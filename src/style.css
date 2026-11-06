@@ -229,3 +229,4 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .linkish:hover { text-decoration: underline; }
 .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sheet-host.editing g[data-trade] { cursor: pointer; }
+.sheet-host.editing svg { user-select: none; -webkit-user-select: none; }
