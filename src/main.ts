@@ -455,7 +455,7 @@ async function openFromAddress() {
   const params = new URLSearchParams(location.hash.slice(1));
   const data = params.get('plan');
   if (!data) return;
-  history.replaceState(null, '', location.pathname + location.search);
+  history.replaceState(null, '', location.pathname); // også ?t=…, som bare tvinger fram ny henting av appen
   const name = params.get('navn') || 'Plan fra Project.json';
   try {
     const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
