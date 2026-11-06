@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Skjematisk plan</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Skjematisk plan</h1>
+      <span id="version" class="muted"></span>
+    </header>
+    <main>
+      <section class="panel">
+        <h2>Status</h2>
+        <ul class="status">
+          <li>Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
+          <li>Prosjektdata lagres aldri i appen eller nettleseren.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Åpne fil</h2>
+        <p class="muted">Velg en plan på din egen maskin. Filen leses bare lokalt i nettleseren.</p>
+        <label class="button">
+          Velg fil
+          <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
+        </label>
+        <p id="file-info" class="muted"></p>
+      </section>
+      <section class="panel">
+        <h2>Ark</h2>
+        <div class="toolbar" role="group" aria-label="Arkretning">
+          <button type="button" data-orientation="landscape" aria-pressed="true">A3 liggende</button>
+          <button type="button" data-orientation="portrait" aria-pressed="false">A3 stående</button>
+        </div>
+        <div id="sheet" class="sheet-host"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
