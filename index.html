@@ -30,6 +30,11 @@
         <button type="button" id="reset-all" class="tb" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
       </div>
       <span class="spacer"></span>
+      <div class="search">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 3a7 7 0 0 1 5.6 11.2l4.6 4.6-1.4 1.4-4.6-4.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+        <input type="search" id="search" aria-label="Søk i planen" placeholder="Søk (Ctrl+F)" title="Bokser med ordene lyser opp. Enter går til neste treff, Shift+Enter til forrige." disabled />
+        <span id="search-count" class="search-count" aria-live="polite"></span>
+      </div>
       <div class="tbgroup" role="group" aria-label="Zoom">
         <button type="button" id="zoom-out" class="tb icon" title="Zoom ut" aria-label="Zoom ut" disabled>−</button>
         <button type="button" id="zoom-fit" class="tb" title="Vis hele arket (Shift + dobbeltklikk)"><span id="zoom-level">100 %</span></button>
