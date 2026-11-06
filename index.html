@@ -58,17 +58,11 @@
             <button type="button" id="zoom-width" title="La arket fylle bredden av vinduet">Fyll bredden</button>
             <button type="button" id="zoom-in" title="Zoom inn (eller Ctrl + hjul, dobbeltklikk)" aria-label="Zoom inn">+</button>
           </div>
-          <label class="field">PDF
-            <select id="variant" title="Arbeidsfil har planen innebygd og kan åpnes igjen her. Ekstern og Kompakt er til å sende ut.">
-              <option value="arbeidsfil" selected>Arbeidsfil</option>
-              <option value="ekstern">Ekstern</option>
-              <option value="kompakt">Kompakt</option>
-            </select>
-          </label>
-          <button type="button" id="save" class="button primary" disabled>Lagre PDF</button>
+          <button type="button" id="save-work" class="button primary" disabled title="PDF med planen innebygd. Åpne den her igjen for å redigere og oppdatere. Internt dokument.">Lagre arbeidsfil</button>
+          <button type="button" id="save-share" class="button" disabled title="Vanlig PDF til deling og vedlegg. Planen er ikke med, så den kan ikke redigeres videre i appen.">Lagre PDF for deling</button>
           <button type="button" id="print" class="button" disabled>Skriv ut</button>
         </div>
-        <p class="muted small">Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen. Arbeidsfilen har planen innebygd og er et internt dokument; send Ekstern eller Kompakt til andre. Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte.</p>
+        <p class="muted small">Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen. <strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument. <strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved. Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte.</p>
         <div id="file-info" aria-live="polite"></div>
       </section>
       <div id="sheet" class="sheet-host landscape"></div>

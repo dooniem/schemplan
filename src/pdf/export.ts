@@ -1,4 +1,4 @@
-// Lager PDF-en: Arbeidsfil (planen innebygd), Ekstern (renset) eller Kompakt (minst mulig).
+// Lager PDF-en: arbeidsfil (planen innebygd, kan redigeres videre i appen) eller vanlig PDF til deling.
 // Lastes først når brukeren lagrer, så pdf-lib og skriftene ikke gjør appen tregere å åpne.
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -9,7 +9,7 @@ import boldUrl from '../assets/fonts/carlito-bold.ttf?inline';
 import { drawSvg, MM_TO_PT } from './svg2pdf';
 import { ATTACHMENT_NAME } from './read';
 
-export type PdfVariant = 'arbeidsfil' | 'ekstern' | 'kompakt';
+export type PdfVariant = 'arbeidsfil' | 'deling';
 
 const bytesOf = (dataUrl: string) => Uint8Array.from(atob(dataUrl.slice(dataUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0));
 
@@ -17,8 +17,8 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
   // Uten updateMetadata skriver pdf-lib ikke inn programnavn og tidspunkt av seg selv
   const doc = await PDFDocument.create({ updateMetadata: false });
   doc.registerFontkit(fontkit);
-  // Kompakt tar bare med tegnene som brukes; de andre har hele skriften, så teksten kan redigeres i Acrobat
-  const subset = variant === 'kompakt';
+  // Delingsfilen tar bare med tegnene som brukes, så den blir liten. Arbeidsfilen har hele skriften.
+  const subset = variant === 'deling';
   // Uten ligaturer: "fi" og "fl" blir vanlige tegn, så teksten kan søkes i og har samme bredde som på skjermen
   const features = { liga: false, clig: false, dlig: false };
   const fonts = {
@@ -28,7 +28,7 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
   const page = doc.addPage([L.width * MM_TO_PT, L.height * MM_TO_PT]);
   drawSvg(doc, page, svg, fonts, L.height);
 
-  if (variant !== 'kompakt') doc.setTitle(plan.plan.title, { showInWindowTitleBar: true });
+  doc.setTitle(plan.plan.title, { showInWindowTitleBar: true });
   if (variant === 'arbeidsfil') {
     doc.setCreator(`Skjematisk plan v${appVersion}`);
     doc.setSubject('Arbeidsfil med innebygd plan. Internt dokument.');

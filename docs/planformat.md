@@ -95,5 +95,5 @@ Fagnavn og datoer beholdes. Bare anonymiserte filer skal deles som testfiler, og
 
 Arbeidsfilen er en vanlig vektor-PDF med planen innebygd som vedlegg, `schemplan.json` (komprimert, MIME-type `application/json`).
 Vedlegget er planfilen i dette formatet, med appens valg lagret i `plan.layout`. Appen åpner PDF-en ved å lese vedlegget.
-Ekstern og Kompakt har ikke vedlegget og kan ikke åpnes igjen som plan.
+PDF-en for deling har ikke vedlegget og kan ikke åpnes igjen som plan.
 

@@ -33,7 +33,7 @@ export async function readPlanFromPdf(bytes: Uint8Array): Promise<ReadResult> {
   const hit = files.find((f) => f.name === ATTACHMENT_NAME);
   if (!hit)
     return {
-      error: 'Denne PDF-en har ingen innebygd plan. Det er trolig en ekstern eller kompakt versjon. Åpne arbeidsfilen (filnavnet slutter som regel på _arbeidsfil.pdf).',
+      error: 'Denne PDF-en har ingen innebygd plan. Det er trolig en PDF til deling. Åpne arbeidsfilen (filnavnet slutter som regel på _arbeidsfil.pdf).',
     };
   const stream = hit.spec.lookupMaybe(PDFName.of('EF'), PDFDict)?.lookup(PDFName.of('F'));
   if (!(stream instanceof PDFRawStream)) return { error: 'Den innebygde planen i PDF-en er skadet.' };
