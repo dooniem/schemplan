@@ -13,7 +13,7 @@
         Åpne
         <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
       </label>
-      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, retning, stil, tekst og logo">
+      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, visning, tekst og logo">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.4l-.4 2.7a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.4l.4-2.7a7.4 7.4 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
         Innstillinger
       </button>
@@ -48,58 +48,79 @@
       <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg>Hjelp</button>
     </header>
 
-    <div id="menu-sheet" class="pop no-print" popover>
-      <div class="pop-row">
-        <span class="pop-label">Retning</span>
-        <div class="group" role="group" aria-label="Arkretning">
-          <button type="button" data-orientation="landscape" aria-pressed="true">Liggende</button>
-          <button type="button" data-orientation="portrait" aria-pressed="false">Stående</button>
+    <div id="menu-sheet" class="pop settings no-print" popover aria-label="Innstillinger">
+      <section class="set-sec" aria-labelledby="set-ark">
+        <h3 id="set-ark">Ark</h3>
+        <div class="set-row">
+          <span class="set-label" id="lbl-paper">Størrelse</span>
+          <div class="group" role="group" aria-labelledby="lbl-paper">
+            <button type="button" data-paper="A3" aria-pressed="true">A3</button>
+            <button type="button" data-paper="A2" aria-pressed="false">A2</button>
+            <button type="button" data-paper="A1" aria-pressed="false">A1</button>
+          </div>
         </div>
-      </div>
-      <label class="pop-row"><span class="pop-label">Ark</span>
-        <select id="paper">
-          <option value="A3" selected>A3</option>
-          <option value="A2">A2</option>
-          <option value="A1">A1</option>
-        </select>
-      </label>
-      <div class="pop-row">
-        <span class="pop-label">Lanes</span>
-        <div class="group" role="group" aria-label="Høyde på lanes">
-          <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
-          <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+        <div class="set-row">
+          <span class="set-label" id="lbl-orient">Retning</span>
+          <div class="group" role="group" aria-labelledby="lbl-orient">
+            <button type="button" data-orientation="landscape" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Liggende</button>
+            <button type="button" data-orientation="portrait" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="3" width="11" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Stående</button>
+          </div>
         </div>
-      </div>
-      <div class="pop-row">
-        <span class="pop-label">Stil</span>
-        <div class="group" role="group" aria-label="Stil">
-          <button type="button" data-style="excel" aria-pressed="false" title="Slik Excel-løsningen tegner">Excel-lik</button>
-          <button type="button" data-style="ny" aria-pressed="true" title="Forslag med bedre lesbarhet">Ny</button>
+        <div class="set-row">
+          <span class="set-label" id="lbl-lanes">Lanes</span>
+          <div class="group" role="group" aria-labelledby="lbl-lanes">
+            <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
+            <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+          </div>
         </div>
-      </div>
-      <label class="pop-row"><span class="pop-label">Tilpasning</span>
-        <select id="fit-mode">
-          <option value="sheet" selected>Tilpass til arket</option>
-          <option value="fixed">Fast tekststørrelse</option>
-        </select>
-      </label>
-      <label class="pop-row"><span class="pop-label">Tekst</span>
-        <span><input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /> pt</span>
-      </label>
-      <label class="pop-row" id="min-text-field"><span class="pop-label">Minst</span>
-        <span><input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt</span>
-      </label>
-      <label class="pop-row"><span class="pop-label">Overskrift</span>
-        <span><input id="title-size" type="number" min="8" max="40" step="1" value="16" /> pt</span>
-      </label>
-      <div class="pop-row">
-        <span class="pop-label">Logo</span>
-        <span class="row">
-          <label class="button" id="logo-pick">Velg bilde …<input id="logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden /></label>
-          <button type="button" id="logo-remove" class="button" disabled>Fjern</button>
-        </span>
-      </div>
-      <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>
+        <div class="set-row">
+          <span class="set-label" id="lbl-style">Stil</span>
+          <div class="group" role="group" aria-labelledby="lbl-style">
+            <button type="button" data-style="ny" aria-pressed="true" title="Forslag med bedre lesbarhet">Ny</button>
+            <button type="button" data-style="excel" aria-pressed="false" title="Slik Excel-løsningen tegner">Excel-lik</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="set-sec" aria-labelledby="set-vis">
+        <h3 id="set-vis">Vis på arket</h3>
+        <label class="set-switch">
+          <span><strong>Forklaring</strong><small>Fagene og fargene nederst</small></span>
+          <input type="checkbox" id="show-legend" role="switch" />
+        </label>
+        <label class="set-switch">
+          <span><strong>Kalender nederst</strong><small>Måneder og uker også under planen</small></span>
+          <input type="checkbox" id="show-bottom-cal" role="switch" />
+        </label>
+      </section>
+
+      <section class="set-sec" aria-labelledby="set-tekst">
+        <h3 id="set-tekst">Tekst</h3>
+        <div class="set-row">
+          <span class="set-label" id="lbl-fit">Tilpasning</span>
+          <div class="group" role="group" aria-labelledby="lbl-fit">
+            <button type="button" data-fit="sheet" aria-pressed="true" title="Teksten krymper til planen får plass på arket">Tilpass arket</button>
+            <button type="button" data-fit="fixed" aria-pressed="false" title="Teksten har alltid samme størrelse">Fast</button>
+          </div>
+        </div>
+        <div class="set-nums">
+          <label><span>Tekst</span><span class="num"><input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /><i>pt</i></span></label>
+          <label id="min-text-field"><span>Minst</span><span class="num"><input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /><i>pt</i></span></label>
+          <label><span>Overskrift</span><span class="num"><input id="title-size" type="number" min="8" max="40" step="1" value="16" /><i>pt</i></span></label>
+        </div>
+      </section>
+
+      <section class="set-sec" aria-labelledby="set-logo">
+        <h3 id="set-logo">Logo</h3>
+        <div class="set-logo">
+          <div class="logo-well" id="logo-well"><img id="logo-preview" alt="" hidden /><span id="logo-empty">Ingen logo</span></div>
+          <div class="set-logo-actions">
+            <label class="button" id="logo-pick">Velg bilde …<input id="logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden /></label>
+            <button type="button" id="logo-remove" class="button" disabled>Fjern</button>
+          </div>
+        </div>
+        <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>
+      </section>
     </div>
 
     <div id="menu-save" class="pop pop-menu no-print" popover>

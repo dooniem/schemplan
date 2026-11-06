@@ -278,6 +278,8 @@ function applyLayout(p: PlanFile) {
   if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
   if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;
   opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
+  opts.showLegend = lay.showLegend ?? p.plan.options.legend;
+  opts.showBottomCalendar = lay.showBottomCalendar ?? p.plan.calendar.bottomCalendar;
   syncControls();
 }
 
@@ -379,13 +381,23 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
-  $<HTMLSelectElement>('#fit-mode').value = opts.fitToSheet ? 'sheet' : 'fixed';
-  $<HTMLSelectElement>('#paper').value = opts.paper ?? 'A3';
+  document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.fit === 'sheet') === opts.fitToSheet)));
+  document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
+  $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
+  $<HTMLInputElement>('#show-bottom-cal').checked = opts.showBottomCalendar ?? plan?.plan.calendar.bottomCalendar ?? false;
+  $<HTMLInputElement>('#show-legend').disabled = !plan;
+  $<HTMLInputElement>('#show-bottom-cal').disabled = !plan;
   $<HTMLInputElement>('#min-text').value = String(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
   $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
-  $<HTMLElement>('#settings').title = `${sheetName(opts.paper ?? 'A3', opts.orientation)}. Ark, retning, stil, tekst og logo.`;
+  $<HTMLElement>('#settings').title = `${sheetName(opts.paper ?? 'A3', opts.orientation)}. Ark, visning, tekst og logo.`;
   $<HTMLInputElement>('#title-size').value = String(opts.titleSizePt ?? DEFAULT_TITLE_PT);
-  $<HTMLButtonElement>('#logo-remove').disabled = !plan?.plan.layout.logo;
+  const logo = plan?.plan.layout.logo;
+  $<HTMLButtonElement>('#logo-remove').disabled = !logo;
+  const preview = $<HTMLImageElement>('#logo-preview');
+  if (logo) preview.src = logo.data;
+  else preview.removeAttribute('src');
+  preview.hidden = !logo;
+  $<HTMLElement>('#logo-empty').hidden = !!logo;
   $<HTMLInputElement>('#logo-input').disabled = !plan;
 }
 
@@ -417,14 +429,26 @@ $<HTMLInputElement>('#text-size').addEventListener('input', (e) => {
     draw();
   }
 });
-$<HTMLSelectElement>('#fit-mode').addEventListener('change', (e) => {
-  opts.fitToSheet = (e.target as HTMLSelectElement).value === 'sheet';
-  syncControls();
+document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    opts.fitToSheet = btn.dataset.fit === 'sheet';
+    syncControls();
+    draw();
+  }),
+);
+document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    opts.paper = btn.dataset.paper as Paper;
+    syncControls();
+    draw();
+  }),
+);
+$<HTMLInputElement>('#show-legend').addEventListener('change', (e) => {
+  opts.showLegend = (e.target as HTMLInputElement).checked;
   draw();
 });
-$<HTMLSelectElement>('#paper').addEventListener('change', (e) => {
-  opts.paper = (e.target as HTMLSelectElement).value as Paper;
-  syncControls();
+$<HTMLInputElement>('#show-bottom-cal').addEventListener('change', (e) => {
+  opts.showBottomCalendar = (e.target as HTMLInputElement).checked;
   draw();
 });
 $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
@@ -499,6 +523,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     fitToSheet: opts.fitToSheet,
     minTextSize: opts.minTextPt ?? DEFAULT_MIN_TEXT_PT,
     titleSize: opts.titleSizePt ?? DEFAULT_TITLE_PT,
+    showLegend: opts.showLegend ?? plan.plan.options.legend,
+    showBottomCalendar: opts.showBottomCalendar ?? plan.plan.calendar.bottomCalendar,
   });
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';

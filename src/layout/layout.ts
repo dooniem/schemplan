@@ -23,6 +23,10 @@ export interface LayoutOptions {
   style?: PlanStyle;
   /** Overskriftens størrelse i punkter. Følger ikke krympingen av resten av teksten. Standard 16. */
   titleSizePt?: number;
+  /** Vis forklaringen. Standard: valget i planen. */
+  showLegend?: boolean;
+  /** Vis kalenderen også under planen. Standard: valget i planen. */
+  showBottomCalendar?: boolean;
 }
 
 export const DEFAULT_TITLE_PT = 16;
@@ -341,7 +345,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const rotateMonths = axis.mode === 'month' && !(ny && measure('Aug', calSize, true) + 1.5 <= colW);
   const monthRowH = rotateMonths ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
   const calH = axis.mode === 'month' ? rowH + monthRowH : rowH * 3;
-  const bottomCal = file.plan.calendar.bottomCalendar;
+  const bottomCal = opts.showBottomCalendar ?? file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
@@ -373,7 +377,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const legendSize = opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
-  if (file.plan.options.legend) {
+  if (opts.showLegend ?? file.plan.options.legend) {
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
     const symbolEntries: { name: string; symbol: 'diamond' | 'flag' | 'holiday' }[] = ny
