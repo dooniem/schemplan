@@ -11,6 +11,7 @@ import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
 import { createEditor } from './editor';
 import type { PdfVariant } from './pdf/export';
+import { placePopovers } from './popover';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -21,6 +22,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: 
 };
 
 $('#version').textContent = `v${__APP_VERSION__}`;
+placePopovers();
 checkOutboundBlocked().then((blocked) => {
   const s = $('#csp-status');
   s.textContent = blocked ? 'aktiv' : 'ikke aktiv (utviklingsmodus)';
@@ -86,7 +88,7 @@ function draw() {
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
   const tight = layout.overflow || layout.belowMin;
   status.textContent = layout.belowMin && !layout.overflow
-    ? `Planen får bare plass på ${here} med ${pt(layout.textSizePt)} pt tekst, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men teksten kan bli vanskelig å lese på papir.`
+    ? `På ${here} blir teksten ${pt(layout.textSizePt)} pt, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men kan bli vanskelig å lese.`
     : layout.overflow
     ? opts.fitToSheet
       ? `Planen får ikke plass på ${here}, selv med ${pt(layout.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
@@ -95,9 +97,13 @@ function draw() {
   status.className = tight ? 'error small' : 'muted small';
 
   // Forslag til annet ark når planen er trang. Regnes ut litt etterpå, så tegningen ikke venter.
-  suggest.replaceChildren();
+  // De gamle forslagene står til de nye er klare: tømmes linjen imens, endrer arket høyde og
+  // visningen hopper ved hver endring.
   window.clearTimeout(suggestTimer);
-  if (!tight && layout.textScale >= 0.999) return;
+  if (!tight && layout.textScale >= 0.999) {
+    showSuggestions([], false);
+    return;
+  }
   const current = plan;
   suggestTimer = window.setTimeout(() => {
     if (plan !== current) return;
@@ -113,20 +119,29 @@ function draw() {
         bestSoFar = top.textSizePt;
       }
     }
-    if (!better.length) return;
-    suggest.append(el('span', tight ? 'Får plass uten å gå under minimum på: ' : 'Større tekst med: '));
-    for (const a of better) {
-      const b = el('button', `${sheetName(a.paper, a.orientation)} (${pt(a.textSizePt)} pt)`, 'button') as HTMLButtonElement;
-      b.type = 'button';
-      b.addEventListener('click', () => {
-        opts.paper = a.paper;
-        opts.orientation = a.orientation;
-        syncControls();
-        draw();
-      });
-      suggest.append(b);
-    }
+    showSuggestions(better, tight);
   }, 30);
+}
+
+let suggestKey = '';
+function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: boolean) {
+  const key = better.length ? `${tight}|${better.map((a) => `${a.paper}${a.orientation}${pt(a.textSizePt)}`).join(',')}` : '';
+  if (key === suggestKey) return;
+  suggestKey = key;
+  suggest.replaceChildren();
+  if (!better.length) return;
+  suggest.append(el('span', tight ? 'Får plass på: ' : 'Større tekst med: '));
+  for (const a of better) {
+    const b = el('button', `${sheetName(a.paper, a.orientation)} (${pt(a.textSizePt)} pt)`, 'button') as HTMLButtonElement;
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      opts.paper = a.paper;
+      opts.orientation = a.orientation;
+      syncControls();
+      draw();
+    });
+    suggest.append(b);
+  }
 }
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
@@ -190,6 +205,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   }
   info.append(status, suggest, saveStatus);
   $<HTMLButtonElement>('#print').disabled = false;
+  $<HTMLButtonElement>('#save-menu').disabled = false;
   $<HTMLButtonElement>('#save-work').disabled = false;
   $<HTMLButtonElement>('#edit').disabled = false;
   editor.reset();
@@ -206,6 +222,7 @@ function syncControls() {
   $<HTMLSelectElement>('#paper').value = opts.paper ?? 'A3';
   $<HTMLInputElement>('#min-text').value = String(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
   $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
+  $('#sheet-summary').textContent = sheetName(opts.paper ?? 'A3', opts.orientation);
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn) =>
@@ -243,6 +260,7 @@ $<HTMLSelectElement>('#fit-mode').addEventListener('change', (e) => {
 });
 $<HTMLSelectElement>('#paper').addEventListener('change', (e) => {
   opts.paper = (e.target as HTMLSelectElement).value as Paper;
+  syncControls();
   draw();
 });
 $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {

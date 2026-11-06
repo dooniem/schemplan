@@ -28,7 +28,7 @@ export function createViewer(host: HTMLElement): Viewer {
 
   // Piksler per mm når hele arket får plass i vinduet
   const fitScale = () => {
-    const pad = 16;
+    const pad = 10;
     const w = Math.max(host.clientWidth - pad * 2, 50);
     const h = Math.max(host.clientHeight - pad * 2, 50);
     return Math.min(w / wMm, h / hMm);
@@ -118,7 +118,7 @@ export function createViewer(host: HTMLElement): Viewer {
     zoomOut: () => setZoom(zoom / STEP),
     fit: () => setZoom(1),
     fitWidth: () => {
-      const w = Math.max(host.clientWidth - 32, 50) / wMm;
+      const w = Math.max(host.clientWidth - 20, 50) / wMm;
       setZoom(w / fitScale(), host.clientWidth / 2, 0);
     },
     onChange(cb) {

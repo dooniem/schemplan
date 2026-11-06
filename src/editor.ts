@@ -95,6 +95,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const undoBtn = tools.querySelector<HTMLButtonElement>('#undo')!;
   const redoBtn = tools.querySelector<HTMLButtonElement>('#redo')!;
   const resetAllBtn = tools.querySelector<HTMLButtonElement>('#reset-all')!;
+  const marksBtn = tools.querySelector<HTMLButtonElement>('#show-marks');
+  /** Blå prikk på bokser brukeren har endret. Kan skjules for å se planen slik den blir. */
+  let showMarks = true;
 
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
@@ -287,7 +290,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
-      if (b && isEdited(b)) {
+      if (showMarks && b && isEdited(b)) {
         const c = document.createElementNS(NS, 'circle');
         for (const [k, v] of Object.entries({ cx: r.x1, cy: r.y0, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
         g.append(c);
@@ -324,6 +327,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     buildPanel();
     overlay();
     syncTools();
+  });
+  marksBtn?.addEventListener('click', () => {
+    showMarks = !showMarks;
+    marksBtn.setAttribute('aria-pressed', String(showMarks));
+    overlay();
   });
   undoBtn.addEventListener('click', undo);
   redoBtn.addEventListener('click', redo);
