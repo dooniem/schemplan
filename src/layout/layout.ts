@@ -1,7 +1,7 @@
 import type { Box, Lane, PlanFile, TradeColor } from '../format/types';
 import { parseBoxText } from '../format/text';
 import { isDrawable } from '../format/validate';
-import { a3Size, type Orientation } from '../sheet';
+import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatShort, MONTHS_NB, parseIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
@@ -12,8 +12,12 @@ export interface LayoutOptions {
   heightMode: 'fill' | 'compact';
   /** Skriftstørrelse i punkter på det ferdige A3-arket. */
   textSizePt: number;
-  /** Krymp teksten til planen får plass på arket. */
+  /** true: krymp teksten til planen får plass, men ikke under minTextPt. false: fast tekststørrelse. */
   fitToSheet: boolean;
+  /** Nedre grense for krymping, i punkter. Standard 6. */
+  minTextPt?: number;
+  /** Arkstørrelse. Standard A3. */
+  paper?: Paper;
   /** 'excel' etterligner VBA-utskriften, 'ny' er lesbarhetsforslaget. */
   style?: PlanStyle;
 }
@@ -125,11 +129,9 @@ export interface Layout {
 }
 
 const MARGIN = 8;
-const LANE_TITLE_W = 30;
 const PAD_X = 0.7;
 const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
-const LANE_PAD = 1.2;
 
 const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
   red: { fill: '#FF0000', text: '#FFFFFF' },
@@ -140,13 +142,43 @@ const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
   black: { fill: '#000000', text: '#FFFFFF' },
 };
 
-interface Piece {
+interface Variant {
   item: Item;
   fx0: number;
   fx1: number;
   h: number;
+}
+
+interface Piece extends Variant {
   sortX: number;
   sortW: number;
+  /** Alternative plasseringer (callout til høyre/venstre, på én eller flere linjer). Den første er standard. */
+  alts?: Variant[];
+}
+
+/**
+ * Som pack, men hver brikke kan ha flere varianter. Velger varianten som ender lavest i lanen,
+ * og ved likt den med smalest fotavtrykk, så den sperrer minst for de neste brikkene.
+ */
+export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[] }[], gap = GAP): { y: number; k: number }[] {
+  const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+  const lowest = (p: { fx0: number; fx1: number; h: number }) => {
+    const overlapping = placed.filter((q) => p.fx0 < q.x1 - 1e-6 && q.x0 < p.fx1 - 1e-6);
+    const candidates = [0, ...overlapping.map((q) => q.y1 + gap)].sort((a, b) => a - b);
+    return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? 0;
+  };
+  return pieces.map((p) => {
+    let best = { y: 0, k: 0, score: Infinity, w: Infinity };
+    p.alts.forEach((v, k) => {
+      const y = lowest(v);
+      const score = y + v.h;
+      const w = v.fx1 - v.fx0;
+      if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w };
+    });
+    const v = p.alts[best.k];
+    placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
+    return { y: best.y, k: best.k };
+  });
 }
 
 /** Plasserer brikker i en lane: hver brikke legges så høyt som mulig uten å overlappe. */
@@ -161,15 +193,50 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
   });
 }
 
+export const DEFAULT_MIN_TEXT_PT = 6;
+
+/**
+ * Tegner planen. Med fitToSheet finner den største tekststørrelsen (i trinn på 0,25 pt) mellom
+ * minTextPt og valgt størrelse der planen får plass. Får den ikke plass ved minTextPt,
+ * tegnes den ved minTextPt og merkes overflow, så appen kan foreslå annet ark.
+ */
 export function computeLayout(file: PlanFile, opts: LayoutOptions, measure: Measure): Layout {
-  if (!opts.fitToSheet) return layoutAt(file, opts, measure, 1);
-  let best = layoutAt(file, opts, measure, 1);
-  for (let f = 0.95; best.overflow && f >= 0.45; f -= 0.05) best = layoutAt(file, opts, measure, f);
+  const full = layoutAt(file, opts, measure, 1);
+  if (!opts.fitToSheet || !full.overflow) return full;
+  const STEP = 0.25;
+  const minPt = Math.min(opts.textSizePt, opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
+  const at = (pt: number) => layoutAt(file, opts, measure, pt / opts.textSizePt);
+  let lo = Math.ceil(minPt / STEP);
+  let hi = Math.floor(opts.textSizePt / STEP) - 1;
+  const floor = at(lo * STEP);
+  if (floor.overflow) return floor;
+  let best = floor;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi + 1) / 2);
+    const L = at(mid * STEP);
+    if (L.overflow) hi = mid - 1;
+    else {
+      lo = mid;
+      best = L;
+    }
+  }
   return best;
 }
 
+/** Hvor stor teksten blir med andre ark, til forslag når planen er trang. */
+export function fitAlternatives(file: PlanFile, opts: LayoutOptions, measure: Measure): { paper: Paper; orientation: Orientation; textSizePt: number; fits: boolean }[] {
+  const out: { paper: Paper; orientation: Orientation; textSizePt: number; fits: boolean }[] = [];
+  for (const paper of ['A3', 'A2', 'A1'] as Paper[])
+    for (const orientation of ['landscape', 'portrait'] as Orientation[]) {
+      if (paper === (opts.paper ?? 'A3') && orientation === opts.orientation) continue;
+      const L = computeLayout(file, { ...opts, paper, orientation, fitToSheet: true }, measure);
+      out.push({ paper, orientation, textSizePt: L.textSizePt, fits: !L.overflow });
+    }
+  return out;
+}
+
 function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: number): Layout {
-  const { width: W, height: H } = a3Size(opts.orientation);
+  const { width: W, height: H } = sheetSize(opts.paper ?? 'A3', opts.orientation);
   const ny = opts.style === 'ny';
   const base = opts.textSizePt * PT_TO_MM * scale;
   const lh = base * LINE_HEIGHT;
@@ -180,6 +247,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const titleSize = base * 1.5;
   const title: TextBlock = { x: W / 2, y: MARGIN + titleSize * 0.85, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
   const headerH = titleSize * 1.4;
+
+  // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
+  const lanes = file.lanes.filter((l) => l.shown);
+  const titlePad = 2 * PAD_X + 2;
+  const longestWord = Math.max(0, ...lanes.flatMap((l) => l.name.split(/\s+/).map((w) => measure(w, base, true))));
+  const widestName = Math.max(0, ...lanes.map((l) => measure(l.name, base, true)));
+  const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
+  // Luft i lanene følger tekststørrelsen
+  const LANE_PAD = Math.max(0.5, base * 0.3);
 
   // ---- Tidsakse ----
   const laneTitleX = MARGIN;
@@ -197,17 +273,20 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const bottomCal = file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
-  const lanes = file.lanes.filter((l) => l.shown);
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - 2 * PAD_X - 2, base, measure, true));
+  const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - titlePad, base, measure, true));
   const contentH = lanes.map((_, i) => {
     const pieces = lanePieces[i];
-    const ys = pack(pieces);
-    pieces.forEach((p, j) => setY(p.item, ys[j]));
-    const inner = pieces.reduce((m, p, j) => Math.max(m, ys[j] + p.h), 0);
-    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * lh + 2 * LANE_PAD, lh * 2);
+    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p] })));
+    pieces.forEach((p, j) => {
+      const v = (p.alts ?? [p])[placed[j].k];
+      Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
+      setY(p.item, placed[j].y);
+    });
+    const inner = pieces.reduce((m, p, j) => Math.max(m, placed[j].y + p.h), 0);
+    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * lh + 2 * LANE_PAD, lh * 1.5);
   });
 
   // ---- Legend ----
@@ -393,7 +472,7 @@ function buildPieces(
     const f = parseIso(r.finish);
 
     if (r.isMilestone) {
-      pieces.push(milestonePiece(box, rawLines, r.finish, axis.xEnd(f), base, lh, measure, calloutMax, axis.x1));
+      pieces.push(milestonePiece(box, rawLines, r.finish, axis.xEnd(f), base, lh, measure, calloutMax, axis.x1, axis.x0));
       continue;
     }
 
@@ -420,7 +499,10 @@ function buildPieces(
       arrowRight: f >= axis.end,
     };
 
-    let useCallout = forcedCallout;
+    // Brukerens valg går foran forslaget. "*" først i teksten (fra Excel) betyr callout.
+    const choice = box.callout ?? 'auto';
+    let useCallout = choice === 'on' || (choice === 'auto' && forcedCallout);
+    const neverCallout = choice === 'off';
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst: én linje per tekstlinje, boksen blir høy nok til teksten
@@ -431,15 +513,15 @@ function buildPieces(
       continue;
     }
     if (!useCallout) {
-      const inner = w - 2 * PAD_X;
-      if (inner < base * 1.6) useCallout = true;
+      const inner = Math.max(w - 2 * PAD_X, 0.5);
+      if (inner < base * 1.6 && !neverCallout) useCallout = true;
       else {
         lines = wrapLines(rawLines, inner, base, measure);
         const h = lines.length * lh + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
         const words = new Set(rawLines.join(' ').split(/\s+/));
         const brokeWord = lines.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
-        if (w / h < 0.25 || brokeWord) useCallout = true;
+        if ((w / h < 0.25 || brokeWord) && !neverCallout) useCallout = true;
         else {
           item.h = h;
           item.text = { x: bx0 + w / 2, y: PAD_Y + base * 0.85, lines, size: base, color: textColor, anchor: 'middle' };
@@ -449,25 +531,35 @@ function buildPieces(
 
     if (useCallout) {
       item.h = lh + 2 * PAD_Y;
-      const cl = wrapLines(rawLines, calloutMax, base, measure);
-      const cw = widest(cl, base, measure) + 2 * PAD_X;
-      const ch = cl.length * lh + 2 * PAD_Y;
-      let cx = bx1 + 2;
-      let side: 'right' | 'left' = 'right';
-      if (cx + cw > axis.x1) {
-        cx = bx0 - 2 - cw;
-        side = 'left';
-      }
-      item.callout = {
-        box: { x: cx, y: 0, w: cw, h: ch },
-        text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
-        leader: ny
-          ? side === 'right'
-            ? [bx1, item.h / 2, cx, item.h / 2]
-            : [bx0, item.h / 2, cx + cw, item.h / 2]
-          : calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
+      const make = (side: 'right' | 'left', maxW: number): Variant => {
+        const cl = wrapLines(rawLines, maxW, base, measure);
+        const cw = widest(cl, base, measure) + 2 * PAD_X;
+        const ch = cl.length * lh + 2 * PAD_Y;
+        const cx = side === 'right' ? bx1 + 2 : bx0 - 2 - cw;
+        const it: BoxItem & { trade: string } = { ...item, callout: null };
+        it.callout = {
+          box: { x: cx, y: 0, w: cw, h: ch },
+          text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
+          leader: ny
+            ? side === 'right'
+              ? [bx1, item.h / 2, cx, item.h / 2]
+              : [bx0, item.h / 2, cx + cw, item.h / 2]
+            : calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
+        };
+        return { item: it, fx0: Math.min(bx0, cx), fx1: Math.max(bx1, cx + cw), h: Math.max(item.h, ch) };
       };
-      pieces.push({ item, fx0: Math.min(bx0, cx), fx1: Math.max(bx1, cx + cw), h: Math.max(item.h, ch), sortX: bx0, sortW: w });
+      // Varianter: høyre eller venstre, vanlig bredde eller på én linje (inntil dobbel bredde)
+      const alts: Variant[] = [];
+      const sides = box.calloutSide === 'left' ? (['left'] as const) : box.calloutSide === 'right' ? (['right'] as const) : (['right', 'left'] as const);
+      for (const side of sides)
+        for (const maxW of [calloutMax, calloutMax * 2]) {
+          const v = make(side, maxW);
+          if (v.fx0 < axis.x0 - 1e-6 || v.fx1 > axis.x1 + 1e-6) continue;
+          if (maxW > calloutMax && alts.some((a) => a.h <= v.h + 1e-6 && a.fx1 - a.fx0 <= v.fx1 - v.fx0 + 1e-6)) continue;
+          alts.push(v);
+        }
+      if (!alts.length) alts.push(make(sides.length === 1 ? sides[0] : bx1 + 2 + calloutMax <= axis.x1 ? 'right' : 'left', calloutMax));
+      pieces.push({ ...alts[0], alts, sortX: bx0, sortW: w });
     } else {
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
     }
@@ -487,6 +579,7 @@ function milestonePiece(
   measure: Measure,
   calloutMax: number,
   rightLimit: number,
+  leftLimit: number,
 ): Piece {
   const style = box.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
   const color = MILESTONE_COLORS[style.color] ?? MILESTONE_COLORS.blue;
@@ -499,10 +592,14 @@ function milestonePiece(
   const lw = Math.max(widest(lines.filter((_, i) => !boldLines[i]), base, measure), widest(lines.filter((_, i) => boldLines[i]), base, measure, true)) + 2 * PAD_X;
   const lhTot = lines.length * lh + 2 * PAD_Y;
   // Flagg: stangen står på datoen og teksten rett til høyre. Ruter: teksten litt til høyre for symbolet.
-  let lx = flag ? x + 0.4 : x + size / 2 + 1.5;
-  if (lx + lw > rightLimit) lx = flag ? x - 0.4 - lw : x - size / 2 - 1.5 - lw;
+  // Teksten kan også stå til venstre når det gir lavere plassering i lanen.
+  const right = flag ? x + 0.4 : x + size / 2 + 1.5;
+  // Til venstre for et flagg må teksten gå klar av duken, som vaier mot venstre
+  const left = flag ? x - size * 1.25 - 0.4 - lw : x - size / 2 - 1.5 - lw;
   const h = Math.max(size, lhTot);
-  const item: MilestoneItem = {
+  const sx0 = flag ? x - size * 1.25 : x - size / 2;
+  const make = (lx: number): Variant => {
+    const item: MilestoneItem = {
     kind: 'milestone',
     id: box.id,
     x,
@@ -513,9 +610,12 @@ function milestonePiece(
     label: { x: lx + PAD_X, y: PAD_Y + base * 0.85, lines, boldLines, size: base, color: '#000000', anchor: 'start' },
     labelBox: { x: lx, y: 0, w: lw, h: lhTot },
     verticalLine: !!style.verticalLine,
+    };
+    return { item, fx0: Math.min(sx0, lx), fx1: Math.max(x + size / 2, lx + lw), h };
   };
-  const sx0 = flag ? x - size : x - size / 2;
-  return { item, fx0: Math.min(sx0, lx), fx1: Math.max(x + size / 2, lx + lw), h, sortX: sx0, sortW: 0 };
+  const alts = [right, left].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map(make);
+  if (!alts.length) alts.push(make(right + lw <= rightLimit ? right : left));
+  return { ...alts[0], alts, sortX: sx0, sortW: 0 };
 }
 
 const MONTH_DARK = '#B4B4B4';

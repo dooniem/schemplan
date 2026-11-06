@@ -82,6 +82,10 @@ export interface Box {
   rotation: Rotation;
   milestone: MilestoneStyle | null;
   shown: boolean;
+  /** Brukerens valg i appen (valgfritt). Uten valg bestemmer appen: "*" først i teksten betyr callout. */
+  callout?: 'auto' | 'on' | 'off';
+  /** Hvilken side callouten står på (valgfritt). */
+  calloutSide?: 'auto' | 'left' | 'right';
   /** Det Excel ville tegnet. null = tegnes ikke (ingen gyldige aktiviteter, eller utenfor Flag20-utvalget). */
   resolved: ResolvedBox | null;
 }

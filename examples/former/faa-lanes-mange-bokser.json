@@ -1,0 +1,3643 @@
+{
+ "format": "schemplan",
+ "version": 1,
+ "exportedAt": "2026-11-06T12:00:00",
+ "anonymized": true,
+ "plan": {
+  "title": "Testplan: få lanes, mange bokser",
+  "schemNumber": 1,
+  "calendar": {
+   "mode": "month",
+   "start": "2027-01-01",
+   "end": "2028-07-01",
+   "workingDaysPerWeek": 5,
+   "bottomCalendar": true
+  },
+  "layout": {
+   "orientation": "landscape",
+   "heightMode": "fill",
+   "textSize": 10,
+   "calloutMaxWidthCm": 5,
+   "excelWidthMultiplier": 1
+  },
+  "options": {
+   "legend": true,
+   "flag20Only": false,
+   "filterOutput": false,
+   "colorBy": "trade"
+  }
+ },
+ "colors": [
+  {
+   "name": "(none)",
+   "fill": "#FFFAC8",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Prosjektering",
+   "fill": "#A9A9A9",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Grunnarbeid",
+   "fill": "#F58231",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Bergarbeid",
+   "fill": "#3CB44B",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Betong",
+   "fill": "#4363D8",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Tilbakefylling",
+   "fill": "#9A6324",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "VA",
+   "fill": "#808000",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Elektro",
+   "fill": "#FFE119",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Kabelkanaler",
+   "fill": "#BFEF45",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Etterarbeid",
+   "fill": "#FFD8B1",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Asfalt",
+   "fill": "#000000",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Testing",
+   "fill": "#FABED4",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Slakk",
+   "fill": "#42D4F4",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Sikkerhetssone",
+   "fill": "#E6194B",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Avretting",
+   "fill": "#DCBEFF",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Stål",
+   "fill": "#469990",
+   "border": "#000000",
+   "text": "#000000"
+  },
+  {
+   "name": "Tak",
+   "fill": "#911EB4",
+   "border": "#000000",
+   "text": "#000000"
+  }
+ ],
+ "holidays": [],
+ "lanes": [
+  {
+   "id": "1",
+   "name": "Quis",
+   "fill": "#CEE5ED",
+   "shown": true,
+   "boxes": [
+    {
+     "id": "1_1",
+     "text": "*Laboris exercitation exercitation",
+     "taskIds": [
+      1
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "flag",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-03-08",
+      "finish": "2027-03-08",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "1_2",
+     "text": "Ullamco",
+     "taskIds": [
+      2
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-03-14",
+      "finish": "2027-04-06",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "1_3",
+     "text": "Magna quis",
+     "taskIds": [
+      3
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-03-14",
+      "finish": "2027-07-15",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "1_4",
+     "text": "Aliquip ipsum tempor",
+     "taskIds": [
+      4
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-04",
+      "finish": "2027-10-29",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    },
+    {
+     "id": "1_5",
+     "text": "Minim|Minim minim",
+     "taskIds": [
+      5
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-02-22",
+      "finish": "2028-03-06",
+      "isMilestone": false,
+      "trade": "VA"
+     }
+    },
+    {
+     "id": "1_6",
+     "text": "Sed laboris elit nisi",
+     "taskIds": [
+      6
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-03-02",
+      "finish": "2028-05-30",
+      "isMilestone": false,
+      "trade": "Avretting"
+     }
+    },
+    {
+     "id": "1_7",
+     "text": "Amet|Elit consectetur",
+     "taskIds": [
+      7
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-05-17",
+      "finish": "2028-06-24",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "1_8",
+     "text": "Laboris commodo amet consequat",
+     "taskIds": [
+      8
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-06",
+      "finish": "2027-04-16",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "1_9",
+     "text": "Laboris",
+     "taskIds": [
+      9
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-09",
+      "finish": "2027-05-01",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "1_10",
+     "text": "*Lorem lorem laboris",
+     "taskIds": [
+      10
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-01",
+      "finish": "2027-05-04",
+      "isMilestone": false,
+      "trade": "Avretting"
+     }
+    },
+    {
+     "id": "1_11",
+     "text": "Sit consectetur sed dolore",
+     "taskIds": [
+      11
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-19",
+      "finish": "2027-07-11",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "1_12",
+     "text": "Lorem sit aliqua incididunt",
+     "taskIds": [
+      12
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-05",
+      "finish": "2027-09-24",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "1_13",
+     "text": "Consequat sed aliquip consequat",
+     "taskIds": [
+      13
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-21",
+      "finish": "2027-11-05",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "1_14",
+     "text": "*Laboris|Aliqua nostrud",
+     "taskIds": [
+      14
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-05",
+      "finish": "2027-11-19",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "1_15",
+     "text": "*Labore consequat",
+     "taskIds": [
+      15
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "green",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-16",
+      "finish": "2027-11-16",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "1_16",
+     "text": "Dolore magna|Dolor",
+     "taskIds": [
+      16
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-26",
+      "finish": "2027-12-01",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "1_17",
+     "text": "Ut magna elit",
+     "taskIds": [
+      17
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-30",
+      "finish": "2028-03-20",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "1_18",
+     "text": "Minim do magna",
+     "taskIds": [
+      18
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-03-06",
+      "finish": "2028-05-09",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "1_19",
+     "text": "Aliqua amet ipsum",
+     "taskIds": [
+      19
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-04-22",
+      "finish": "2028-06-30",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "1_20",
+     "text": "*Aliquip aliqua|Adipiscing exercitation",
+     "taskIds": [
+      20
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-01-27",
+      "finish": "2027-02-04",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "1_21",
+     "text": "Sit",
+     "taskIds": [
+      21
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-17",
+      "finish": "2027-12-08",
+      "isMilestone": false,
+      "trade": "Tilbakefylling"
+     }
+    },
+    {
+     "id": "1_22",
+     "text": "*Eiusmod labore labore magna",
+     "taskIds": [
+      22
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-01-23",
+      "finish": "2027-01-28",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "1_23",
+     "text": "Adipiscing consectetur aliqua labore",
+     "taskIds": [
+      23
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "orange",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-01-13",
+      "finish": "2027-01-13",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "1_24",
+     "text": "Sed nisi quis",
+     "taskIds": [
+      24
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-01-23",
+      "finish": "2027-05-11",
+      "isMilestone": false,
+      "trade": "Testing"
+     }
+    },
+    {
+     "id": "1_25",
+     "text": "Ipsum ipsum do|Minim",
+     "taskIds": [
+      25
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-03-12",
+      "finish": "2027-07-12",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "1_26",
+     "text": "Consectetur et labore",
+     "taskIds": [
+      26
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-26",
+      "finish": "2027-08-17",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "1_27",
+     "text": "Commodo enim",
+     "taskIds": [
+      27
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-04-29",
+      "finish": "2028-05-08",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "1_28",
+     "text": "Et",
+     "taskIds": [
+      28
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-05-08",
+      "finish": "2028-06-30",
+      "isMilestone": false,
+      "trade": "Tilbakefylling"
+     }
+    },
+    {
+     "id": "1_29",
+     "text": "*Magna consequat nisi ut",
+     "taskIds": [
+      29
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-03-25",
+      "finish": "2027-04-04",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "1_30",
+     "text": "Exercitation",
+     "taskIds": [
+      30
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-23",
+      "finish": "2027-10-23",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    }
+   ]
+  },
+  {
+   "id": "2",
+   "name": "Quis exercitation",
+   "fill": "#FFFFFF",
+   "shown": true,
+   "boxes": [
+    {
+     "id": "2_1",
+     "text": "Minim tempor amet|Consectetur minim ut",
+     "taskIds": [
+      31
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "green",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-07",
+      "finish": "2027-04-07",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "2_2",
+     "text": "Amet",
+     "taskIds": [
+      32
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-15",
+      "finish": "2027-07-23",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "2_3",
+     "text": "*Consequat|Veniam dolore labore",
+     "taskIds": [
+      33
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-20",
+      "finish": "2027-07-31",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "2_4",
+     "text": "Dolore sed",
+     "taskIds": [
+      34
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-17",
+      "finish": "2027-09-21",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "2_5",
+     "text": "Incididunt do",
+     "taskIds": [
+      35
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-14",
+      "finish": "2027-07-03",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "2_6",
+     "text": "Do tempor ut",
+     "taskIds": [
+      36
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-11",
+      "finish": "2027-10-04",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "2_7",
+     "text": "Labore ut",
+     "taskIds": [
+      37
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-06",
+      "finish": "2027-11-27",
+      "isMilestone": false,
+      "trade": "Testing"
+     }
+    },
+    {
+     "id": "2_8",
+     "text": "Adipiscing sit",
+     "taskIds": [
+      38
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-21",
+      "finish": "2028-03-15",
+      "isMilestone": false,
+      "trade": "Kabelkanaler"
+     }
+    },
+    {
+     "id": "2_9",
+     "text": "Labore|Ullamco",
+     "taskIds": [
+      39
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-04",
+      "finish": "2027-06-11",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "2_10",
+     "text": "Lorem labore ullamco",
+     "taskIds": [
+      40
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-12",
+      "finish": "2027-11-07",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "2_11",
+     "text": "Et et nostrud|Commodo",
+     "taskIds": [
+      41
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-13",
+      "finish": "2028-02-04",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "2_12",
+     "text": "Ipsum|Tempor",
+     "taskIds": [
+      42
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-08",
+      "finish": "2028-03-29",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "2_13",
+     "text": "Labore dolore|Sit",
+     "taskIds": [
+      43
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-06",
+      "finish": "2028-02-09",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "2_14",
+     "text": "Nostrud laboris",
+     "taskIds": [
+      44
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-02",
+      "finish": "2027-12-07",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "2_15",
+     "text": "Adipiscing consequat quis|Et adipiscing",
+     "taskIds": [
+      45
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-05",
+      "finish": "2027-11-04",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    },
+    {
+     "id": "2_16",
+     "text": "Ullamco",
+     "taskIds": [
+      46
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-30",
+      "finish": "2027-11-14",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "2_17",
+     "text": "Et consequat",
+     "taskIds": [
+      47
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-17",
+      "finish": "2028-02-08",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "2_18",
+     "text": "*Lorem",
+     "taskIds": [
+      48
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-02-04",
+      "finish": "2028-02-17",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "2_19",
+     "text": "Veniam laboris magna|Tempor",
+     "taskIds": [
+      49
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-30",
+      "finish": "2028-04-01",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "2_20",
+     "text": "Consectetur",
+     "taskIds": [
+      50
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-03-29",
+      "finish": "2028-04-28",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "2_21",
+     "text": "Dolore lorem",
+     "taskIds": [
+      51
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-02-17",
+      "finish": "2028-06-07",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "2_22",
+     "text": "*Aliqua|Exercitation",
+     "taskIds": [
+      52
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-04-03",
+      "finish": "2028-04-09",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "2_23",
+     "text": "Amet enim sit consequat",
+     "taskIds": [
+      53
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-31",
+      "finish": "2028-02-06",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "2_24",
+     "text": "Consequat magna consequat",
+     "taskIds": [
+      54
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-04-08",
+      "finish": "2028-06-30",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "2_25",
+     "text": "Consectetur ut et eiusmod",
+     "taskIds": [
+      55
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-07",
+      "finish": "2027-11-04",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "2_26",
+     "text": "Aliquip minim",
+     "taskIds": [
+      56
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-02",
+      "finish": "2028-01-26",
+      "isMilestone": false,
+      "trade": "Kabelkanaler"
+     }
+    },
+    {
+     "id": "2_27",
+     "text": "Eiusmod aliqua lorem|Sit",
+     "taskIds": [
+      57
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-24",
+      "finish": "2028-02-05",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "2_28",
+     "text": "Adipiscing|Quis",
+     "taskIds": [
+      58
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "green",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-29",
+      "finish": "2027-12-29",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "2_29",
+     "text": "Ullamco et",
+     "taskIds": [
+      59
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "orange",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2028-04-12",
+      "finish": "2028-04-12",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "2_30",
+     "text": "Consequat do|Veniam elit",
+     "taskIds": [
+      60
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-10",
+      "finish": "2027-04-20",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    }
+   ]
+  },
+  {
+   "id": "3",
+   "name": "Labore",
+   "fill": "#FFFFFF",
+   "shown": true,
+   "boxes": [
+    {
+     "id": "3_1",
+     "text": "Dolor aliquip tempor",
+     "taskIds": [
+      61
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-10",
+      "finish": "2027-09-05",
+      "isMilestone": false,
+      "trade": "Kabelkanaler"
+     }
+    },
+    {
+     "id": "3_2",
+     "text": "Ullamco",
+     "taskIds": [
+      62
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-06",
+      "finish": "2027-09-30",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "3_3",
+     "text": "Enim lorem",
+     "taskIds": [
+      63
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-29",
+      "finish": "2027-10-10",
+      "isMilestone": false,
+      "trade": "Tilbakefylling"
+     }
+    },
+    {
+     "id": "3_4",
+     "text": "Laboris|Exercitation aliquip consequat",
+     "taskIds": [
+      64
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-07",
+      "finish": "2028-02-04",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "3_5",
+     "text": "Et dolor|Consequat ut",
+     "taskIds": [
+      65
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-28",
+      "finish": "2027-10-02",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "3_6",
+     "text": "Lorem quis exercitation incididunt",
+     "taskIds": [
+      66
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-01",
+      "finish": "2027-10-01",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "3_7",
+     "text": "Nisi amet",
+     "taskIds": [
+      67
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-14",
+      "finish": "2027-10-22",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "3_8",
+     "text": "Eiusmod",
+     "taskIds": [
+      68
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "flag",
+      "verticalLine": false,
+      "color": "orange",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-21",
+      "finish": "2027-10-21",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "3_9",
+     "text": "Nisi consectetur",
+     "taskIds": [
+      69
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-27",
+      "finish": "2027-11-01",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "3_10",
+     "text": "*Laboris consequat|Do labore",
+     "taskIds": [
+      70
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-02",
+      "finish": "2027-11-10",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "3_11",
+     "text": "Incididunt magna dolor|Dolore tempor dolore",
+     "taskIds": [
+      71
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-03",
+      "finish": "2027-12-01",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "3_12",
+     "text": "*Adipiscing nostrud enim",
+     "taskIds": [
+      72
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-01",
+      "finish": "2027-12-08",
+      "isMilestone": false,
+      "trade": "VA"
+     }
+    },
+    {
+     "id": "3_13",
+     "text": "Dolore ut consequat|Consectetur nisi",
+     "taskIds": [
+      73
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-23",
+      "finish": "2027-06-23",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "3_14",
+     "text": "Do nostrud amet|Ullamco",
+     "taskIds": [
+      74
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-01",
+      "finish": "2027-06-29",
+      "isMilestone": false,
+      "trade": "Avretting"
+     }
+    },
+    {
+     "id": "3_15",
+     "text": "Minim ullamco nisi|Lorem labore exercitation",
+     "taskIds": [
+      75
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-26",
+      "finish": "2027-10-26",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "3_16",
+     "text": "Enim|Aliqua quis",
+     "taskIds": [
+      76
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-08",
+      "finish": "2027-11-22",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "3_17",
+     "text": "Labore exercitation eiusmod nisi",
+     "taskIds": [
+      77
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-21",
+      "finish": "2027-12-21",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "3_18",
+     "text": "Aliqua consequat",
+     "taskIds": [
+      78
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-21",
+      "finish": "2028-01-10",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "3_19",
+     "text": "Eiusmod exercitation",
+     "taskIds": [
+      79
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-07",
+      "finish": "2027-10-08",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "3_20",
+     "text": "Incididunt dolor eiusmod dolor",
+     "taskIds": [
+      80
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-04",
+      "finish": "2027-12-15",
+      "isMilestone": false,
+      "trade": "VA"
+     }
+    },
+    {
+     "id": "3_21",
+     "text": "Dolore",
+     "taskIds": [
+      81
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-07",
+      "finish": "2028-03-06",
+      "isMilestone": false,
+      "trade": "Testing"
+     }
+    },
+    {
+     "id": "3_22",
+     "text": "Minim minim sed",
+     "taskIds": [
+      82
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-03-05",
+      "finish": "2028-03-19",
+      "isMilestone": false,
+      "trade": "Betong"
+     }
+    },
+    {
+     "id": "3_23",
+     "text": "Ullamco|Aliqua",
+     "taskIds": [
+      83
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-08",
+      "finish": "2027-04-16",
+      "isMilestone": false,
+      "trade": "Kabelkanaler"
+     }
+    },
+    {
+     "id": "3_24",
+     "text": "Laboris dolor consectetur",
+     "taskIds": [
+      84
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-04-06",
+      "finish": "2027-07-03",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    },
+    {
+     "id": "3_25",
+     "text": "Aliquip|Nisi magna aliqua",
+     "taskIds": [
+      85
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-06",
+      "finish": "2028-01-16",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "3_26",
+     "text": "Dolor|Dolore",
+     "taskIds": [
+      86
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-14",
+      "finish": "2028-02-18",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    },
+    {
+     "id": "3_27",
+     "text": "Do veniam enim exercitation",
+     "taskIds": [
+      87
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-02-17",
+      "finish": "2028-04-01",
+      "isMilestone": false,
+      "trade": "Prosjektering"
+     }
+    },
+    {
+     "id": "3_28",
+     "text": "Amet laboris do enim",
+     "taskIds": [
+      88
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-01-05",
+      "finish": "2027-02-21",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    },
+    {
+     "id": "3_29",
+     "text": "Quis quis",
+     "taskIds": [
+      89
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-21",
+      "finish": "2027-08-17",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "3_30",
+     "text": "Ut laboris",
+     "taskIds": [
+      90
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-15",
+      "finish": "2027-08-28",
+      "isMilestone": false,
+      "trade": "Avretting"
+     }
+    }
+   ]
+  },
+  {
+   "id": "4",
+   "name": "Consectetur ullamco amet",
+   "fill": "#FFFFFF",
+   "shown": true,
+   "boxes": [
+    {
+     "id": "4_1",
+     "text": "Amet",
+     "taskIds": [
+      91
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-14",
+      "finish": "2027-09-28",
+      "isMilestone": false,
+      "trade": "Testing"
+     }
+    },
+    {
+     "id": "4_2",
+     "text": "Sit ullamco commodo",
+     "taskIds": [
+      92
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-29",
+      "finish": "2027-10-08",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "4_3",
+     "text": "Sit sed labore",
+     "taskIds": [
+      93
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "green",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-06",
+      "finish": "2027-09-06",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "4_4",
+     "text": "Ipsum veniam minim labore",
+     "taskIds": [
+      94
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-22",
+      "finish": "2027-12-26",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "4_5",
+     "text": "*Adipiscing do labore",
+     "taskIds": [
+      95
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-12-25",
+      "finish": "2028-01-09",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "4_6",
+     "text": "*Nisi",
+     "taskIds": [
+      96
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-08",
+      "finish": "2028-01-19",
+      "isMilestone": false,
+      "trade": "Avretting"
+     }
+    },
+    {
+     "id": "4_7",
+     "text": "Ullamco laboris labore adipiscing",
+     "taskIds": [
+      97
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "flag",
+      "verticalLine": false,
+      "color": "green",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-19",
+      "finish": "2028-01-19",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "4_8",
+     "text": "Dolor|Nostrud",
+     "taskIds": [
+      98
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-02",
+      "finish": "2028-01-15",
+      "isMilestone": false,
+      "trade": "Betong"
+     }
+    },
+    {
+     "id": "4_9",
+     "text": "Incididunt commodo",
+     "taskIds": [
+      99
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-11",
+      "finish": "2027-06-13",
+      "isMilestone": false,
+      "trade": "Sikkerhetssone"
+     }
+    },
+    {
+     "id": "4_10",
+     "text": "Elit consequat veniam ut",
+     "taskIds": [
+      100
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-08",
+      "finish": "2027-07-13",
+      "isMilestone": false,
+      "trade": "VA"
+     }
+    },
+    {
+     "id": "4_11",
+     "text": "Aliqua ullamco|Laboris",
+     "taskIds": [
+      101
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-07-09",
+      "finish": "2027-08-10",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "4_12",
+     "text": "*Elit incididunt",
+     "taskIds": [
+      102
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-09",
+      "finish": "2027-08-15",
+      "isMilestone": false,
+      "trade": "Etterarbeid"
+     }
+    },
+    {
+     "id": "4_13",
+     "text": "Labore aliquip|Aliquip minim",
+     "taskIds": [
+      103
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-08",
+      "finish": "2027-09-21",
+      "isMilestone": false,
+      "trade": "Grunnarbeid"
+     }
+    },
+    {
+     "id": "4_14",
+     "text": "Incididunt laboris",
+     "taskIds": [
+      104
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-28",
+      "finish": "2027-06-01",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "4_15",
+     "text": "Sit sed ipsum|Magna adipiscing veniam",
+     "taskIds": [
+      105
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "orange",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-31",
+      "finish": "2027-05-31",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "4_16",
+     "text": "Aliqua nostrud",
+     "taskIds": [
+      106
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-12",
+      "finish": "2027-08-10",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "4_17",
+     "text": "Veniam",
+     "taskIds": [
+      107
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "diamond",
+      "verticalLine": false,
+      "color": "red",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-05-23",
+      "finish": "2027-05-23",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "4_18",
+     "text": "Nostrud veniam incididunt",
+     "taskIds": [
+      108
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-06-11",
+      "finish": "2027-09-06",
+      "isMilestone": false,
+      "trade": "Testing"
+     }
+    },
+    {
+     "id": "4_19",
+     "text": "*Amet|Nisi veniam ut",
+     "taskIds": [
+      109
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-04",
+      "finish": "2027-09-13",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "4_20",
+     "text": "Veniam commodo lorem lorem",
+     "taskIds": [
+      110
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-05",
+      "finish": "2027-11-07",
+      "isMilestone": false,
+      "trade": "Stål"
+     }
+    },
+    {
+     "id": "4_21",
+     "text": "Ullamco nostrud laboris",
+     "taskIds": [
+      111
+     ],
+     "rotation": 0,
+     "milestone": {
+      "dateSource": "scheduled",
+      "symbol": "flag",
+      "verticalLine": false,
+      "color": "orange",
+      "rotateText": false,
+      "showDate": true
+     },
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-11",
+      "finish": "2027-10-11",
+      "isMilestone": true,
+      "trade": "(none)"
+     }
+    },
+    {
+     "id": "4_22",
+     "text": "Consequat dolore|Nostrud aliqua sit",
+     "taskIds": [
+      112
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-28",
+      "finish": "2028-02-14",
+      "isMilestone": false,
+      "trade": "Asfalt"
+     }
+    },
+    {
+     "id": "4_23",
+     "text": "Dolore lorem|Magna incididunt labore",
+     "taskIds": [
+      113
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-01-15",
+      "finish": "2028-05-14",
+      "isMilestone": false,
+      "trade": "Elektro"
+     }
+    },
+    {
+     "id": "4_24",
+     "text": "Minim|Veniam laboris",
+     "taskIds": [
+      114
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-05-02",
+      "finish": "2028-06-30",
+      "isMilestone": false,
+      "trade": "VA"
+     }
+    },
+    {
+     "id": "4_25",
+     "text": "Do exercitation",
+     "taskIds": [
+      115
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-09-09",
+      "finish": "2027-11-09",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "4_26",
+     "text": "Enim labore",
+     "taskIds": [
+      116
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-10",
+      "finish": "2027-11-13",
+      "isMilestone": false,
+      "trade": "Bergarbeid"
+     }
+    },
+    {
+     "id": "4_27",
+     "text": "*Consectetur|Lorem incididunt",
+     "taskIds": [
+      117
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-11-12",
+      "finish": "2027-11-20",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "4_28",
+     "text": "Veniam amet",
+     "taskIds": [
+      118
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-10-29",
+      "finish": "2028-02-29",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "4_29",
+     "text": "Aliquip laboris commodo consectetur",
+     "taskIds": [
+      119
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2028-02-29",
+      "finish": "2028-03-09",
+      "isMilestone": false,
+      "trade": "Slakk"
+     }
+    },
+    {
+     "id": "4_30",
+     "text": "*Adipiscing nisi",
+     "taskIds": [
+      120
+     ],
+     "rotation": 0,
+     "milestone": null,
+     "shown": true,
+     "resolved": {
+      "start": "2027-08-11",
+      "finish": "2027-08-19",
+      "isMilestone": false,
+      "trade": "Tak"
+     }
+    }
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "uid": 1,
+   "name": "Laboris exercitation exercitation",
+   "start": "2027-03-08",
+   "finish": "2027-03-08",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 2,
+   "name": "Ullamco",
+   "start": "2027-03-14",
+   "finish": "2027-04-06",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 3,
+   "name": "Magna quis",
+   "start": "2027-03-14",
+   "finish": "2027-07-15",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 4,
+   "name": "Aliquip ipsum tempor",
+   "start": "2027-07-04",
+   "finish": "2027-10-29",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 5,
+   "name": "Minim Minim minim",
+   "start": "2028-02-22",
+   "finish": "2028-03-06",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "VA"
+  },
+  {
+   "uid": 6,
+   "name": "Sed laboris elit nisi",
+   "start": "2028-03-02",
+   "finish": "2028-05-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Avretting"
+  },
+  {
+   "uid": 7,
+   "name": "Amet Elit consectetur",
+   "start": "2028-05-17",
+   "finish": "2028-06-24",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 8,
+   "name": "Laboris commodo amet consequat",
+   "start": "2027-04-06",
+   "finish": "2027-04-16",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 9,
+   "name": "Laboris",
+   "start": "2027-04-09",
+   "finish": "2027-05-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 10,
+   "name": "Lorem lorem laboris",
+   "start": "2027-05-01",
+   "finish": "2027-05-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Avretting"
+  },
+  {
+   "uid": 11,
+   "name": "Sit consectetur sed dolore",
+   "start": "2027-04-19",
+   "finish": "2027-07-11",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 12,
+   "name": "Lorem sit aliqua incididunt",
+   "start": "2027-07-05",
+   "finish": "2027-09-24",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 13,
+   "name": "Consequat sed aliquip consequat",
+   "start": "2027-09-21",
+   "finish": "2027-11-05",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 14,
+   "name": "Laboris Aliqua nostrud",
+   "start": "2027-11-05",
+   "finish": "2027-11-19",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 15,
+   "name": "Labore consequat",
+   "start": "2027-11-16",
+   "finish": "2027-11-16",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 16,
+   "name": "Dolore magna Dolor",
+   "start": "2027-11-26",
+   "finish": "2027-12-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 17,
+   "name": "Ut magna elit",
+   "start": "2028-01-30",
+   "finish": "2028-03-20",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 18,
+   "name": "Minim do magna",
+   "start": "2028-03-06",
+   "finish": "2028-05-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 19,
+   "name": "Aliqua amet ipsum",
+   "start": "2028-04-22",
+   "finish": "2028-06-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 20,
+   "name": "Aliquip aliqua Adipiscing exercitation",
+   "start": "2027-01-27",
+   "finish": "2027-02-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 21,
+   "name": "Sit",
+   "start": "2027-11-17",
+   "finish": "2027-12-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tilbakefylling"
+  },
+  {
+   "uid": 22,
+   "name": "Eiusmod labore labore magna",
+   "start": "2027-01-23",
+   "finish": "2027-01-28",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 23,
+   "name": "Adipiscing consectetur aliqua labore",
+   "start": "2027-01-13",
+   "finish": "2027-01-13",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 24,
+   "name": "Sed nisi quis",
+   "start": "2027-01-23",
+   "finish": "2027-05-11",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Testing"
+  },
+  {
+   "uid": 25,
+   "name": "Ipsum ipsum do Minim",
+   "start": "2027-03-12",
+   "finish": "2027-07-12",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 26,
+   "name": "Consectetur et labore",
+   "start": "2027-06-26",
+   "finish": "2027-08-17",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 27,
+   "name": "Commodo enim",
+   "start": "2028-04-29",
+   "finish": "2028-05-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 28,
+   "name": "Et",
+   "start": "2028-05-08",
+   "finish": "2028-06-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tilbakefylling"
+  },
+  {
+   "uid": 29,
+   "name": "Magna consequat nisi ut",
+   "start": "2027-03-25",
+   "finish": "2027-04-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 30,
+   "name": "Exercitation",
+   "start": "2027-10-23",
+   "finish": "2027-10-23",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 31,
+   "name": "Minim tempor amet Consectetur minim ut",
+   "start": "2027-04-07",
+   "finish": "2027-04-07",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 32,
+   "name": "Amet",
+   "start": "2027-07-15",
+   "finish": "2027-07-23",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 33,
+   "name": "Consequat Veniam dolore labore",
+   "start": "2027-07-20",
+   "finish": "2027-07-31",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 34,
+   "name": "Dolore sed",
+   "start": "2027-07-17",
+   "finish": "2027-09-21",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 35,
+   "name": "Incididunt do",
+   "start": "2027-06-14",
+   "finish": "2027-07-03",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 36,
+   "name": "Do tempor ut",
+   "start": "2027-06-11",
+   "finish": "2027-10-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 37,
+   "name": "Labore ut",
+   "start": "2027-09-06",
+   "finish": "2027-11-27",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Testing"
+  },
+  {
+   "uid": 38,
+   "name": "Adipiscing sit",
+   "start": "2027-12-21",
+   "finish": "2028-03-15",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Kabelkanaler"
+  },
+  {
+   "uid": 39,
+   "name": "Labore Ullamco",
+   "start": "2027-06-04",
+   "finish": "2027-06-11",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 40,
+   "name": "Lorem labore ullamco",
+   "start": "2027-08-12",
+   "finish": "2027-11-07",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 41,
+   "name": "Et et nostrud Commodo",
+   "start": "2027-10-13",
+   "finish": "2028-02-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 42,
+   "name": "Ipsum Tempor",
+   "start": "2028-01-08",
+   "finish": "2028-03-29",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 43,
+   "name": "Labore dolore Sit",
+   "start": "2027-12-06",
+   "finish": "2028-02-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 44,
+   "name": "Nostrud laboris",
+   "start": "2027-11-02",
+   "finish": "2027-12-07",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 45,
+   "name": "Adipiscing consequat quis Et adipiscing",
+   "start": "2027-08-05",
+   "finish": "2027-11-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 46,
+   "name": "Ullamco",
+   "start": "2027-10-30",
+   "finish": "2027-11-14",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 47,
+   "name": "Et consequat",
+   "start": "2027-10-17",
+   "finish": "2028-02-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 48,
+   "name": "Lorem",
+   "start": "2028-02-04",
+   "finish": "2028-02-17",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 49,
+   "name": "Veniam laboris magna Tempor",
+   "start": "2028-01-30",
+   "finish": "2028-04-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 50,
+   "name": "Consectetur",
+   "start": "2028-03-29",
+   "finish": "2028-04-28",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 51,
+   "name": "Dolore lorem",
+   "start": "2028-02-17",
+   "finish": "2028-06-07",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 52,
+   "name": "Aliqua Exercitation",
+   "start": "2028-04-03",
+   "finish": "2028-04-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 53,
+   "name": "Amet enim sit consequat",
+   "start": "2027-12-31",
+   "finish": "2028-02-06",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 54,
+   "name": "Consequat magna consequat",
+   "start": "2028-04-08",
+   "finish": "2028-06-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 55,
+   "name": "Consectetur ut et eiusmod",
+   "start": "2027-08-07",
+   "finish": "2027-11-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 56,
+   "name": "Aliquip minim",
+   "start": "2027-10-02",
+   "finish": "2028-01-26",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Kabelkanaler"
+  },
+  {
+   "uid": 57,
+   "name": "Eiusmod aliqua lorem Sit",
+   "start": "2028-01-24",
+   "finish": "2028-02-05",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 58,
+   "name": "Adipiscing Quis",
+   "start": "2027-12-29",
+   "finish": "2027-12-29",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 59,
+   "name": "Ullamco et",
+   "start": "2028-04-12",
+   "finish": "2028-04-12",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 60,
+   "name": "Consequat do Veniam elit",
+   "start": "2027-04-10",
+   "finish": "2027-04-20",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 61,
+   "name": "Dolor aliquip tempor",
+   "start": "2027-08-10",
+   "finish": "2027-09-05",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Kabelkanaler"
+  },
+  {
+   "uid": 62,
+   "name": "Ullamco",
+   "start": "2027-09-06",
+   "finish": "2027-09-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 63,
+   "name": "Enim lorem",
+   "start": "2027-09-29",
+   "finish": "2027-10-10",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tilbakefylling"
+  },
+  {
+   "uid": 64,
+   "name": "Laboris Exercitation aliquip consequat",
+   "start": "2027-10-07",
+   "finish": "2028-02-04",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 65,
+   "name": "Et dolor Consequat ut",
+   "start": "2027-09-28",
+   "finish": "2027-10-02",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 66,
+   "name": "Lorem quis exercitation incididunt",
+   "start": "2027-10-01",
+   "finish": "2027-10-01",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 67,
+   "name": "Nisi amet",
+   "start": "2027-10-14",
+   "finish": "2027-10-22",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 68,
+   "name": "Eiusmod",
+   "start": "2027-10-21",
+   "finish": "2027-10-21",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 69,
+   "name": "Nisi consectetur",
+   "start": "2027-10-27",
+   "finish": "2027-11-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 70,
+   "name": "Laboris consequat Do labore",
+   "start": "2027-11-02",
+   "finish": "2027-11-10",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 71,
+   "name": "Incididunt magna dolor Dolore tempor dolore",
+   "start": "2027-11-03",
+   "finish": "2027-12-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 72,
+   "name": "Adipiscing nostrud enim",
+   "start": "2027-12-01",
+   "finish": "2027-12-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "VA"
+  },
+  {
+   "uid": 73,
+   "name": "Dolore ut consequat Consectetur nisi",
+   "start": "2027-06-23",
+   "finish": "2027-06-23",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 74,
+   "name": "Do nostrud amet Ullamco",
+   "start": "2027-04-01",
+   "finish": "2027-06-29",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Avretting"
+  },
+  {
+   "uid": 75,
+   "name": "Minim ullamco nisi Lorem labore exercitation",
+   "start": "2027-10-26",
+   "finish": "2027-10-26",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 76,
+   "name": "Enim Aliqua quis",
+   "start": "2027-09-08",
+   "finish": "2027-11-22",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 77,
+   "name": "Labore exercitation eiusmod nisi",
+   "start": "2027-11-21",
+   "finish": "2027-12-21",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 78,
+   "name": "Aliqua consequat",
+   "start": "2027-12-21",
+   "finish": "2028-01-10",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 79,
+   "name": "Eiusmod exercitation",
+   "start": "2027-07-07",
+   "finish": "2027-10-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 80,
+   "name": "Incididunt dolor eiusmod dolor",
+   "start": "2027-10-04",
+   "finish": "2027-12-15",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "VA"
+  },
+  {
+   "uid": 81,
+   "name": "Dolore",
+   "start": "2027-11-07",
+   "finish": "2028-03-06",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Testing"
+  },
+  {
+   "uid": 82,
+   "name": "Minim minim sed",
+   "start": "2028-03-05",
+   "finish": "2028-03-19",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Betong"
+  },
+  {
+   "uid": 83,
+   "name": "Ullamco Aliqua",
+   "start": "2027-04-08",
+   "finish": "2027-04-16",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Kabelkanaler"
+  },
+  {
+   "uid": 84,
+   "name": "Laboris dolor consectetur",
+   "start": "2027-04-06",
+   "finish": "2027-07-03",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 85,
+   "name": "Aliquip Nisi magna aliqua",
+   "start": "2027-12-06",
+   "finish": "2028-01-16",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 86,
+   "name": "Dolor Dolore",
+   "start": "2028-01-14",
+   "finish": "2028-02-18",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  },
+  {
+   "uid": 87,
+   "name": "Do veniam enim exercitation",
+   "start": "2028-02-17",
+   "finish": "2028-04-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Prosjektering"
+  },
+  {
+   "uid": 88,
+   "name": "Amet laboris do enim",
+   "start": "2027-01-05",
+   "finish": "2027-02-21",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 89,
+   "name": "Quis quis",
+   "start": "2027-05-21",
+   "finish": "2027-08-17",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 90,
+   "name": "Ut laboris",
+   "start": "2027-08-15",
+   "finish": "2027-08-28",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Avretting"
+  },
+  {
+   "uid": 91,
+   "name": "Amet",
+   "start": "2027-06-14",
+   "finish": "2027-09-28",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Testing"
+  },
+  {
+   "uid": 92,
+   "name": "Sit ullamco commodo",
+   "start": "2027-09-29",
+   "finish": "2027-10-08",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 93,
+   "name": "Sit sed labore",
+   "start": "2027-09-06",
+   "finish": "2027-09-06",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 94,
+   "name": "Ipsum veniam minim labore",
+   "start": "2027-12-22",
+   "finish": "2027-12-26",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 95,
+   "name": "Adipiscing do labore",
+   "start": "2027-12-25",
+   "finish": "2028-01-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 96,
+   "name": "Nisi",
+   "start": "2028-01-08",
+   "finish": "2028-01-19",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Avretting"
+  },
+  {
+   "uid": 97,
+   "name": "Ullamco laboris labore adipiscing",
+   "start": "2028-01-19",
+   "finish": "2028-01-19",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 98,
+   "name": "Dolor Nostrud",
+   "start": "2028-01-02",
+   "finish": "2028-01-15",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Betong"
+  },
+  {
+   "uid": 99,
+   "name": "Incididunt commodo",
+   "start": "2027-05-11",
+   "finish": "2027-06-13",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Sikkerhetssone"
+  },
+  {
+   "uid": 100,
+   "name": "Elit consequat veniam ut",
+   "start": "2027-06-08",
+   "finish": "2027-07-13",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "VA"
+  },
+  {
+   "uid": 101,
+   "name": "Aliqua ullamco Laboris",
+   "start": "2027-07-09",
+   "finish": "2027-08-10",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 102,
+   "name": "Elit incididunt",
+   "start": "2027-08-09",
+   "finish": "2027-08-15",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Etterarbeid"
+  },
+  {
+   "uid": 103,
+   "name": "Labore aliquip Aliquip minim",
+   "start": "2027-08-08",
+   "finish": "2027-09-21",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Grunnarbeid"
+  },
+  {
+   "uid": 104,
+   "name": "Incididunt laboris",
+   "start": "2027-05-28",
+   "finish": "2027-06-01",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 105,
+   "name": "Sit sed ipsum Magna adipiscing veniam",
+   "start": "2027-05-31",
+   "finish": "2027-05-31",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 106,
+   "name": "Aliqua nostrud",
+   "start": "2027-05-12",
+   "finish": "2027-08-10",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 107,
+   "name": "Veniam",
+   "start": "2027-05-23",
+   "finish": "2027-05-23",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 108,
+   "name": "Nostrud veniam incididunt",
+   "start": "2027-06-11",
+   "finish": "2027-09-06",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Testing"
+  },
+  {
+   "uid": 109,
+   "name": "Amet Nisi veniam ut",
+   "start": "2027-09-04",
+   "finish": "2027-09-13",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 110,
+   "name": "Veniam commodo lorem lorem",
+   "start": "2027-09-05",
+   "finish": "2027-11-07",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Stål"
+  },
+  {
+   "uid": 111,
+   "name": "Ullamco nostrud laboris",
+   "start": "2027-10-11",
+   "finish": "2027-10-11",
+   "deadline": null,
+   "milestone": true,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": null
+  },
+  {
+   "uid": 112,
+   "name": "Consequat dolore Nostrud aliqua sit",
+   "start": "2027-11-28",
+   "finish": "2028-02-14",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Asfalt"
+  },
+  {
+   "uid": 113,
+   "name": "Dolore lorem Magna incididunt labore",
+   "start": "2028-01-15",
+   "finish": "2028-05-14",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Elektro"
+  },
+  {
+   "uid": 114,
+   "name": "Minim Veniam laboris",
+   "start": "2028-05-02",
+   "finish": "2028-06-30",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "VA"
+  },
+  {
+   "uid": 115,
+   "name": "Do exercitation",
+   "start": "2027-09-09",
+   "finish": "2027-11-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 116,
+   "name": "Enim labore",
+   "start": "2027-11-10",
+   "finish": "2027-11-13",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Bergarbeid"
+  },
+  {
+   "uid": 117,
+   "name": "Consectetur Lorem incididunt",
+   "start": "2027-11-12",
+   "finish": "2027-11-20",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 118,
+   "name": "Veniam amet",
+   "start": "2027-10-29",
+   "finish": "2028-02-29",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 119,
+   "name": "Aliquip laboris commodo consectetur",
+   "start": "2028-02-29",
+   "finish": "2028-03-09",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Slakk"
+  },
+  {
+   "uid": 120,
+   "name": "Adipiscing nisi",
+   "start": "2027-08-11",
+   "finish": "2027-08-19",
+   "deadline": null,
+   "milestone": false,
+   "summary": false,
+   "flag20": false,
+   "percentComplete": 0,
+   "trade": "Tak"
+  }
+ ]
+}

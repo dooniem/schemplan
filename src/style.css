@@ -78,10 +78,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .sheet .sheet-label { fill: #6b6b66; font-size: 8px; text-anchor: middle; }
 
 /* Utskrift: bare arket, i ekte A3-mål */
-/* Standard A3 liggende. main.ts skriver om regelen til valgt retning før utskrift. */
+/* Standard A3 liggende. main.ts skriver om regelen til valgt ark og retning før utskrift. */
 @page { size: A3 landscape; margin: 0; }
-@page a3-landscape { size: A3 landscape; margin: 0; }
-@page a3-portrait { size: A3 portrait; margin: 0; }
 
 @media print {
   .no-print { display: none !important; }
@@ -89,8 +87,9 @@ details summary { cursor: pointer; font-size: 13px; }
   main { padding: 0; max-width: none; display: block; }
   .sheet-host { display: block; overflow: hidden; }
   .sheet-host svg { display: block; }
-  .sheet-host.landscape { page: a3-landscape; }
-  .sheet-host.portrait { page: a3-portrait; }
-  .sheet-host.landscape svg { width: 420mm; height: 297mm; max-height: none; box-shadow: none; }
-  .sheet-host.portrait svg { width: 297mm; height: 420mm; max-height: none; box-shadow: none; }
+  /* Arket skrives ut i målene fra SVG-ens width/height (mm), uansett arkstørrelse */
+  .sheet-host svg { width: auto; height: auto; max-height: none; box-shadow: none; }
 }
+
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.suggest:empty { display: none; }

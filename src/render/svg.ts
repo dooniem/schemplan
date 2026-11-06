@@ -163,7 +163,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
         // Flagg: stangen står på datoen og går ned langs teksten, duken vaier mot venstre
         const top = it.y - s;
         node('line', { x1: it.x, x2: it.x, y1: top, y2: Math.max(it.y + s, lb.y + lb.h), stroke: '#404040', 'stroke-width': 0.3 }, g);
-        const fw = s * 2.8;
+        const fw = s * 2.4;
         node('path', {
           d: `M${r(it.x)} ${r(top)} C${r(it.x - fw * 0.35)} ${r(top + s * 0.35)} ${r(it.x - fw * 0.6)} ${r(top - s * 0.15)} ${r(it.x - fw)} ${r(top + s * 0.45)} C${r(it.x - fw * 0.6)} ${r(top + s * 0.6)} ${r(it.x - fw * 0.35)} ${r(top + s)} ${r(it.x)} ${r(top + s * 1.1)} Z`,
           fill: it.color,

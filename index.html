@@ -21,9 +21,16 @@
             <input id="file-input" type="file" accept=".json,application/json" hidden />
           </label>
           <div class="group" role="group" aria-label="Arkretning">
-            <button type="button" data-orientation="landscape" aria-pressed="true">A3 liggende</button>
-            <button type="button" data-orientation="portrait" aria-pressed="false">A3 stående</button>
+            <button type="button" data-orientation="landscape" aria-pressed="true">Liggende</button>
+            <button type="button" data-orientation="portrait" aria-pressed="false">Stående</button>
           </div>
+          <label class="field">Ark
+            <select id="paper">
+              <option value="A3" selected>A3</option>
+              <option value="A2">A2</option>
+              <option value="A1">A1</option>
+            </select>
+          </label>
           <div class="group" role="group" aria-label="Høyde på lanes">
             <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
             <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
@@ -35,11 +42,19 @@
           <label class="field">Tekst
             <input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /> pt
           </label>
-          <label class="field"><input id="fit" type="checkbox" checked /> Krymp tekst til planen får plass</label>
+          <label class="field">Tilpasning
+            <select id="fit-mode">
+              <option value="sheet" selected>Tilpass til arket</option>
+              <option value="fixed">Fast tekststørrelse</option>
+            </select>
+          </label>
+          <label class="field" id="min-text-field">Minst
+            <input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt
+          </label>
           <span class="spacer"></span>
           <button type="button" id="print" class="button" disabled>Skriv ut / lagre PDF</button>
         </div>
-        <p class="muted small">Filen leses bare lokalt i nettleseren og lagres ingen steder. Ved PDF: velg «Lagre som PDF» og A3 i utskriftsdialogen.</p>
+        <p class="muted small">Filen leses bare lokalt i nettleseren og lagres ingen steder. Ved PDF: velg «Lagre som PDF» i utskriftsdialogen. Arkstørrelsen er forhåndsvalgt.</p>
         <div id="file-info" aria-live="polite"></div>
       </section>
       <div id="sheet" class="sheet-host landscape"></div>
