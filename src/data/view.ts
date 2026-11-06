@@ -1,6 +1,7 @@
 // Datafanen: tabell over alle bokser med filter, sortering og eksport til Excel.
 import type { PlanFile } from '../format/types';
 import { cell, COLUMNS, planRows, type DataRow } from './rows';
+import { createCtxMenu } from '../ctxmenu';
 
 export interface DataView {
   /** Tegner tabellen på nytt fra planen (kalles etter hver endring mens fanen vises). */
@@ -111,9 +112,7 @@ export function createDataView(
     picked = tr?.dataset.id ?? '';
     mark();
   });
-  const menu = root.querySelector<HTMLElement>('#data-menu')!;
-  const showInPlan = menu.querySelector<HTMLButtonElement>('button')!;
-  const closeMenu = () => menu.matches(':popover-open') && menu.hidePopover();
+  const ctx = createCtxMenu();
   tbody.addEventListener('contextmenu', (e) => {
     const tr = (e.target as Element).closest<HTMLTableRowElement>('tr[data-id]');
     if (!tr) return;
@@ -121,20 +120,11 @@ export function createDataView(
     picked = tr.dataset.id!;
     mark();
     const hidden = tr.classList.contains('is-hidden');
-    showInPlan.disabled = hidden;
-    showInPlan.querySelector('span')!.textContent = hidden ? 'Boksen er skjult og vises ikke i planen.' : 'Går til planen og viser boksen, klar til å redigere.';
-    if (!menu.matches(':popover-open')) menu.showPopover();
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
-    menu.style.left = `${Math.max(8, Math.min(e.clientX, vw - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(e.clientY, vh - menu.offsetHeight - 8))}px`;
+    const id = picked;
+    ctx.open(e.clientX, e.clientY, tr.cells[1]?.textContent?.trim() || 'Boks', [
+      { items: [{ label: 'Vis i planen', icon: 'target', disabled: hidden, hint: hidden ? 'Boksen er skjult og vises ikke i planen.' : 'Går til planen og viser boksen, klar til å redigere.', onSelect: () => onPick(id) }] },
+    ]);
   });
-  showInPlan.addEventListener('click', () => {
-    closeMenu();
-    if (picked) onPick(picked);
-  });
-  document.addEventListener('pointerdown', (e) => !menu.contains(e.target as Node) && closeMenu());
-  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
   filter.addEventListener('input', refresh);
   onlyEdited.addEventListener('change', refresh);
   showHidden.addEventListener('change', refresh);
