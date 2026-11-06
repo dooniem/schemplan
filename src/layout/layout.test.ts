@@ -130,6 +130,17 @@ describe('Excel-utseende', () => {
 
 const shape = (name: string): PlanFile => JSON.parse(readFileSync(new URL(`../../examples/former/${name}.json`, import.meta.url), 'utf8'));
 
+describe('lane-titler', () => {
+  it('"|" i lane-navnet gir linjeskift', () => {
+    const p = example();
+    p.lanes[0].name = 'Første|Andre';
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false }, approxMeasure);
+    expect(L.lanes[0].title.lines).toEqual(['Første', 'Andre']);
+    p.lanes[0].name = 'A /| B';
+    expect(computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false }, approxMeasure).lanes[0].title.lines).toEqual(['A | B']);
+  });
+});
+
 describe('tilpasning til arket', () => {
   it('krymper under minimum heller enn å kutte planen, og sier fra', () => {
     const L = computeLayout(shape('mange-av-begge'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: true, minTextPt: 7 }, approxMeasure);
