@@ -374,13 +374,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (file.plan.options.legend) {
-    const sw = legendSize * 2.2;
-    const sh = legendSize * 1.3;
-    const rowStep = legendSize * 2;
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
-    let lx = MARGIN;
-    let row = 0;
     const symbolEntries: { name: string; symbol: 'diamond' | 'flag' | 'holiday' }[] = ny
       ? [
           // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
@@ -389,16 +384,40 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       : [];
     const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name));
     const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined }))];
-    for (const { c, symbol, trade } of entries) {
-      const name = ny && c.name === '(none)' ? 'Uten fag' : c.name;
-      const w = sw + 1.5 + measure(name, legendSize) + 5;
-      if (lx + w > lxMax && lx > MARGIN) {
+    const names = entries.map(({ c }) => (ny && c.name === '(none)' ? 'Uten fag' : c.name));
+    // Forklaringen skal helst stå på én rad. Først tettes mellomrommet, så krympes den
+    // ned mot minste tekststørrelse. Får den fortsatt ikke plass, brytes den til flere rader.
+    const room = lxMax - MARGIN;
+    const widthAt = (size: number, gap: number) =>
+      names.reduce((sum, n) => sum + size * 2.2 + 1.5 + measure(n, size) + gap, 0) - gap;
+    let gap = 5;
+    let size = legendSize;
+    if (widthAt(size, gap) > room) gap = 3;
+    if (widthAt(size, gap) > room) {
+      // Aldri mindre enn teksten i selve planen eller minste tekststørrelse
+      const floor = Math.min(legendSize, Math.max(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT, opts.textSizePt * scale) * PT_TO_MM);
+      // Bredden er proporsjonal med størrelsen, bortsett fra de faste mellomrommene
+      const fixed = widthAt(0, gap);
+      const perSize = (widthAt(legendSize, gap) - fixed) / legendSize;
+      size = Math.max(floor, (room - fixed) / perSize);
+    }
+    const sw = size * 2.2;
+    const sh = size * 1.3;
+    const rowStep = size * 2;
+    // Krympet forklaring står på samme grunnlinje som datoen
+    const dy = (legendSize - size) * 1.3 * 0.8;
+    let lx = MARGIN;
+    let row = 0;
+    for (const [i, { c, symbol, trade }] of entries.entries()) {
+      const name = names[i];
+      const w = sw + 1.5 + measure(name, size) + gap;
+      if (lx + w - gap > lxMax && lx > MARGIN) {
         lx = MARGIN;
         row++;
       }
       legendEntries.push({
         x: lx,
-        y: row * rowStep,
+        y: row * rowStep + dy,
         w: sw,
         h: sh,
         fill: c.fill ?? '#FFFFFF',
@@ -406,11 +425,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         textColor: c.text ?? '#000000',
         symbol,
         trade,
-        label: { x: lx + sw + 1.5, y: row * rowStep + sh * 0.8, lines: [name], size: legendSize, color: '#000000', anchor: 'start' },
+        label: { x: lx + sw + 1.5, y: row * rowStep + dy + sh * 0.8, lines: [name], size, color: '#000000', anchor: 'start' },
       });
       lx += w;
     }
-    if (legendEntries.length) legendH = (row + 1) * rowStep + 2;
+    // Raden er aldri lavere enn datoen ved siden av
+    if (legendEntries.length) legendH = Math.max((row + 1) * rowStep + dy, legendSize * 2) + 2;
   }
   if (!legendH) legendH = legendSize * 2 + 2; // datoen nede til høyre
 

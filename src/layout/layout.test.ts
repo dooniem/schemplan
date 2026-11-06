@@ -177,8 +177,18 @@ describe('tilpasning til arket', () => {
     const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 12, fitToSheet: true, minTextPt: 4 };
     const L = computeLayout(shape('middels'), opts, approxMeasure);
     expect(L.textSizePt).toBeLessThan(12);
-    const sizes = [...L.legend.map((e) => e.label.size), L.subtitle.size];
-    for (const s of sizes) expect(s).toBeCloseTo(12 * 0.3528 * 0.85, 2);
+    expect(L.subtitle.size).toBeCloseTo(12 * 0.3528 * 0.85, 2);
+    // Forklaringen kan krympe for å holde seg på én rad, men aldri under planteksten
+    for (const e of L.legend) expect(e.label.size).toBeGreaterThanOrEqual(L.textSizePt * 0.3528 - 1e-6);
+  });
+
+  it('forklaringen holder seg på én rad når den kan', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 12, fitToSheet: true, minTextPt: 4 };
+    const L = computeLayout(shape('middels'), opts, approxMeasure);
+    expect(L.legend.length).toBeGreaterThan(1);
+    expect(new Set(L.legend.map((e) => e.y)).size).toBe(1);
+    const last = L.legend[L.legend.length - 1];
+    expect(last.label.x + approxMeasure(last.label.lines[0], last.label.size)).toBeLessThan(L.subtitle.x - approxMeasure(L.subtitle.lines[0], L.subtitle.size));
   });
 
   it('større ark gir større tekst', () => {
