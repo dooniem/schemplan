@@ -47,6 +47,10 @@ export interface PlanSettings {
     minTextSize?: number;
     /** Overskriftens størrelse i punkter. Krympes ikke når planen tilpasses arket. */
     titleSize?: number;
+    /** Vis forklaringen. Mangler den, gjelder valget fra Project. */
+    showLegend?: boolean;
+    /** Vis kalenderen også under planen. Mangler den, gjelder valget fra Project. */
+    showBottomCalendar?: boolean;
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
