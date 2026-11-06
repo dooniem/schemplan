@@ -44,7 +44,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -60,6 +60,76 @@ export function resetBox(b: Box): void {
   delete b.calloutSide;
   delete b.height;
   delete b.top;
+  delete b.hidden;
+}
+
+/** Lanen boksen ligger i nå. */
+export function laneOf(plan: PlanFile, id: string): Lane | null {
+  return plan.lanes.find((l) => l.boxes.some((b) => b.id === id)) ?? null;
+}
+
+/** Flytter boksen til en annen lane, sist i lanen. Husker lanen den kom fra, så den kan flyttes tilbake. */
+export function moveBox(plan: PlanFile, id: string, toLane: string): void {
+  const from = laneOf(plan, id);
+  const to = plan.lanes.find((l) => l.id === toLane);
+  if (!from || !to || from === to) return;
+  const i = from.boxes.findIndex((b) => b.id === id);
+  const [b] = from.boxes.splice(i, 1);
+  if (!b.manual) {
+    if (!b.fromLane) b.fromLane = from.id;
+    if (b.fromLane === to.id) delete b.fromLane;
+  }
+  to.boxes.push(b);
+}
+
+/** Tilbakestiller boksen, og flytter den tilbake til lanen den kom fra. */
+export function resetBoxInPlan(plan: PlanFile, id: string): void {
+  const b = findBox(plan, id);
+  if (!b) return;
+  resetBox(b);
+  if (b.fromLane) moveBox(plan, id, b.fromLane);
+}
+
+const newId = (plan: PlanFile) => {
+  const used = new Set(plan.lanes.flatMap((l) => l.boxes.map((b) => b.id)));
+  let n = 1;
+  while (used.has(`app_${n}`)) n++;
+  return `app_${n}`;
+};
+
+/** Kopi av boksen rett etter den i samme lane. Kopien er laget i appen og følger ikke Project. */
+export function copyBox(plan: PlanFile, id: string): Box | null {
+  const lane = laneOf(plan, id);
+  const src = lane && lane.boxes.find((b) => b.id === id);
+  if (!lane || !src) return null;
+  const b: Box = structuredClone(src);
+  b.id = newId(plan);
+  b.taskIds = [];
+  b.manual = true;
+  delete b.top;
+  delete b.original;
+  delete b.fromLane;
+  delete b.hidden;
+  lane.boxes.splice(lane.boxes.indexOf(src) + 1, 0, b);
+  return b;
+}
+
+/** Ny boks i lanen, laget i appen. */
+export function newBox(plan: PlanFile, laneId: string, start: string, finish: string): Box | null {
+  const lane = plan.lanes.find((l) => l.id === laneId);
+  if (!lane) return null;
+  const b: Box = { id: newId(plan), text: 'Ny boks', taskIds: [], rotation: 0, milestone: null, shown: true, manual: true, resolved: { start, finish, isMilestone: false, trade: '(none)' } };
+  lane.boxes.push(b);
+  return b;
+}
+
+/** Bokser laget i appen slettes. Bokser fra Project skjules, så de kan vises igjen. */
+export function removeBox(plan: PlanFile, id: string): void {
+  const lane = laneOf(plan, id);
+  const b = lane?.boxes.find((x) => x.id === id);
+  if (!lane || !b) return;
+  if (b.manual) lane.boxes.splice(lane.boxes.indexOf(b), 1);
+  else b.hidden = true;
 }
 
 /** Runder av til hundredeler av en tekstlinje, så filen ikke fylles med lange desimaltall. */
@@ -155,6 +225,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     syncTools();
   };
 
+  const copySelected = () => {
+    if (!selected) return;
+    let made: Box | null = null;
+    const id = selected;
+    commit((pl) => (made = copyBox(pl, id)));
+    if (made) select((made as Box).id);
+  };
+  const removeSelected = () => {
+    if (!selected) return;
+    const id = selected;
+    selected = null;
+    commit((pl) => removeBox(pl, id));
+    overlay();
+  };
+
   const restore = (from: PlanFile[], to: PlanFile[]) => {
     const plan = host.getPlan();
     const prev = from.pop();
@@ -200,7 +285,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         'Dra en boks opp eller ned for å gi den fast plass i lanen.',
         'Dra i den blå streken under valgt boks for å endre høyden.',
         'Dra i nederste kant av en lane for å gi den fast høyde.',
-        'Høyreklikk en lane for automatisk eller fast høyde.',
+        'Dra en boks til en annen lane for å flytte den dit.',
+        'Høyreklikk en lane for ny boks, lanehøyde og skjulte bokser.',
+        'Ctrl+D kopierer valgt boks. Delete skjuler den.',
         'Ctrl+Z angrer, Ctrl+Y gjør om.',
       ])
         tips.append(el('li', {}, t));
@@ -214,7 +301,31 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     close.addEventListener('click', () => select(null));
     head.append(close);
     panel.append(head);
-    if (b.resolved) panel.append(el('p', { class: 'muted small' }, `${b.resolved.start.split('-').reverse().join('.')} til ${b.resolved.finish.split('-').reverse().join('.')}${b.resolved.trade && b.resolved.trade !== '(none)' ? ` · ${b.resolved.trade}` : ''}`));
+    if (b.manual && b.resolved) {
+      // Boks laget i appen: datoene velges her
+      const dw = el('div', { class: 'prop' });
+      dw.append(el('span', { class: 'prop-label' }, 'Laget i appen, følger ikke Project'));
+      const row = el('div', { class: 'row dates' });
+      const mk = (key: 'start' | 'finish', label: string) => {
+        const lab = el('label', { class: 'small' }, label);
+        const inp = el('input', { type: 'date', value: b.resolved![key], min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
+        inp.addEventListener('change', () => {
+          const v = inp.value;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+          change((x) => {
+            if (!x.resolved) return;
+            x.resolved[key] = v;
+            if (x.resolved.start > x.resolved.finish) x.resolved[key === 'start' ? 'finish' : 'start'] = v;
+          });
+        });
+        lab.append(inp);
+        row.append(lab);
+      };
+      mk('start', 'Fra');
+      mk('finish', 'Til');
+      dw.append(row);
+      panel.append(dw);
+    } else if (b.resolved) panel.append(el('p', { class: 'muted small' }, `${b.resolved.start.split('-').reverse().join('.')} til ${b.resolved.finish.split('-').reverse().join('.')}${b.resolved.trade && b.resolved.trade !== '(none)' ? ` · ${b.resolved.trade}` : ''}`));
 
     // Tekst
     const tw = el('label', { class: 'prop' });
@@ -318,9 +429,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill boks');
     reset.disabled = !isEdited(b);
     reset.title = 'Fjerner det du har endret, så appens forslag gjelder igjen';
-    reset.addEventListener('click', () => change(resetBox));
-    panel.append(el('div', { class: 'panel-foot' }, undefined));
-    panel.lastElementChild!.append(reset);
+    reset.addEventListener('click', () => commit((pl) => resetBoxInPlan(pl, b.id)));
+    const copy = el('button', { type: 'button', class: 'button', title: 'Lag en kopi rett under (Ctrl+D)' }, 'Kopier');
+    copy.addEventListener('click', () => copySelected());
+    const del = el('button', { type: 'button', class: 'button', title: b.manual ? 'Slett boksen (Delete)' : 'Skjul boksen. Høyreklikk lanen for å vise den igjen. (Delete)' }, b.manual ? 'Slett' : 'Skjul');
+    del.addEventListener('click', () => removeSelected());
+    const foot = el('div', { class: 'panel-foot row' });
+    foot.append(copy, del, reset);
+    panel.append(foot);
   };
 
   // ---- Markeringer i tegningen (kommer ikke med i PDF eller utskrift) ----
@@ -441,14 +557,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const startMove = (it: Item): Drag | null => {
     if (!layoutNow) return null;
     const r = bounds(it);
-    const lane = laneAt(r.y0);
-    if (!lane) return null;
-    const unit = layoutNow.unit;
-    const pad = lane.top - lane.y0;
+    const home = laneAt(r.y0);
+    if (!home) return null;
+    const L = layoutNow;
+    const unit = L.unit;
     const fh = r.y1 - r.y0;
-    const maxY = Math.max(lane.top, lane.y1 - pad - fh);
+    let lane = home;
     let g: SVGGElement | null = null;
     let rect: SVGRectElement | null = null;
+    let target: SVGRectElement | null = null;
     let y = r.y0;
     return {
       startY: r.y0,
@@ -457,16 +574,26 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       move(dy) {
         if (!g) {
           g = ghostLayer();
+          // Lanen boksen havner i, markert svakt
+          target = shape(g, 'rect', { x: L.laneTitleX, y: home.y0, width: L.plot.x1 - L.laneTitleX, height: home.y1 - home.y0, fill: ACCENT, 'fill-opacity': 0.06 });
           rect = shape(g, 'rect', { x: r.x0, y: r.y0, width: r.x1 - r.x0, height: fh, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
         }
+        // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
+        const first = L.lanes[0];
+        const last = L.lanes[L.lanes.length - 1];
+        lane = laneAt(clamp(r.y0 + dy + fh / 2, first.y0, last.y1 - 1e-3)) ?? home;
+        const pad = lane.top - lane.y0;
+        const maxY = Math.max(lane.top, lane.y1 - pad - fh);
         y = clamp(lane.top + Math.round((r.y0 + dy - lane.top) / (unit / 4)) * (unit / 4), lane.top, maxY);
         set(rect!, { y });
+        set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
       },
       end() {
         g?.remove();
-        if (Math.abs(y - r.y0) < 1e-6) return;
+        if (Math.abs(y - r.y0) < 1e-6 && lane === home) return;
         selected = it.id;
         commit((plan) => {
+          if (lane !== home) moveBox(plan, it.id, lane.id);
           const b = findBox(plan, it.id);
           if (b) b.top = lines(y - lane.top, unit);
         });
@@ -565,7 +692,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const d = drag;
     drag = null;
     if (d.moved) {
+      // Klikket som kommer rett etter at knappen slippes, skal ikke velge noe annet
       suppressClick = true;
+      window.setTimeout(() => (suppressClick = false), 0);
       d.end();
     } else svgNow?.querySelector('g.edit-ghost')?.remove();
   };
@@ -607,9 +736,36 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     menu.replaceChildren(el('p', { class: 'pop-title' }, `Lane: ${lane.name.replace(/\/?\|/g, ' ')}`));
     item('Automatisk høyde', 'Så høy som innholdet krever, og fyller ledig plass.', !lane.height, () => commit((pl) => delete findLane(pl, ln.id)!.height));
     item('Fast høyde', 'Beholder høyden. Dra i nederste kant for å endre den.', !!lane.height, () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))));
+    // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
+    const start = L.dateAt(Math.max(p.x, L.plot.x0));
+    const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
+    const finishT = new Date(`${start}T00:00:00Z`);
+    finishT.setUTCDate(finishT.getUTCDate() + days);
+    const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];
+    item('Ny boks her', `Fra ${start.split('-').reverse().join('.')}. Følger ikke Project.`, null, () => {
+      let made: Box | null = null;
+      commit((pl) => {
+        made = newBox(pl, ln.id, start, finish);
+        if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
+      });
+      if (made) select((made as Box).id);
+    });
+    const hiddenBoxes = lane.boxes.filter((b) => b.hidden);
+    for (const hb of hiddenBoxes) {
+      const hid = hb.id;
+      item(`Vis igjen: ${hb.text.replace(/\/?\|/g, ' ').replace(/^\*/, '')}`, 'Skjult boks i denne lanen.', null, () => commit((pl) => delete findBox(pl, hid)!.hidden));
+    }
     if (box) {
       const id = box.id;
       menu.append(el('p', { class: 'pop-title' }, 'Boks'));
+      item('Kopier', 'Kopi rett under, som følger ikke Project.', null, () => {
+        selected = id;
+        copySelected();
+      });
+      item(box.manual ? 'Slett' : 'Skjul', box.manual ? 'Boksen er laget i appen.' : 'Vis den igjen fra denne menyen.', null, () => {
+        selected = id;
+        removeSelected();
+      });
       if (!box.resolved?.isMilestone) item('Standard høyde', 'Så høy som teksten krever.', null, () => commit((pl) => delete findBox(pl, id)!.height), !box.height);
       item('Løsne', 'La appen velge plassen i lanen igjen.', null, () => commit((pl) => delete findBox(pl, id)!.top), box.top === undefined);
     }
@@ -638,10 +794,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     if (!plan) return;
     snapshot();
-    plan.lanes.forEach((l) => {
-      l.boxes.forEach(resetBox);
-      delete l.height;
-    });
+    const ids = plan.lanes.flatMap((l) => l.boxes.map((b) => b.id));
+    ids.forEach((id) => resetBoxInPlan(plan, id));
+    plan.lanes.forEach((l) => delete l.height);
     host.redraw();
     buildPanel();
     syncTools();
@@ -656,8 +811,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       else select(null);
       return;
     }
+    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && selected) {
+      e.preventDefault();
+      removeSelected();
+      return;
+    }
     if (inField || !mod) return;
     const k = e.key.toLowerCase();
+    if (k === 'd' && selected) {
+      e.preventDefault();
+      copySelected();
+      return;
+    }
     if (k === 'z' && !e.shiftKey) {
       e.preventDefault();
       undo();

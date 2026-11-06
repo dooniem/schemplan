@@ -109,6 +109,12 @@ export interface Box {
   height?: number;
   /** Fast plass i lanen valgt i appen: avstand fra toppen av lanen, i tekstlinjer (valgfritt). */
   top?: number;
+  /** Skjult i appen (valgfritt). Skilt fra `shown`, som kommer fra Project. */
+  hidden?: boolean;
+  /** Boksen er laget i appen (ny eller kopi), ikke hentet fra Project. Datoene står i `resolved`. */
+  manual?: boolean;
+  /** Lanen boksen lå i før den ble flyttet i appen (valgfritt). */
+  fromLane?: string;
 }
 
 export interface MilestoneStyle {

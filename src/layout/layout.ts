@@ -3,7 +3,7 @@ import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { addDays, formatShort, MONTHS_NB, parseIso } from './dates';
+import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 
@@ -140,6 +140,8 @@ export interface Layout {
   /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
   belowMin: boolean;
   style: PlanStyle;
+  /** Datoen (ÅÅÅÅ-MM-DD) som starter ved x, til nye bokser. */
+  dateAt(x: number): string;
   /** Logo øverst til venstre, i mm. */
   logo: { x: number; y: number; w: number; h: number; href: string } | null;
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
@@ -492,6 +494,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     style: ny ? 'ny' : 'excel',
     logo,
     unit: lh,
+    dateAt(x: number) {
+      let best = axis.start;
+      for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
+        if (axis.xStart(t) <= x + 1e-9) best = t;
+        else break;
+      }
+      return toIso(best);
+    },
   };
 }
 
@@ -543,7 +553,7 @@ function buildPieces(
   const calloutMax = Math.max(15, file.plan.layout.calloutMaxWidthCm * 6);
 
   for (const box of lane.boxes) {
-    if (!box.shown || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
+    if (!box.shown || box.hidden || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
     const r = box.resolved;
     const { lines: rawLines, forcedCallout } = parseBoxText(box.text);
     const s = parseIso(r.start);

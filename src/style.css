@@ -201,6 +201,10 @@ details summary { cursor: pointer; font-size: 13px; }
 .row { display: flex; align-items: center; gap: 6px; }
 .row input[type='color'] { width: 24px; height: 20px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
 .button.small { padding: 2px 8px; font-size: 12px; margin-left: auto; }
+.row.dates label { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.row.dates input { font: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); min-width: 0; }
+.panel-foot.row { flex-wrap: wrap; }
+.panel-foot .button { padding: 3px 8px; font-size: 12px; }
 .panel-foot { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
 .prop .group { display: flex; }
 .prop .group button { flex: 1; padding: 2px 4px; font-size: 12px; }
