@@ -273,7 +273,8 @@ function applyLayout(p: PlanFile) {
   opts.heightMode = lay.heightMode;
   opts.textSizePt = lay.textSize;
   // Valg som er lagret i en arbeidsfil
-  if (lay.paper) opts.paper = lay.paper;
+  // A4 er aldri standard: en ny plan fra Project starter på A3 selv om forrige plan var A4
+  opts.paper = lay.paper ?? (opts.paper === 'A4' ? 'A3' : opts.paper);
   opts.style = lay.style ?? 'ny';
   if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
   if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;

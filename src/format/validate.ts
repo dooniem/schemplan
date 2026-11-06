@@ -90,7 +90,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needNum(lay, 'textSize', 'plan.layout');
       needNum(lay, 'calloutMaxWidthCm', 'plan.layout');
       needNum(lay, 'excelWidthMultiplier', 'plan.layout');
-      if (lay.paper !== undefined) needEnum(lay, 'paper', 'plan.layout', ['A3', 'A2', 'A1']);
+      if (lay.paper !== undefined) needEnum(lay, 'paper', 'plan.layout', ['A4', 'A3', 'A2', 'A1']);
       if (lay.style !== undefined) needEnum(lay, 'style', 'plan.layout', ['excel', 'ny']);
       if (lay.fitToSheet !== undefined) needBool(lay, 'fitToSheet', 'plan.layout');
       if (lay.minTextSize !== undefined) needNum(lay, 'minTextSize', 'plan.layout');
