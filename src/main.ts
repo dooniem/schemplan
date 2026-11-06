@@ -233,15 +233,14 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
 
 // Oppdater fra Project: velg en ny plan fra Project (.json) når en arbeidsfil er åpen,
 // eller arbeidsfilen (.pdf) når en ny plan fra Project er åpen. Redigeringene i arbeidsfilen beholdes.
-$<HTMLInputElement>('#update-input').addEventListener('change', async (e) => {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file || !plan) return;
+async function updateFrom(file: File, pdfOnly = false): Promise<boolean> {
+  if (!plan) return false;
   const current = plan;
   const currentName = baseName;
-  const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
-  if (!r) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (pdfOnly && String.fromCharCode(...bytes.subarray(0, 4)) !== '%PDF') return false;
+  const r = await readPlan(bytes, file.name);
+  if (!r) return false;
   const { mergePlans, summarizeMerge } = await import('./merge');
   const work = r.isPdf ? r.plan : current;
   const fresh = r.isPdf ? current : r.plan;
@@ -258,6 +257,36 @@ $<HTMLInputElement>('#update-input').addEventListener('change', async (e) => {
   ]);
   note.classList.add('small');
   showPlan(merged, r.isPdf ? file.name : `${currentName}.pdf`, r.warnings, note);
+  return true;
+}
+
+$<HTMLInputElement>('#update-input').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file) await updateFrom(file);
+});
+
+// Åpnet med «Oppdater i Web»: be om arbeidsfilen med en gang.
+const updateDialog = $<HTMLDialogElement>('#update-dialog');
+const updateError = $<HTMLElement>('#update-dialog-error');
+function askForWorkFile() {
+  updateError.hidden = true;
+  if (!updateDialog.open) updateDialog.showModal();
+}
+$<HTMLButtonElement>('#update-skip').addEventListener('click', () => updateDialog.close());
+$<HTMLButtonElement>('#update-choose').addEventListener('click', () => $<HTMLInputElement>('#update-pick').click());
+$<HTMLInputElement>('#update-pick').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (await updateFrom(file, true)) {
+    updateDialog.close();
+    return;
+  }
+  updateError.textContent = `${file.name} er ikke en arbeidsfil fra appen. Velg PDF-en du lagret med «Lagre arbeidsfil».`;
+  updateError.hidden = false;
 });
 
 function syncControls() {
@@ -437,6 +466,7 @@ async function openFromAddress() {
     if (!r) return;
     editor.reset();
     showPlan(r.plan, name, r.warnings);
+    if (params.get('modus') === 'oppdater') askForWorkFile();
   } catch {
     $('#file-info').replaceChildren(el('p', 'Planen i adressen kunne ikke leses. Prøv Generer Web på nytt, eller åpne planfilen.', 'error'));
   }
