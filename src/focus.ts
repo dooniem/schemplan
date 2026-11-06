@@ -12,6 +12,8 @@ export interface Focus {
   afterDraw(svg: SVGSVGElement, layout: Layout): void;
   /** Ny plan: fjern perioden. */
   reset(): void;
+  /** Fagene i fokus (tom når ingen er valgt). */
+  readonly trades: string[];
 }
 
 export interface Period {
@@ -335,6 +337,9 @@ export function createFocus(
   bar.querySelector<HTMLButtonElement>('.icon')?.addEventListener('click', clearAll);
 
   return {
+    get trades() {
+      return [...trades];
+    },
     afterDraw(s, layout) {
       svg = s;
       L = layout;
