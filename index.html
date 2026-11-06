@@ -7,35 +7,38 @@
     <title>Skjematisk plan</title>
   </head>
   <body>
-    <header class="topbar">
+    <header class="topbar no-print">
       <h1>Skjematisk plan</h1>
       <span id="version" class="muted"></span>
+      <span class="spacer"></span>
+      <span class="muted small">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></span>
     </header>
     <main>
-      <section class="panel">
-        <h2>Status</h2>
-        <ul class="status">
-          <li>Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
-          <li>Prosjektdata lagres aldri i appen eller nettleseren.</li>
-        </ul>
-      </section>
-      <section class="panel">
-        <h2>Åpne fil</h2>
-        <p class="muted">Velg planfilen fra Generate in Web i Project. Filen leses bare lokalt i nettleseren.</p>
-        <label class="button">
-          Velg fil
-          <input id="file-input" type="file" accept=".json,application/json" hidden />
-        </label>
+      <section class="panel no-print">
+        <div class="toolbar">
+          <label class="button primary">
+            Åpne planfil
+            <input id="file-input" type="file" accept=".json,application/json" hidden />
+          </label>
+          <div class="group" role="group" aria-label="Arkretning">
+            <button type="button" data-orientation="landscape" aria-pressed="true">A3 liggende</button>
+            <button type="button" data-orientation="portrait" aria-pressed="false">A3 stående</button>
+          </div>
+          <div class="group" role="group" aria-label="Høyde på lanes">
+            <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
+            <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+          </div>
+          <label class="field">Tekst
+            <input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /> pt
+          </label>
+          <label class="field"><input id="fit" type="checkbox" checked /> Krymp tekst til planen får plass</label>
+          <span class="spacer"></span>
+          <button type="button" id="print" class="button" disabled>Skriv ut / lagre PDF</button>
+        </div>
+        <p class="muted small">Filen leses bare lokalt i nettleseren og lagres ingen steder. Ved PDF: velg «Lagre som PDF» og A3 i utskriftsdialogen.</p>
         <div id="file-info" aria-live="polite"></div>
       </section>
-      <section class="panel">
-        <h2>Ark</h2>
-        <div class="toolbar" role="group" aria-label="Arkretning">
-          <button type="button" data-orientation="landscape" aria-pressed="true">A3 liggende</button>
-          <button type="button" data-orientation="portrait" aria-pressed="false">A3 stående</button>
-        </div>
-        <div id="sheet" class="sheet-host"></div>
-      </section>
+      <div id="sheet" class="sheet-host landscape"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
