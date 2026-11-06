@@ -12,7 +12,7 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
     Dim taskData As Variant, filePath As String, anonymize As Boolean, answer As VbMsgBoxResult
     Dim filterOutput As Boolean, flag20Only As Boolean, laneShown As Boolean, boxShown As Boolean
     Dim taskIds As Object, firstLane As Boolean, firstBox As Boolean, uid As Variant
-    Dim numBoxes As Long, numSkipped As Long, i As Long
+    Dim numBoxes As Long, numSkipped As Long, i As Long, stepName As String
 
     answer = MsgBox("Skal tekstene anonymiseres?" & vbNewLine & vbNewLine & _
         "Ja: lanes, bokser og aktivitetsnavn gjøres om til fyllord med samme lengde." & vbNewLine & _
@@ -21,6 +21,8 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
     If answer = vbCancel Then Exit Sub
     anonymize = (answer = vbYes)
 
+    On Error GoTo fail
+    stepName = "kalender og plandata"
     dateError = False
     generateCalendar dateArr, 2 'Setter pSchemStart og pSchemEnd, tegner ingenting
     If dateError Then Exit Sub
@@ -40,6 +42,7 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
     sb.Add "  ""exportedAt"": " & JsonStr(Format(Now, "yyyy-mm-dd\Thh:nn:ss")) & "," & vbLf
     sb.Add "  ""anonymized"": " & JsonBool(anonymize) & "," & vbLf
 
+    stepName = "plan og innstillinger"
     ' ---- Plan og innstillinger ----
     sb.Add "  ""plan"": {" & vbLf
     sb.Add "    ""title"": " & JsonStr(IIf(anonymize, "Eksempelplan", CleanSchemHeader(SchematicSchedule.txtSchemHeader.text))) & "," & vbLf
@@ -63,6 +66,7 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
         """colorBy"": " & JsonStr(IIf(SchemColorBroker = 2, "lane", "trade")) & "}" & vbLf
     sb.Add "  }," & vbLf
 
+    stepName = "farger"
     ' ---- Farger per fag: bakgrunn, kant ("#" = ingen), tekst ----
     sb.Add "  ""colors"": [" & vbLf
     For i = 0 To pColorDict.Count - 1
@@ -71,9 +75,11 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
     Next i
     sb.Add "  ]," & vbLf
 
+    stepName = "ferier"
     ' ---- Ferier: kalenderunntak over 5 dager som starter i perioden (samme regel som DrawHolidays) ----
     sb.Add "  ""holidays"": [" & JsonHolidays() & "]," & vbLf
 
+    stepName = "lanes og bokser"
     ' ---- Lanes og bokser ----
     sb.Add "  ""lanes"": [" & vbLf
     firstLane = True
@@ -125,10 +131,12 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
     Next laneKey
     sb.Add vbLf & "  ]," & vbLf
 
+    stepName = "aktiviteter"
     ' ---- Aktivitetene boksene viser ----
     sb.Add "  ""tasks"": [" & JsonTasks(taskIds, anonymize) & vbLf & "  ]" & vbLf
     sb.Add "}" & vbLf
 
+    stepName = "lagring av fil"
     filePath = WebExportPath(SchedNumber, anonymize)
     If Not WriteUtf8File(filePath, JoinCollection(sb)) Then
         MsgBox "Klarte ikke å lagre filen:" & vbNewLine & filePath, vbExclamation, "Generate in Web"
@@ -140,6 +148,14 @@ Public Sub ExportSchematicJson(dateArr As Variant, SchedNumber As Long, formMult
         IIf(numSkipped > 0, ", " & numSkipped & " bokser uten gyldige aktiviteter", "") & "." & vbNewLine & vbNewLine & _
         "Åpne web-appen nå? Velg filen over i appen.", vbYesNo + vbInformation, "Generate in Web")
     If answer = vbYes Then CreateObject("Shell.Application").ShellExecute SCHEMPLAN_URL
+    Exit Sub
+fail:
+    Dim errText As String
+    errText = "Eksporten stoppet under " & stepName & ":" & vbNewLine & Err.Description & " (feil " & Err.Number & ")"
+    If stepName = "lanes og bokser" Then
+        If Not taskbox Is Nothing Then errText = errText & vbNewLine & "Siste boks: " & taskbox.pTwoID
+    End If
+    MsgBox errText, vbExclamation, "Generate in Web"
 End Sub
 
 ' ---------- Hjelpefunksjoner for eksporten ----------
@@ -300,7 +316,7 @@ Private Function JsonHolidays() As String
 End Function
 
 Private Function JsonTasks(taskIds As Object, anonymize As Boolean) As String
-    Dim key As Variant, t As task, out As String, nm As String, trade As String, dl As Variant
+    Dim key As Variant, t As task, out As String, nm As String, trade As String, dl As Variant, dlJson As String
     For Each key In taskIds.keys
         Set t = Nothing
         On Error Resume Next
@@ -315,12 +331,16 @@ Private Function JsonTasks(taskIds As Object, anonymize As Boolean) As String
                 trade = t.GetField(FagColumn)
                 On Error GoTo 0
             End If
+            'Frist er teksten "NA" når den mangler. Ikke bruk IIf her: den regner ut begge grenene,
+            'og DateValue("NA") gir Type mismatch.
             dl = t.Deadline
+            dlJson = "null"
+            If IsDate(dl) Then dlJson = JsonDate(DateValue(dl))
             out = out & IIf(out = "", "", ",") & vbLf & "    {""uid"": " & t.UniqueID & _
                 ", ""name"": " & JsonStr(nm) & _
                 ", ""start"": " & JsonDate(DateValue(t.Start)) & _
                 ", ""finish"": " & JsonDate(DateValue(t.Finish)) & _
-                ", ""deadline"": " & IIf(IsDate(dl), JsonDate(DateValue(dl)), "null") & _
+                ", ""deadline"": " & dlJson & _
                 ", ""milestone"": " & JsonBool(t.Milestone) & _
                 ", ""summary"": " & JsonBool(t.Summary) & _
                 ", ""flag20"": " & JsonBool(t.Flag20) & _
