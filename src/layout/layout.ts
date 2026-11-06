@@ -433,12 +433,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       minH: minH[i],
       manual: !!lane.height,
       title: {
-        x: ny ? laneTitleX + PAD_X + 1 : laneTitleX + LANE_TITLE_W / 2,
+        x: laneTitleX + LANE_TITLE_W / 2,
         y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
         lines: tl,
         size: base,
         color: '#000000',
-        anchor: ny ? 'start' : 'middle',
+        anchor: 'middle',
         bold: true,
       },
     });

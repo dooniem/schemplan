@@ -36,7 +36,7 @@ let baseName = 'skjematisk-plan';
 let shown: { layout: ReturnType<typeof computeLayout>; svg: SVGSVGElement } | null = null;
 // Skriften må være lastet før teksten måles, ellers blir målene fra reserveskriften
 const fontsReady = Promise.all(['400 10px Carlito', '700 10px Carlito'].map((f) => document.fonts.load(f))).catch(() => []);
-const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3' };
+const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3', style: 'ny' };
 const measure = canvasMeasure();
 const host = $<HTMLDivElement>('#sheet');
 const viewer = createViewer(host);
@@ -185,7 +185,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   // Valg som er lagret i en arbeidsfil
   const lay = plan.plan.layout;
   if (lay.paper) opts.paper = lay.paper;
-  if (lay.style) opts.style = lay.style;
+  opts.style = lay.style ?? 'ny';
   if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
   if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;
   opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
@@ -217,7 +217,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
 function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
-  document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'excel'))));
+  document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
   $<HTMLSelectElement>('#fit-mode').value = opts.fitToSheet ? 'sheet' : 'fixed';
   $<HTMLSelectElement>('#paper').value = opts.paper ?? 'A3';
@@ -332,7 +332,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
     heightMode: opts.heightMode,
     textSize: opts.textSizePt,
     paper: opts.paper ?? 'A3',
-    style: opts.style ?? 'excel',
+    style: opts.style ?? 'ny',
     fitToSheet: opts.fitToSheet,
     minTextSize: opts.minTextPt ?? DEFAULT_MIN_TEXT_PT,
     titleSize: opts.titleSizePt ?? DEFAULT_TITLE_PT,
