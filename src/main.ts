@@ -176,7 +176,8 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   }
   info.append(status, suggest, saveStatus);
   $<HTMLButtonElement>('#print').disabled = false;
-  $<HTMLButtonElement>('#save').disabled = false;
+  $<HTMLButtonElement>('#save-work').disabled = false;
+  $<HTMLButtonElement>('#save-share').disabled = false;
   draw();
 });
 
@@ -240,12 +241,10 @@ $<HTMLButtonElement>('#print').addEventListener('click', () => {
   setPrintPage(opts.paper ?? 'A3', opts.orientation);
   window.print();
 });
-// Lagre PDF: arbeidsfil med planen innebygd, eller ekstern/kompakt uten
-const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', ekstern: '', kompakt: '_kompakt' };
-$<HTMLButtonElement>('#save').addEventListener('click', async () => {
+// Lagre PDF: arbeidsfil med planen innebygd, eller vanlig PDF til deling uten
+const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', deling: '' };
+async function save(variant: PdfVariant, btn: HTMLButtonElement) {
   if (!plan || !shown) return;
-  const btn = $<HTMLButtonElement>('#save');
-  const variant = $<HTMLSelectElement>('#variant').value as PdfVariant;
   const name = `${baseName}${SUFFIX[variant]}.pdf`;
   // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
   const saved: PlanFile = structuredClone(plan);
@@ -280,7 +279,7 @@ $<HTMLButtonElement>('#save').addEventListener('click', async () => {
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
     const kb = Math.max(1, Math.round(pdf.length / 1024));
-    saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å fortsette.' : ''}`;
+    saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å redigere eller oppdatere planen.' : ' Klar til deling.'}`;
     saveStatus.className = 'ok small';
   } catch (e) {
     if ((e as Error).name === 'AbortError') saveStatus.textContent = '';
@@ -291,7 +290,9 @@ $<HTMLButtonElement>('#save').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
   }
-});
+}
+$<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
+$<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
 draw();
