@@ -146,72 +146,118 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
 
-$<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+/** Leser en planfil (.json) eller arbeidsfil (.pdf). Viser feil i statuslinjen og gir null om den ikke kan brukes. */
+async function readPlan(bytes: Uint8Array, name: string): Promise<{ plan: PlanFile; warnings: string[]; isPdf: boolean } | null> {
   const info = $('#file-info');
-  input.value = '';
-  if (!file) return;
-  info.replaceChildren();
-
   // En arbeidsfil (PDF) har planen som vedlegg
-  const bytes = new Uint8Array(await file.arrayBuffer());
   const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
   let text: string;
   if (isPdf) {
     const { readPlanFromPdf } = await import('./pdf/read');
     const r = await readPlanFromPdf(bytes);
     if ('error' in r) {
-      info.append(el('p', `Kunne ikke åpne ${file.name}. ${r.error}`, 'error'));
-      return;
+      info.replaceChildren(el('p', `Kunne ikke åpne ${name}. ${r.error}`, 'error'));
+      return null;
     }
     text = r.json;
   } else text = new TextDecoder().decode(bytes);
   const result = validatePlan(text);
   await fontsReady;
   if (!result.plan) {
-    info.append(el('p', `Kunne ikke lese ${file.name}.`, 'error'));
+    info.replaceChildren(el('p', `Kunne ikke lese ${name}.`, 'error'));
     const ul = el('ul', undefined, 'messages');
     result.errors.slice(0, 20).forEach((m) => ul.append(el('li', m)));
     if (result.errors.length > 20) ul.append(el('li', `… og ${result.errors.length - 20} til.`));
     info.append(ul);
-    return;
+    return null;
   }
+  return { plan: result.plan, warnings: result.warnings, isPdf };
+}
 
-  plan = result.plan;
-  opts.orientation = plan.plan.layout.orientation;
-  opts.heightMode = plan.plan.layout.heightMode;
-  opts.textSizePt = plan.plan.layout.textSize;
+/** Tar i bruk valgene som er lagret i planen. */
+function applyLayout(p: PlanFile) {
+  const lay = p.plan.layout;
+  opts.orientation = lay.orientation;
+  opts.heightMode = lay.heightMode;
+  opts.textSizePt = lay.textSize;
   // Valg som er lagret i en arbeidsfil
-  const lay = plan.plan.layout;
   if (lay.paper) opts.paper = lay.paper;
   opts.style = lay.style ?? 'ny';
   if (lay.fitToSheet !== undefined) opts.fitToSheet = lay.fitToSheet;
   if (lay.minTextSize !== undefined) opts.minTextPt = lay.minTextSize;
   opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
-  baseName = file.name.replace(/\.(pdf|json)$/i, '').replace(/_(arbeidsfil|kompakt)$/i, '') || 'skjematisk-plan';
   syncControls();
+}
 
-  const s = summarize(plan);
-  const line = `${file.name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
+const details = (title: string, groups: [string, string[]][]) => {
+  const d = el('details');
+  d.append(el('summary', title));
+  for (const [head, items] of groups) {
+    if (!items.length) continue;
+    d.append(el('p', head, 'small'));
+    const ul = el('ul', undefined, 'messages');
+    items.slice(0, 30).forEach((m) => ul.append(el('li', m)));
+    if (items.length > 30) ul.append(el('li', `… og ${items.length - 30} til.`));
+    d.append(ul);
+  }
+  return d;
+};
+
+function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElement) {
+  const info = $('#file-info');
+  info.replaceChildren();
+  plan = p;
+  applyLayout(p);
+  baseName = name.replace(/\.(pdf|json)$/i, '').replace(/_(arbeidsfil|kompakt)$/i, '') || 'skjematisk-plan';
+  const s = summarize(p);
+  const line = `${name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
     `${fmtDate(s.start)} til ${fmtDate(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
   info.append(el('p', line, 'ok small'));
-  if (result.warnings.length) {
-    const d = el('details');
-    d.append(el('summary', `${result.warnings.length} ting å se på`));
-    const ul = el('ul', undefined, 'messages');
-    result.warnings.forEach((m) => ul.append(el('li', m)));
-    d.append(ul);
-    info.append(d);
-  }
+  if (note) info.append(note);
+  if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  $<HTMLButtonElement>('#print').disabled = false;
-  $<HTMLButtonElement>('#save-menu').disabled = false;
-  $<HTMLButtonElement>('#save-work').disabled = false;
-  $<HTMLButtonElement>('#edit').disabled = false;
-  editor.reset();
-  $<HTMLButtonElement>('#save-share').disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input']) $<HTMLButtonElement>(id).disabled = false;
   draw();
+}
+
+$<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
+  if (!r) return;
+  editor.reset();
+  showPlan(r.plan, file.name, r.warnings);
+});
+
+// Oppdater fra Project: velg en ny plan fra Project (.json) når en arbeidsfil er åpen,
+// eller arbeidsfilen (.pdf) når en ny plan fra Project er åpen. Redigeringene i arbeidsfilen beholdes.
+$<HTMLInputElement>('#update-input').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !plan) return;
+  const current = plan;
+  const currentName = baseName;
+  const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
+  if (!r) return;
+  const { mergePlans, summarizeMerge } = await import('./merge');
+  const work = r.isPdf ? r.plan : current;
+  const fresh = r.isPdf ? current : r.plan;
+  const { plan: merged, report } = mergePlans(work, fresh);
+  editor.replacePlan(merged);
+  const note = details(summarizeMerge(report), [
+    ['Nye bokser:', report.newBoxes],
+    ['Borte fra Project:', report.goneBoxes],
+    ['Nye lanes:', report.newLanes],
+    ['Lanes borte fra Project:', report.goneLanes],
+    ['Lanes borte fra Project, men beholdt fordi de har egne bokser:', report.keptLanes],
+    ['Project har endret teksten du hadde redigert (teksten fra Project gjelder):', report.textChanged],
+    ['Project har flyttet bokser du hadde flyttet (Project gjelder):', report.moveDropped],
+  ]);
+  note.classList.add('small');
+  showPlan(merged, r.isPdf ? file.name : `${currentName}.pdf`, r.warnings, note);
 });
 
 function syncControls() {
@@ -374,6 +420,30 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement) {
 }
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
+// Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
+// Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.
+async function openFromAddress() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const data = params.get('plan');
+  if (!data) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const name = params.get('navn') || 'Plan fra Project.json';
+  try {
+    const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+    const packed = Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+    const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    const r = await readPlan(bytes, name);
+    if (!r) return;
+    editor.reset();
+    showPlan(r.plan, name, r.warnings);
+  } catch {
+    $('#file-info').replaceChildren(el('p', 'Planen i adressen kunne ikke leses. Prøv Generer Web på nytt, eller åpne planfilen.', 'error'));
+  }
+}
+openFromAddress();
+window.addEventListener('hashchange', openFromAddress);
+
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
 draw();

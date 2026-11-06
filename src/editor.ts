@@ -23,6 +23,8 @@ export interface Editor {
   readonly active: boolean;
   /** Endringer siden sist lagring. */
   readonly dirty: boolean;
+  /** Bytter ut hele planen (f.eks. etter oppdatering fra Project), så det kan angres. */
+  replacePlan(p: PlanFile): void;
   markSaved(): void;
 }
 
@@ -898,6 +900,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     },
     markSaved() {
       dirty = false;
+    },
+    replacePlan(p) {
+      snapshot();
+      host.setPlan(p);
+      selected = null;
+      typingSession = false;
+      host.redraw();
+      buildPanel();
+      syncTools();
     },
   };
 }
