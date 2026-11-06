@@ -58,6 +58,8 @@ Fra fase 3 bygges den samme planen inn som vedlegg i PDF-arbeidsfilen.
 
 - `text` er lagret som i VBA: `|` er linjeskift, `/|` er en loddrett strek, `*` først betyr tvunget callout.
 - `rotation` er `0`, `90` eller `-90`.
+- `callout` (valgfri): `auto` (standard), `on` eller `off`. Settes av brukeren i appen. Uten feltet bestemmer appen, og `*` først i teksten betyr callout.
+- `calloutSide` (valgfri): `auto` (standard), `left` eller `right`.
 - `shown: false` betyr at lanen eller boksen er filtrert bort i userformen.
 - `resolved: null` betyr at boksen ikke tegnes, fordi ingen aktiviteter finnes eller ingen er med i Flag20-utvalget.
 - `milestone` er stilen for milepæler: `dateSource` (`deadline`/`scheduled`), `symbol` (`flag`/`diamond`),

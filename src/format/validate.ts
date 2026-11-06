@@ -173,6 +173,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         needStr(b, 'text', bp);
         needBool(b, 'shown', bp);
         needEnum(b, 'rotation', bp, [0, 90, -90]);
+        if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
+        if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');
         const label = typeof b.id === 'string' ? `Boks ${b.id}` : bp;
         if (typeof b.id === 'string') {

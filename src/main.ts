@@ -4,7 +4,8 @@ import { renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile } from './format/types';
 import { setPrintPage } from './print';
-import { computeLayout, type LayoutOptions } from './layout/layout';
+import { computeLayout, DEFAULT_MIN_TEXT_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
+import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 
@@ -25,10 +26,14 @@ checkOutboundBlocked().then((blocked) => {
 
 // Planen finnes bare i minnet så lenge fanen er åpen
 let plan: PlanFile | null = null;
-const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true };
+const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3' };
 const measure = canvasMeasure();
 const host = $<HTMLDivElement>('#sheet');
 const status = el('p', '', 'muted small');
+const suggest = el('div', '', 'suggest small');
+let suggestTimer = 0;
+const pt = (v: number) => v.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
+const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? 'liggende' : 'stående'}`;
 
 function draw() {
   host.classList.toggle('landscape', opts.orientation === 'landscape');
@@ -41,11 +46,48 @@ function draw() {
   const layout = computeLayout(plan, opts, measure);
   host.replaceChildren(renderPlan(layout));
   const ms = Math.round(performance.now() - t0);
-  const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${layout.textSizePt.toFixed(1).replace('.', ',')} pt for å få plass.` : '';
+  const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
+  const here = sheetName(opts.paper ?? 'A3', opts.orientation);
   status.textContent = layout.overflow
-    ? `Planen er høyere enn A3-arket. Prøv mindre tekst, Kompakt eller stående ark.`
+    ? opts.fitToSheet
+      ? `Planen får ikke plass på ${here} med minst ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
+      : `Planen får ikke plass på ${here} med ${pt(opts.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
     : `Tegnet på ${ms} ms.${shrunk}`;
   status.className = layout.overflow ? 'error small' : 'muted small';
+
+  // Forslag til annet ark når planen er trang. Regnes ut litt etterpå, så tegningen ikke venter.
+  suggest.replaceChildren();
+  window.clearTimeout(suggestTimer);
+  if (!layout.overflow && layout.textScale >= 0.999) return;
+  const current = plan;
+  suggestTimer = window.setTimeout(() => {
+    if (plan !== current) return;
+    // Beste retning per ark, og et større ark bare når det gir større tekst enn et mindre
+    const order: Paper[] = ['A3', 'A2', 'A1'];
+    const alts = fitAlternatives(current, opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
+    const better: typeof alts = [];
+    let bestSoFar = layout.overflow ? 0 : layout.textSizePt;
+    for (const paper of order) {
+      const top = alts.filter((a) => a.paper === paper).sort((a, b) => b.textSizePt - a.textSizePt)[0];
+      if (top && top.textSizePt > bestSoFar + 0.2) {
+        better.push(top);
+        bestSoFar = top.textSizePt;
+      }
+    }
+    if (!better.length) return;
+    suggest.append(el('span', layout.overflow ? 'Får plass på: ' : 'Større tekst med: '));
+    for (const a of better) {
+      const b = el('button', `${sheetName(a.paper, a.orientation)} (${pt(a.textSizePt)} pt)`, 'button') as HTMLButtonElement;
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        opts.paper = a.paper;
+        opts.orientation = a.orientation;
+        syncControls();
+        draw();
+      });
+      suggest.append(b);
+    }
+  }, 30);
 }
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
@@ -86,7 +128,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
     d.append(ul);
     info.append(d);
   }
-  info.append(status);
+  info.append(status, suggest);
   $<HTMLButtonElement>('#print').disabled = false;
   draw();
 });
@@ -96,7 +138,10 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'excel'))));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
-  $<HTMLInputElement>('#fit').checked = opts.fitToSheet;
+  $<HTMLSelectElement>('#fit-mode').value = opts.fitToSheet ? 'sheet' : 'fixed';
+  $<HTMLSelectElement>('#paper').value = opts.paper ?? 'A3';
+  $<HTMLInputElement>('#min-text').value = String(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
+  $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn) =>
@@ -127,15 +172,27 @@ $<HTMLInputElement>('#text-size').addEventListener('input', (e) => {
     draw();
   }
 });
-$<HTMLInputElement>('#fit').addEventListener('change', (e) => {
-  opts.fitToSheet = (e.target as HTMLInputElement).checked;
+$<HTMLSelectElement>('#fit-mode').addEventListener('change', (e) => {
+  opts.fitToSheet = (e.target as HTMLSelectElement).value === 'sheet';
+  syncControls();
   draw();
+});
+$<HTMLSelectElement>('#paper').addEventListener('change', (e) => {
+  opts.paper = (e.target as HTMLSelectElement).value as Paper;
+  draw();
+});
+$<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
+  const v = Number((e.target as HTMLInputElement).value.replace(',', '.'));
+  if (v >= 4 && v <= 20) {
+    opts.minTextPt = v;
+    draw();
+  }
 });
 // Utskrift: A3 i samme retning som i appen, både fra knappen og fra Ctrl+P
 $<HTMLButtonElement>('#print').addEventListener('click', () => {
-  setPrintPage(opts.orientation);
+  setPrintPage(opts.paper ?? 'A3', opts.orientation);
   window.print();
 });
-window.addEventListener('beforeprint', () => setPrintPage(opts.orientation));
+window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
 draw();

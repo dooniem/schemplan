@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanFile } from '../format/types';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
-import { computeLayout, pack, type Item } from './layout';
+import { computeLayout, fitAlternatives, pack, packVariants, type Item } from './layout';
 import { approxMeasure } from './text';
 
 const example = (): PlanFile => JSON.parse(readFileSync(new URL('../../examples/eksempelplan.json', import.meta.url), 'utf8'));
@@ -125,5 +125,92 @@ describe('Excel-utseende', () => {
     const m = L.items.find((i) => i.kind === 'milestone' && i.symbol === 'diamond');
     expect(m && m.kind === 'milestone' && m.label.boldLines?.[0]).toBe(false);
     expect(m && m.kind === 'milestone' && m.label.boldLines?.[1]).toBe(true);
+  });
+});
+
+const shape = (name: string): PlanFile => JSON.parse(readFileSync(new URL(`../../examples/former/${name}.json`, import.meta.url), 'utf8'));
+
+describe('tilpasning til arket', () => {
+  it('krymper aldri under minste tekststørrelse, og sier fra når planen ikke får plass', () => {
+    const L = computeLayout(shape('mange-av-begge'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: true, minTextPt: 7 }, approxMeasure);
+    expect(L.textSizePt).toBeGreaterThanOrEqual(7 - 1e-9);
+    expect(L.overflow).toBe(true);
+  });
+
+  it('fast tekststørrelse krymper ikke', () => {
+    const L = computeLayout(shape('mange-av-begge'), { orientation: 'landscape', heightMode: 'fill', textSizePt: 10, fitToSheet: false }, approxMeasure);
+    expect(L.textSizePt).toBe(10);
+  });
+
+  it('finner største tekst i trinn på 0,25 pt som får plass', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 12, fitToSheet: true, minTextPt: 4 };
+    const L = computeLayout(shape('middels'), opts, approxMeasure);
+    expect(L.overflow).toBe(false);
+    expect((L.textSizePt * 4) % 1).toBeCloseTo(0);
+    if (L.textSizePt < 12) {
+      const bigger = computeLayout(shape('middels'), { ...opts, textSizePt: L.textSizePt + 0.25, fitToSheet: false }, approxMeasure);
+      expect(bigger.overflow).toBe(true);
+    }
+  });
+
+  it('større ark gir større tekst', () => {
+    const p = shape('mange-lanes-faa-bokser');
+    const base = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 14, fitToSheet: true, minTextPt: 4 };
+    const a3 = computeLayout(p, { ...base, paper: 'A3' }, approxMeasure);
+    const a2 = computeLayout(p, { ...base, paper: 'A2' }, approxMeasure);
+    expect(a2.width).toBe(594);
+    expect(a2.textSizePt).toBeGreaterThan(a3.textSizePt);
+    const alts = fitAlternatives(p, { ...base, paper: 'A3' }, approxMeasure);
+    expect(alts).toHaveLength(5);
+  });
+
+  it('ingen overlapp i noen av testformene', () => {
+    for (const name of ['mange-lanes-faa-bokser', 'faa-lanes-mange-bokser', 'mange-av-begge', 'middels', 'ukeplan', 'lange-lanetitler']) {
+      const L = computeLayout(shape(name), { orientation: 'landscape', heightMode: 'compact', textSizePt: 7, fitToSheet: false }, approxMeasure);
+      const f = L.items.map(footprint);
+      for (let i = 0; i < f.length; i++)
+        for (let j = i + 1; j < f.length; j++) {
+          const a = f[i];
+          const b = f[j];
+          const hit = a.x0 < b.x1 - 0.01 && b.x0 < a.x1 - 0.01 && a.y0 < b.y1 - 0.01 && b.y0 < a.y1 - 0.01;
+          expect(hit, `${name}: ${L.items[i].id} og ${L.items[j].id}`).toBe(false);
+        }
+    }
+  });
+});
+
+describe('plassering med varianter', () => {
+  it('velger varianten som ligger lavest, og ved likt den smaleste', () => {
+    const r = packVariants([
+      { alts: [{ fx0: 0, fx1: 10, h: 2 }] },
+      { alts: [{ fx0: 5, fx1: 15, h: 2 }, { fx0: 12, fx1: 20, h: 2 }] },
+    ]);
+    expect(r[1]).toEqual({ y: 0, k: 1 });
+  });
+});
+
+describe('brukerens callout-valg', () => {
+  const withBox = (patch: object) => {
+    const p = example();
+    const lane = p.lanes[0];
+    lane.boxes = [{ ...lane.boxes[0], text: 'Kort', resolved: { start: '2026-03-02', finish: '2026-03-04', isMilestone: false, trade: '(none)' }, milestone: null, ...patch }];
+    return computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false }, approxMeasure).items.find((i) => i.kind === 'box')!;
+  };
+  it('smal boks får callout når appen bestemmer', () => {
+    const it = withBox({});
+    expect(it.kind === 'box' && it.callout).toBeTruthy();
+  });
+  it('callout av: teksten står i boksen', () => {
+    const it = withBox({ callout: 'off' });
+    expect(it.kind === 'box' && it.callout).toBeNull();
+    expect(it.kind === 'box' && it.text).toBeTruthy();
+  });
+  it('callout på venstre side når brukeren velger det', () => {
+    const it = withBox({ calloutSide: 'left' });
+    expect(it.kind === 'box' && it.callout && it.callout.box.x < it.x0).toBe(true);
+  });
+  it('stjerne i teksten gir callout også på bred boks', () => {
+    const it = withBox({ text: '*Bred', resolved: { start: '2026-03-02', finish: '2026-08-28', isMilestone: false, trade: '(none)' } });
+    expect(it.kind === 'box' && it.callout).toBeTruthy();
   });
 });

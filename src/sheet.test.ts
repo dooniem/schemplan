@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { a3Size, printableArea } from './sheet';
+import { a3Size, printableArea, sheetSize } from './sheet';
 
 describe('A3-ark', () => {
   it('har riktige mål liggende og stående', () => {
@@ -19,5 +19,12 @@ describe('A3-ark', () => {
       width: 0,
       height: 0,
     });
+  });
+});
+
+describe('arkstørrelser', () => {
+  it('A2 og A1 i mm', () => {
+    expect(sheetSize('A2', 'landscape')).toEqual({ width: 594, height: 420 });
+    expect(sheetSize('A1', 'portrait')).toEqual({ width: 594, height: 841 });
   });
 });

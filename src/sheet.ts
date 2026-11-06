@@ -7,13 +7,18 @@ export interface SheetSize {
   height: number; // mm
 }
 
-const A3_LONG = 420;
-const A3_SHORT = 297;
+export type Paper = 'A3' | 'A2' | 'A1';
+
+/** Kort og lang side i mm (ISO 216). */
+const PAPER_MM: Record<Paper, [number, number]> = { A3: [297, 420], A2: [420, 594], A1: [594, 841] };
+
+export function sheetSize(paper: Paper, orientation: Orientation): SheetSize {
+  const [short, long] = PAPER_MM[paper];
+  return orientation === 'landscape' ? { width: long, height: short } : { width: short, height: long };
+}
 
 export function a3Size(orientation: Orientation): SheetSize {
-  return orientation === 'landscape'
-    ? { width: A3_LONG, height: A3_SHORT }
-    : { width: A3_SHORT, height: A3_LONG };
+  return sheetSize('A3', orientation);
 }
 
 export interface Margins {
