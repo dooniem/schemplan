@@ -176,6 +176,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
     }
   }
 
+  // Kritisk linje oppå boksene. Klikk går gjennom den til boksene under.
+  if (L.critical && L.critical.points.length >= 4) {
+    const pts = L.critical.points;
+    const d = pts.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
+    node('path', { class: 'critical-line', d, fill: 'none', stroke: L.critical.color, 'stroke-width': L.critical.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg);
+  }
+
   // Ramme rundt planen og lane-kolonnen
   const yTop = L.calendarTop.length ? L.calendarTop[0].y : y0;
   node('rect', { x: left, y: yTop, width: x1 - left, height: y1 - yTop, fill: 'none', stroke: '#000000', 'stroke-width': 0.35 }, svg);

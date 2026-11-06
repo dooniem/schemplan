@@ -51,6 +51,8 @@ export interface PlanSettings {
     logo?: { data: string; aspect: number };
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
+    /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */
+    criticalLine?: { width: number; color: HexColor };
   };
   options: {
     legend: boolean;
@@ -127,6 +129,8 @@ export interface Box {
   header?: boolean;
   /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>>;
+  /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
+  critical?: boolean;
 }
 
 export interface MilestoneStyle {

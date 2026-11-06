@@ -23,9 +23,9 @@ export interface MergeReport {
 }
 
 /** Felt som bare settes i appen og følger boksen. */
-const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'milestoneStyle'] as const;
+const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'milestoneStyle', 'critical'] as const;
 /** Valg fra appen som ligger i plan.layout. */
-const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'logo', 'tradeColors'] as const;
+const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'logo', 'tradeColors', 'criticalLine'] as const;
 
 const label = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim() || '(uten tekst)';
 const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c).join(',') : '');

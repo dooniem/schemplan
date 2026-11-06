@@ -6,6 +6,7 @@ import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
+import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -148,6 +149,8 @@ export interface Layout {
   dateAt(x: number): string;
   /** Logo øverst til venstre, i mm. */
   logo: { x: number; y: number; w: number; h: number; href: string } | null;
+  /** Kritisk linje gjennom de merkede boksene, eller null. */
+  critical: CriticalLine | null;
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
   unit: number;
 }
@@ -510,6 +513,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     belowMin: false,
     style: ny ? 'ny' : 'excel',
     logo,
+    critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
     unit: lh,
     dateAt(x: number) {
       let best = axis.start;
