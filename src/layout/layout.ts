@@ -155,7 +155,7 @@ const PAD_X = 0.7;
 const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
 
-const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
+export const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
   red: { fill: '#FF0000', text: '#FFFFFF' },
   yellow: { fill: '#FCF600', text: '#000000' },
   green: { fill: '#008000', text: '#FFFFFF' },
@@ -709,7 +709,7 @@ function milestonePiece(
   rightLimit: number,
   leftLimit: number,
 ): Piece {
-  const style = box.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
+  const style = { ...(box.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false }), ...box.milestoneStyle };
   const color = MILESTONE_COLORS[style.color] ?? MILESTONE_COLORS.blue;
   const size = base * 1.6;
   const flag = style.symbol === 'flag';

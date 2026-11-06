@@ -198,6 +198,16 @@ export function validatePlan(input: string | unknown): ValidationResult {
         optPos(b, 'height', bp);
         for (const k of ['hidden', 'manual', 'header'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
+        if (b.milestoneStyle !== undefined) {
+          const m = b.milestoneStyle;
+          const mp = `${bp}.milestoneStyle`;
+          if (!isObj(m)) err(mp, 'må være et objekt');
+          else {
+            if (m.symbol !== undefined) needEnum(m, 'symbol', mp, ['flag', 'diamond']);
+            if (m.color !== undefined) needEnum(m, 'color', mp, ['red', 'yellow', 'green', 'blue', 'orange', 'black']);
+            for (const k of ['verticalLine', 'showDate'] as const) if (m[k] !== undefined) needBool(m, k, mp);
+          }
+        }
         if (b.top !== undefined && !(typeof b.top === 'number' && Number.isFinite(b.top) && b.top >= 0)) err(`${bp}.top`, 'må være et tall, 0 eller større');
         for (const k of ['fill', 'textColor'] as const)
           if (b[k] !== undefined && !(typeof b[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b[k] as string))) err(`${bp}.${k}`, 'må være en farge som #RRGGBB');

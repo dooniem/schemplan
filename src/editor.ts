@@ -1,7 +1,7 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
-import type { BoxItem, Item, LaneLayout, Layout } from './layout/layout';
+import { MILESTONE_COLORS, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -46,7 +46,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -64,6 +64,7 @@ export function resetBox(b: Box): void {
   delete b.top;
   delete b.hidden;
   delete b.header;
+  delete b.milestoneStyle;
 }
 
 /** Lanen boksen ligger i nå. */
@@ -580,7 +581,38 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     tw.append(ta, el('span', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'));
     panel.append(tw);
     if (ms) {
-      panel.append(el('p', { class: 'muted small' }, 'Symbol og farge på milepæler kommer i et senere trinn.'));
+      // Utseende fra appen går foran det som er valgt i Project
+      const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
+      const st = { ...base, ...b.milestoneStyle };
+      type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate';
+      const setMs = (k: MsKey, v: unknown) =>
+        change((x) => {
+          const m: Record<string, unknown> = { ...x.milestoneStyle };
+          if ((base as Record<string, unknown>)[k] === v) delete m[k];
+          else m[k] = v;
+          if (Object.keys(m).length) x.milestoneStyle = m as Box['milestoneStyle'];
+          else delete x.milestoneStyle;
+        });
+      panel.append(segmented('Symbol', st.symbol, [['diamond', '◆ Ruter'], ['flag', '⚑ Flagg']], (v) => setMs('symbol', v)));
+      const cw = el('div', { class: 'prop' });
+      cw.append(el('span', { class: 'prop-label' }, 'Farge'));
+      const sw = el('div', { class: 'swatches' });
+      const names: Record<string, string> = { red: 'Rød', yellow: 'Gul', green: 'Grønn', blue: 'Blå', orange: 'Oransje', black: 'Svart' };
+      for (const [k, c] of Object.entries(MILESTONE_COLORS)) {
+        const s = el('button', { type: 'button', class: 'swatch', title: names[k], 'aria-label': names[k], 'aria-pressed': String(st.color === k) });
+        s.style.background = c.fill;
+        s.addEventListener('click', () => setMs('color', k));
+        sw.append(s);
+      }
+      cw.append(sw);
+      panel.append(cw);
+      panel.append(segmented('Loddrett linje', st.verticalLine ? 'on' : 'off', [['off', 'Av'], ['on', 'På']], (v) => setMs('verticalLine', v === 'on')));
+      panel.append(segmented('Vis dato', st.showDate ? 'on' : 'off', [['off', 'Av'], ['on', 'På']], (v) => setMs('showDate', v === 'on')));
+      if (b.milestoneStyle) {
+        const back = el('button', { type: 'button', class: 'button small' }, 'Utseende fra Project');
+        back.addEventListener('click', () => change((x) => delete x.milestoneStyle));
+        panel.append(back);
+      }
     } else {
       // Bakgrunnsfarge: alle fagfarger og lanefarger, pluss egen farge. Ingen farger fjernes.
       const cw = el('div', { class: 'prop' });

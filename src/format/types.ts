@@ -123,6 +123,8 @@ export interface Box {
   fromLane?: string;
   /** Overskriftsboks (valgfritt): teksten står øverst, og andre bokser kan ligge inne i den. */
   header?: boolean;
+  /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
+  milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>>;
 }
 
 export interface MilestoneStyle {
