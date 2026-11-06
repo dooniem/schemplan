@@ -48,8 +48,18 @@ export function autoTextColor(fill: string): '#000000' | '#FFFFFF' {
   return black + DARK_TEXT_BIAS >= white ? '#000000' : '#FFFFFF';
 }
 
-/** Kantfarge avledet av fyllet: samme fargetone, mørkere. Lyse fyll får tydelig kant, mørke fyll en nesten svart. */
+const toHex = (rgb: number[]) => '#' + rgb.map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/** Minste kontrast mellom kant og fyll, så to like bokser som ligger inntil hverandre kan skilles. */
+const BORDER_CONTRAST = 2;
+
+/**
+ * Kantfarge avledet av fyllet: samme fargetone, mørkere. Er fyllet så mørkt at en mørkere kant
+ * ikke synes (marineblå, svart, mørk brun), blir kanten i stedet lysere, i samme tone.
+ */
 export function derivedBorder(fill: string, amount = 0.45): string {
-  const [r, g, b] = hex(fill).map((c) => Math.round(c * (1 - amount) * 255));
-  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const c = hex(fill);
+  const darker = toHex(c.map((v) => v * (1 - amount)));
+  if (contrast(darker, fill) >= BORDER_CONTRAST) return darker;
+  return toHex(c.map((v) => v + (1 - v) * amount));
 }
