@@ -1043,10 +1043,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
     }
     const sel = layoutNow.items.find((i) => i.id === selected);
-    if (sel?.kind === 'box') {
+    // Ikke i kritisk linje-modus: der skal et klikk like under boksen treffe naboen
+    if (sel?.kind === 'box' && !criticalMode) {
       const w = sel.x1 - sel.x0;
       line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
-      line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 10, 'pointer-events': 'stroke' });
+      line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
     svgNow.append(g);
   };
@@ -1363,6 +1364,32 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (p.x < layoutNow.laneTitleX || p.x >= layoutNow.plot.x0) return null;
     return laneAt(p.y) ?? null;
   };
+  /** Boksen under markøren, funnet ut fra plasseringen og ikke bare elementet under markøren:
+   *  callout-teksten til en boks kan ligge over naboen, grepene på valgt boks likeså, og et klikk
+   *  like ved kanten skal også treffe. Først en boks markøren er inne i (den minste, når bokser
+   *  ligger inne i en overskriftsboks), så teksten eller callouten du pekte på, og til sist den
+   *  nærmeste innenfor slingringsmonnet, der valgt boks vinner. */
+  const boxAt = (e: MouseEvent): string | null => {
+    if (!active || !layoutNow) return null;
+    const p = toMm(e.clientX, e.clientY);
+    const boxes = layoutNow.items.filter((it): it is BoxItem => it.kind === 'box');
+    let inside: BoxItem | null = null;
+    for (const it of boxes)
+      if (p.x >= it.x0 && p.x <= it.x1 && p.y >= it.y && p.y <= it.y + it.h && (!inside || (it.x1 - it.x0) * it.h < (inside.x1 - inside.x0) * inside.h)) inside = it;
+    if (inside) return inside.id;
+    const g = itemOf(e);
+    if (g) return g.getAttribute('data-id');
+    const slack = 8 / (svgNow?.getScreenCTM()?.a || 4);
+    let best = Infinity;
+    let hit: string | null = null;
+    for (const it of boxes) {
+      const d = Math.hypot(Math.max(it.x0 - p.x, 0, p.x - it.x1), Math.max(it.y - p.y, 0, p.y - (it.y + it.h)));
+      if (d > slack) continue;
+      const score = it.id === selected ? -1 : d * 1e6 + (it.x1 - it.x0) * it.h;
+      if (score < best) [best, hit] = [score, it.id];
+    }
+    return hit;
+  };
   sheet.addEventListener('click', (e) => {
     if (!active) return;
     if (suppressClick) {
@@ -1371,17 +1398,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const g = itemOf(e);
     if (criticalMode) {
-      const id = g?.getAttribute('data-id');
+      const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
       if (b) setCritical([b.id], !b.critical);
       return;
     }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
-    if (g && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(g.getAttribute('data-id')!);
-    const ln = g ? null : titleLaneOf(e);
+    const id = g ? boxAt(e) : null;
+    if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(id);
+    const ln = id ? null : titleLaneOf(e);
     if (ln) selectLane(ln.id);
-    else if (!(e.shiftKey && !g)) select(g ? g.getAttribute('data-id') : null);
+    else if (!(e.shiftKey && !id)) select(id);
   });
   sheet.addEventListener('dblclick', (e) => {
     const g = itemOf(e);
@@ -1471,25 +1499,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const lane = ln && findLane(plan, ln.id);
     if (!ln || !lane) return;
     e.preventDefault();
-    // Boksen finnes ut fra plasseringen, ikke elementet under markøren: dragkanten
-    // på valgt boks ligger over boksen, og et høyreklikk like ved kanten skal også
-    // treffe. Valgt boks vinner innenfor slingringsmonnet, ellers den nærmeste,
-    // og den minste når bokser ligger inne i en overskriftsboks.
-    const g = itemOf(e);
-    let hitId = g?.getAttribute('data-id') ?? null;
-    if (!hitId) {
-      const slack = 8 / (svgNow?.getScreenCTM()?.a || 4);
-      let best = Infinity;
-      for (const it of L.items) {
-        if (it.kind !== 'box') continue;
-        const dx = Math.max(it.x0 - p.x, 0, p.x - it.x1);
-        const dy = Math.max(it.y - p.y, 0, p.y - (it.y + it.h));
-        const d = Math.hypot(dx, dy);
-        if (d > slack) continue;
-        const score = it.id === selected ? -1 : d * 1e6 + (it.x1 - it.x0) * it.h;
-        if (score < best) [best, hitId] = [score, it.id];
-      }
-    }
+    const hitId = boxAt(e);
     const box = hitId ? findBox(plan, hitId) : null;
     const onTitle = p.x < L.plot.x0;
     if (onTitle) {
