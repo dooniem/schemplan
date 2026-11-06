@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergePlans } from './merge';
-import { copyBox, moveBox } from './editor';
+import { copyBox, keepLaneOriginal, moveBox, moveLane, newBox, newLane } from './editor';
 import { testplan } from './test/testplaner';
 import { validatePlan } from './format/validate';
 
@@ -76,5 +76,47 @@ describe('oppdater fra Project', () => {
     const { plan, report } = mergePlans(work, fresh);
     expect(laneOf(plan, '1_1')).toBe('5');
     expect(report.moveDropped).toHaveLength(1);
+  });
+});
+
+describe('lanes ved oppdatering fra Project', () => {
+  it('beholder navn, farge, skjuling, egne lanes og rekkefølgen fra arbeidsfilen', () => {
+    const work = testplan();
+    const l2 = work.lanes[1];
+    keepLaneOriginal(l2);
+    l2.name = 'Eget navn';
+    l2.fill = '#8DCDF8';
+    work.lanes[2].hidden = true;
+    const mine = newLane(work, '1');
+    newBox(work, mine.id, '2026-02-01', '2026-02-10');
+    moveBox(work, '3_1', mine.id);
+    moveLane(work, '5', 0);
+    const fresh = testplan();
+    // Ny lane i Project rett etter lane 3
+    fresh.lanes.splice(3, 0, { id: '9', name: 'Ny fra Project', fill: null, shown: true, boxes: [] });
+    const { plan, report } = mergePlans(work, fresh);
+    expect(plan.lanes.map((l) => l.id)).toEqual(['5', '1', mine.id, '2', '3', '9', '4']);
+    const p2 = plan.lanes.find((l) => l.id === '2')!;
+    expect(p2.name).toBe('Eget navn');
+    expect(p2.fill).toBe('#8DCDF8');
+    expect(p2.original?.name).toBe(fresh.lanes[1].name);
+    expect(plan.lanes.find((l) => l.id === '3')!.hidden).toBe(true);
+    expect(laneOf(plan, '3_1')).toBe(mine.id);
+    expect(plan.lanes.find((l) => l.id === mine.id)!.boxes.length).toBe(2);
+    expect(report.manualLanes).toBe(1);
+    expect(report.newLanes).toEqual(['Ny fra Project']);
+    expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
+  });
+
+  it('nytt navn i Project vinner over navnet fra appen', () => {
+    const work = testplan();
+    keepLaneOriginal(work.lanes[0]);
+    work.lanes[0].name = 'Eget navn';
+    const fresh = testplan();
+    fresh.lanes[0].name = 'Nytt i Project';
+    const { plan, report } = mergePlans(work, fresh);
+    expect(plan.lanes[0].name).toBe('Nytt i Project');
+    expect(plan.lanes[0].original).toBeUndefined();
+    expect(report.laneNameChanged).toEqual(['Nytt i Project']);
   });
 });

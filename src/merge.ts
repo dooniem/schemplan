@@ -15,7 +15,11 @@ export interface MergeReport {
   textChanged: string[];
   /** Bokser du hadde flyttet, men som Project nå har lagt i en annen lane. Project gjelder. */
   moveDropped: string[];
+  /** Lanes der Project har endret navnet du hadde endret. Navnet fra Project gjelder. */
+  laneNameChanged: string[];
   manualKept: number;
+  /** Lanes laget i appen som er beholdt. */
+  manualLanes: number;
 }
 
 /** Felt som bare settes i appen og følger boksen. */
@@ -28,7 +32,7 @@ const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c)
 
 export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; report: MergeReport } {
   const plan: PlanFile = structuredClone(fresh);
-  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], moveDropped: [], manualKept: 0 };
+  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], moveDropped: [], laneNameChanged: [], manualKept: 0, manualLanes: 0 };
 
   for (const k of APP_LAYOUT) if (work.plan.layout[k] !== undefined) (plan.plan.layout as Record<string, unknown>)[k] = structuredClone(work.plan.layout[k]);
 
@@ -52,7 +56,7 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   for (const lane of plan.lanes) {
     const ol = oldLanes.get(lane.id);
     if (!ol) report.newLanes.push(label(lane.name));
-    else if (ol.height) lane.height = ol.height;
+    else mergeLane(ol, lane, report);
     for (const fb of lane.boxes) {
       let ob = byKey.get(key(fb));
       if (!ob || used.has(ob)) ob = byId.get(fb.id);
@@ -77,16 +81,21 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       const now = oldLaneOf.get(ob)!;
       if (ob.fromLane && now.id !== lane.id) {
         if (ob.fromLane !== lane.id) report.moveDropped.push(label(fb.text));
-        else if (freshLaneIds.has(now.id) || work.lanes.find((l) => l.id === now.id)?.boxes.some((b) => b.manual))
+        else if (freshLaneIds.has(now.id) || now.manual || now.boxes.some((b) => b.manual))
           moves.push({ box: fb, from: lane, to: now.id });
         else report.moveDropped.push(label(fb.text));
       }
     }
   }
 
-  // Lanes som er borte i Project: beholdes bare om de har bokser laget i appen
+  // Lanes laget i appen beholdes alltid. Lanes som er borte i Project, beholdes bare om de har bokser laget i appen.
   for (const ol of work.lanes) {
     if (freshLaneIds.has(ol.id)) continue;
+    if (ol.manual) {
+      report.manualLanes++;
+      plan.lanes.push({ ...structuredClone(ol), boxes: [] });
+      continue;
+    }
     const manual = ol.boxes.filter((b) => b.manual);
     if (!manual.length) {
       report.goneLanes.push(label(ol.name));
@@ -112,6 +121,8 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
 
   for (const [b] of oldLaneOf) if (!used.has(b)) report.goneBoxes.push(label(b.text));
 
+  plan.lanes = orderLanes(work.lanes.map((l) => l.id), fresh.lanes.map((l) => l.id), plan.lanes);
+
   // Id-er må være unike: bokser laget i appen får nytt nummer om Project har tatt id-en
   const seen = new Set<string>();
   let n = 1;
@@ -126,6 +137,35 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   return { plan, report };
 }
 
+/** Navn, farge, høyde og skjuling fra appen. Navn og farge gjelder så lenge Project ikke har endret dem. */
+function mergeLane(ol: Lane, lane: Lane, report: MergeReport) {
+  if (ol.height) lane.height = ol.height;
+  if (ol.hidden) lane.hidden = true;
+  if (!ol.original) return;
+  const orig = { name: lane.name, fill: lane.fill };
+  if (lane.name === ol.original.name) lane.name = ol.name;
+  else if (ol.name !== ol.original.name) report.laneNameChanged.push(label(lane.name));
+  if ((lane.fill ?? '').toUpperCase() === (ol.original.fill ?? '').toUpperCase()) lane.fill = ol.fill;
+  if (lane.name !== orig.name || lane.fill !== orig.fill) lane.original = orig;
+}
+
+/**
+ * Rekkefølgen fra arbeidsfilen gjelder. Nye lanes fra Project settes inn rett etter
+ * lanen de kommer etter i Project, eller først om de er først der.
+ */
+function orderLanes(workOrder: string[], freshOrder: string[], lanes: Lane[]): Lane[] {
+  const byId = new Map(lanes.map((l) => [l.id, l]));
+  const known = new Set(workOrder);
+  const out = workOrder.filter((id) => byId.has(id));
+  freshOrder.forEach((id, i) => {
+    if (known.has(id) || !byId.has(id)) return;
+    const prev = i > 0 ? out.indexOf(freshOrder[i - 1]) : -1;
+    out.splice(prev + 1, 0, id);
+  });
+  for (const l of lanes) if (!out.includes(l.id)) out.push(l.id);
+  return out.map((id) => byId.get(id)!);
+}
+
 /** Kort sammendrag til statuslinjen. */
 export function summarizeMerge(r: MergeReport): string {
   const parts = [
@@ -135,6 +175,7 @@ export function summarizeMerge(r: MergeReport): string {
     r.newLanes.length && `${r.newLanes.length} nye lanes`,
     r.goneLanes.length && `${r.goneLanes.length} lanes borte`,
     r.manualKept && `${r.manualKept} egne bokser beholdt`,
+    r.manualLanes && `${r.manualLanes} egne lanes beholdt`,
   ].filter(Boolean);
   return `Oppdatert fra Project: ${parts.join(', ')}.`;
 }

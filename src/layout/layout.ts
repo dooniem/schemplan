@@ -310,7 +310,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const logo = lg ? { x: MARGIN, y: MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
-  const lanes = file.lanes.filter((l) => l.shown);
+  const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
   const titlePad = 2 * PAD_X + 2;
   // "|" i lane-navnet er linjeskift, som i boksteksten
   const laneRaw = lanes.map((l) => splitLines(l.name));

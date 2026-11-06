@@ -80,6 +80,12 @@ export interface Lane {
   boxes: Box[];
   /** Fast høyde valgt i appen, i tekstlinjer (valgfritt). Uten den blir lanen så høy som innholdet krever. */
   height?: number;
+  /** Skjult i appen (valgfritt). Skilt fra `shown`, som kommer fra Project. */
+  hidden?: boolean;
+  /** Lanen er laget i appen, ikke hentet fra Project. */
+  manual?: boolean;
+  /** Navn og farge før første endring i appen, så de kan tilbakestilles og flettes (valgfritt). */
+  original?: { name: string; fill: HexColor | null };
 }
 
 export type Rotation = 0 | 90 | -90;
