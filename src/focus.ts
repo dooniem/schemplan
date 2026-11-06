@@ -28,13 +28,10 @@ const norsk = (iso: string) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${
 const DAY = 86400000;
 const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY) + 1;
 
-/** Varighet med vanlige ord: dager under to uker, ellers uker. */
+/** Varighet i kalenderdager, med start- og sluttdagen. */
 export function duration(start: string, finish: string): string {
   const d = days(start, finish);
-  if (d <= 1) return '1 dag';
-  if (d < 14) return `${d} dager`;
-  const w = Math.round(d / 7);
-  return `${w} uker`;
+  return d <= 1 ? '1 dag' : `${d} dager`;
 }
 
 /** Bokser og milepæler som ligger helt eller delvis i perioden (datoene tas med). */
@@ -90,62 +87,47 @@ export function createFocus(
   document.body.append(tip);
   let tipId = '';
 
+  // Kort og stille: bare datoene, og først når musen har holdt seg på boksen en liten stund
+  const DELAY_MS = 500;
   const tipFor = (id: string) => {
-    const plan = getPlan();
     const r = rows.get(id);
-    if (!plan || !r) return null;
-    const frag = document.createDocumentFragment();
-    const title = document.createElement('strong');
-    title.textContent = r.text || '(uten tekst)';
-    frag.append(title);
+    if (!r || !r.finish) return null;
     const dl = document.createElement('dl');
-    const add = (k: string, v: string, cls = '') => {
-      if (!v) return;
+    const add = (k: string, v: string) => {
       const dt = document.createElement('dt');
       dt.textContent = k;
       const dd = document.createElement('dd');
       dd.textContent = v;
-      if (cls) dd.className = cls;
       dl.append(dt, dd);
     };
     if (r.type === 'Milepæl') add('Dato', norsk(r.finish));
     else {
       add('Start', norsk(r.start));
       add('Slutt', norsk(r.finish));
-      if (r.start && r.finish) add('Varighet', duration(r.start, r.finish));
+      if (r.start) add('Varighet', duration(r.start, r.finish));
     }
-    add('Lane', r.lane);
-    add('Fag', r.trade);
-    // Fra aktivitetene i Project: fremdrift og frist
-    const ids = new Set(r.taskIds ? r.taskIds.split(', ').map(Number) : []);
-    const tasks = plan.tasks.filter((t) => ids.has(t.uid));
-    if (tasks.length) {
-      const pc = Math.round(tasks.reduce((n, t) => n + t.percentComplete, 0) / tasks.length);
-      if (pc > 0) add('Fullført', `${pc} %`);
-      const deadlines = tasks.map((t) => t.deadline).filter((d): d is string => !!d).sort();
-      if (deadlines.length) add('Frist', norsk(deadlines[0]) + (r.finish > deadlines[0] ? ' (slutter etter fristen)' : ''), r.finish > deadlines[0] ? 'warn' : '');
-      add(tasks.length === 1 ? 'Aktivitet' : `Aktiviteter (${tasks.length})`, tasks.slice(0, 3).map((t) => t.name).join('; ') + (tasks.length > 3 ? ' …' : ''));
-    }
-    if (r.source === 'Appen') add('Kilde', 'Laget i appen');
-    if (r.critical) add('Kritisk linje', 'Ja');
-    frag.append(dl);
-    return frag;
+    return dl;
   };
 
+  let timer = 0;
+  let pending = '';
+  let last: { x: number; y: number } = { x: 0, y: 0 };
   const hideTip = () => {
+    window.clearTimeout(timer);
+    pending = '';
     tip.hidden = true;
     tipId = '';
   };
-  const place = (e: PointerEvent) => {
-    const pad = 14;
+  const place = () => {
+    const pad = 12;
     const vw = document.documentElement.clientWidth;
     const vh = document.documentElement.clientHeight;
     const w = tip.offsetWidth;
     const h = tip.offsetHeight;
-    let x = e.clientX + pad;
-    let y = e.clientY + pad;
-    if (x + w > vw - 8) x = e.clientX - w - pad;
-    if (y + h > vh - 8) y = e.clientY - h - pad;
+    let x = last.x + pad;
+    let y = last.y + pad;
+    if (x + w > vw - 8) x = last.x - w - pad;
+    if (y + h > vh - 8) y = last.y - h - pad;
     tip.style.left = `${Math.max(8, x)}px`;
     tip.style.top = `${Math.max(8, y)}px`;
   };
@@ -155,15 +137,22 @@ export function createFocus(
     if (e.buttons !== 0 || e.pointerType === 'touch') return hideTip();
     const g = (e.target as Element | null)?.closest?.('g[data-id]');
     const id = g?.getAttribute('data-id') ?? '';
+    last = { x: e.clientX, y: e.clientY };
     if (!id) return hideTip();
-    if (id !== tipId) {
+    if (id === tipId) return place();
+    if (id === pending) return;
+    // Ny boks: skjul den gamle og vent litt før den nye vises
+    hideTip();
+    pending = id;
+    timer = window.setTimeout(() => {
       const content = tipFor(id);
-      if (!content) return hideTip();
+      pending = '';
+      if (!content) return;
       tip.replaceChildren(content);
       tip.hidden = false;
       tipId = id;
-    }
-    place(e);
+      place();
+    }, DELAY_MS);
   });
   host.addEventListener('pointerleave', hideTip);
   host.addEventListener('pointerdown', hideTip);

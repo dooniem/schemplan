@@ -1472,8 +1472,26 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const lane = ln && findLane(plan, ln.id);
     if (!ln || !lane) return;
     e.preventDefault();
+    // Boksen finnes ut fra plasseringen, ikke elementet under markøren: dragkanten
+    // på valgt boks ligger over boksen, og et høyreklikk like ved kanten skal også
+    // treffe. Valgt boks vinner innenfor slingringsmonnet, ellers den nærmeste,
+    // og den minste når bokser ligger inne i en overskriftsboks.
     const g = itemOf(e);
-    const box = g ? findBox(plan, g.getAttribute('data-id')!) : null;
+    let hitId = g?.getAttribute('data-id') ?? null;
+    if (!hitId) {
+      const slack = 8 / (svgNow?.getScreenCTM()?.a || 4);
+      let best = Infinity;
+      for (const it of L.items) {
+        if (it.kind !== 'box') continue;
+        const dx = Math.max(it.x0 - p.x, 0, p.x - it.x1);
+        const dy = Math.max(it.y - p.y, 0, p.y - (it.y + it.h));
+        const d = Math.hypot(dx, dy);
+        if (d > slack) continue;
+        const score = it.id === selected ? -1 : d * 1e6 + (it.x1 - it.x0) * it.h;
+        if (score < best) [best, hitId] = [score, it.id];
+      }
+    }
+    const box = hitId ? findBox(plan, hitId) : null;
     const item = (label: string, note: string, pressed: boolean | null, fn: () => void, disabled = false) => {
       const b = el('button', { type: 'button' });
       if (pressed !== null) b.setAttribute('aria-pressed', String(pressed));

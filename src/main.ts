@@ -71,7 +71,19 @@ const dataSection = $<HTMLElement>('#data-view');
 const dataView = createDataView(dataSection, () => plan, (id) => {
   showView('plan');
   editor.focusBox(id);
-  host.querySelector(`g[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center', inline: 'center' });
+  const g = host.querySelector<SVGGElement>(`g.items > g[data-id="${CSS.escape(id)}"]`);
+  if (!g) return;
+  // Zoom inn til boksen og la en ring pulsere et par sekunder, så den er lett å finne
+  viewer.reveal(g);
+  const b = g.getBBox();
+  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  for (const [k, v] of Object.entries({ x: b.x - 1.2, y: b.y - 1.2, width: b.width + 2.4, height: b.height + 2.4, rx: 1, class: 'flash-ring' })) ring.setAttribute(k, String(v));
+  const layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  layer.setAttribute('class', 'edit-overlay flash');
+  layer.setAttribute('pointer-events', 'none');
+  layer.append(ring);
+  g.ownerSVGElement?.append(layer);
+  setTimeout(() => layer.remove(), 2600);
 });
 function showView(v: 'plan' | 'data') {
   dataSection.hidden = v !== 'data';

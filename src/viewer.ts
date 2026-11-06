@@ -16,6 +16,8 @@ export interface Viewer {
   onChange(cb: (zoom: number) => void): void;
   /** Hendelser som filteret sier ja til, overlates til andre (f.eks. redigering): ingen panorering eller zoom. */
   setIgnore(fn: (e: Event) => boolean): void;
+  /** Zoomer inn til minst `minZoom` og legger elementet midt i vinduet. */
+  reveal(el: Element, minZoom?: number): void;
 }
 
 export function createViewer(host: HTMLElement): Viewer {
@@ -126,6 +128,14 @@ export function createViewer(host: HTMLElement): Viewer {
     },
     setIgnore(fn) {
       ignore = fn;
+    },
+    reveal(el, minZoom = 3) {
+      if (!svg) return;
+      if (zoom < minZoom) setZoom(minZoom);
+      const r = el.getBoundingClientRect();
+      const hr = host.getBoundingClientRect();
+      host.scrollLeft += r.left + r.width / 2 - (hr.left + hr.width / 2);
+      host.scrollTop += r.top + r.height / 2 - (hr.top + hr.height / 2);
     },
   };
 }
