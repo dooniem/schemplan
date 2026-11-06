@@ -3,7 +3,7 @@ import { parseBoxText } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { a3Size, type Orientation } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { addDays, formatShort, parseIso } from './dates';
+import { addDays, formatShort, MONTHS_NB, parseIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 
 export interface LayoutOptions {
@@ -23,6 +23,8 @@ export interface TextBlock {
   color: string;
   anchor: 'start' | 'middle' | 'end';
   bold?: boolean;
+  /** Fet skrift per linje (overstyrer bold). */
+  boldLines?: boolean[];
   rotate?: 0 | 90 | -90;
 }
 
@@ -36,7 +38,8 @@ export interface BoxItem {
   fill: string;
   border: string | null;
   text: TextBlock | null;
-  callout: { box: { x: number; y: number; w: number; h: number }; text: TextBlock; leader: [number, number, number, number] } | null;
+  /** leader: punkter x0,y0,x1,y1,… fra innsiden av boksen til streken foran teksten. */
+  callout: { box: { x: number; y: number; w: number; h: number }; text: TextBlock; leader: number[] } | null;
   arrowLeft: boolean;
   arrowRight: boolean;
 }
@@ -59,8 +62,10 @@ export type Item = BoxItem | MilestoneItem;
 export interface CalendarRow {
   y: number;
   h: number;
-  cells: { x0: number; x1: number; label: string; strong: boolean }[];
+  cells: { x0: number; x1: number; label: string; strong: boolean; fill: string }[];
   size: number;
+  /** Månedsnavn skrives loddrett, slik Excel gjør. */
+  rotate: boolean;
 }
 
 export interface LaneLayout {
@@ -71,6 +76,13 @@ export interface LaneLayout {
   title: TextBlock;
 }
 
+/** Bakgrunnsstriper i planområdet: annenhver måned litt mørkere. */
+export interface Band {
+  x0: number;
+  x1: number;
+  fill: string;
+}
+
 export interface LegendEntry {
   x: number;
   y: number;
@@ -78,6 +90,7 @@ export interface LegendEntry {
   h: number;
   fill: string;
   border: string | null;
+  textColor: string;
   label: TextBlock;
 }
 
@@ -94,7 +107,8 @@ export interface Layout {
   calendarTop: CalendarRow[];
   calendarBottom: CalendarRow[];
   lanes: LaneLayout[];
-  grid: { x: number; strong: boolean }[];
+  grid: { x: number; strong: boolean; month: boolean }[];
+  bands: Band[];
   holidays: { x0: number; x1: number }[];
   items: Item[];
   legend: LegendEntry[];
@@ -105,8 +119,8 @@ export interface Layout {
 const MARGIN = 8;
 const LANE_TITLE_W = 30;
 const PAD_X = 0.7;
-const PAD_Y = 0.5;
-const GAP = 0.8; // mellom bokser i samme lane
+const PAD_Y = 0.25; // Excel har lite luft over og under teksten
+const GAP = 0; // Excel stabler boksene kant i kant
 const LANE_PAD = 1.2;
 
 const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
@@ -155,15 +169,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
 
   // ---- Overskrift ----
   const titleSize = base * 1.5;
-  const title: TextBlock = { x: MARGIN, y: MARGIN + titleSize * 0.85, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'start', bold: true };
-  const subtitle: TextBlock = {
-    x: W - MARGIN,
-    y: MARGIN + titleSize * 0.85,
-    lines: [`Fra MS Project ${formatShort(file.exportedAt.slice(0, 10))}`],
-    size: base * 0.8,
-    color: '#555555',
-    anchor: 'end',
-  };
+  const title: TextBlock = { x: W / 2, y: MARGIN + titleSize * 0.85, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
   const headerH = titleSize * 1.4;
 
   // ---- Tidsakse ----
@@ -171,10 +177,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const x0 = MARGIN + LANE_TITLE_W;
   const x1 = W - MARGIN;
   const axis = buildTimeAxis(file.plan.calendar, x0, x1);
-  const calSize = base * 0.85;
+  const calSize = base * 0.9;
   const rowH = calSize * 1.8;
-  const calRows = axis.mode === 'month' ? 2 : 3;
-  const calH = rowH * calRows;
+  // Månedsvisning: loddrette månedsnavn, raden må være høy nok til "Mai"/"Des"
+  const monthRowH = axis.mode === 'month' ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
+  const calH = axis.mode === 'month' ? rowH + monthRowH : rowH * 3;
   const bottomCal = file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
@@ -182,7 +189,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - 2 * PAD_X - 1, base, measure, true));
+  const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - 2 * PAD_X - 2, base, measure, true));
   const contentH = lanes.map((_, i) => {
     const pieces = lanePieces[i];
     const ys = pack(pieces);
@@ -201,13 +208,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const sw = legendSize * 2.2;
     const sh = legendSize * 1.3;
     const rowStep = legendSize * 2;
-    let lx = x0;
+    // Plass til datoen nede til høyre
+    const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
+    let lx = MARGIN;
     let row = 0;
     for (const c of file.colors) {
-      if (c.name === '(none)' || !usedTrades.has(c.name)) continue;
+      if (!usedTrades.has(c.name)) continue;
       const w = sw + 1.5 + measure(c.name, legendSize) + 5;
-      if (lx + w > x1 && lx > x0) {
-        lx = x0;
+      if (lx + w > lxMax && lx > MARGIN) {
+        lx = MARGIN;
         row++;
       }
       legendEntries.push({
@@ -217,12 +226,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         h: sh,
         fill: c.fill ?? '#FFFFFF',
         border: c.border,
+        textColor: c.text ?? '#000000',
         label: { x: lx + sw + 1.5, y: row * rowStep + sh * 0.8, lines: [c.name], size: legendSize, color: '#000000', anchor: 'start' },
       });
       lx += w;
     }
     if (legendEntries.length) legendH = (row + 1) * rowStep + 2;
   }
+  if (!legendH) legendH = legendSize * 2 + 2; // datoen nede til høyre
 
   // ---- Høydebudsjett ----
   const plotTop = MARGIN + headerH + calH;
@@ -249,12 +260,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       y1: y0 + h,
       fill: lane.fill,
       title: {
-        x: laneTitleX + PAD_X + 0.5,
+        x: laneTitleX + LANE_TITLE_W / 2,
         y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
         lines: tl,
         size: base,
         color: '#000000',
-        anchor: 'start',
+        anchor: 'middle',
         bold: true,
       },
     });
@@ -263,20 +274,33 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const plotBottom = y;
 
   // ---- Kalenderrader ----
-  const calendarTop = calendarRows(axis, plotTop - calH, rowH, calSize, measure, false);
-  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, calSize, measure, true) : [];
+  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false);
+  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true) : [];
   const legendTop = plotBottom + (bottomCal ? calH : 0) + 2;
   const legend = legendEntries.map((e) => ({
     ...e,
     y: e.y + legendTop,
     label: { ...e.label, y: e.label.y + legendTop },
   }));
+  const legendSizeMm = legendSize;
+  const subtitle: TextBlock = {
+    x: x1,
+    y: legendTop + legendSizeMm * 1.3 * 0.8,
+    lines: [formatLong(file.exportedAt.slice(0, 10))],
+    size: legendSizeMm,
+    color: '#000000',
+    anchor: 'end',
+    bold: true,
+  };
 
   // ---- Rutenett og ferier ----
   const grid = axis.columns.slice(1).map((c, i) => ({
     x: c.x0,
-    strong: axis.mode === 'month' ? c.year !== axis.columns[i].year : c.monthLabel !== axis.columns[i].monthLabel,
+    // Kraftig strek ved årsskifte. I ukesvisning får månedsskiftene en tynn strek.
+    strong: c.year !== axis.columns[i].year,
+    month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
+  const bands: Band[] = monthBands(axis);
   const holidays = file.holidays
     .map((h) => ({ s: parseIso(h.start), e: parseIso(h.end) }))
     .filter((h) => h.e >= axis.start && h.s < axis.end)
@@ -296,6 +320,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     calendarBottom,
     lanes: laneLayouts,
     grid,
+    bands,
     holidays,
     items,
     legend,
@@ -311,8 +336,7 @@ function setY(item: Item, y: number) {
     if (item.callout) {
       item.callout.box.y += dy;
       item.callout.text.y += dy;
-      item.callout.leader[1] += dy;
-      item.callout.leader[3] += dy;
+      for (let k = 1; k < item.callout.leader.length; k += 2) item.callout.leader[k] += dy;
     }
   } else {
     const top = Math.min(item.y - item.size / 2, item.labelBox.y);
@@ -404,16 +428,16 @@ function buildPieces(
       const cl = wrapLines(rawLines, calloutMax, base, measure);
       const cw = widest(cl, base, measure) + 2 * PAD_X;
       const ch = cl.length * lh + 2 * PAD_Y;
-      let cx = bx1 + 2.5;
+      let cx = bx1 + 2;
       let side: 'right' | 'left' = 'right';
       if (cx + cw > axis.x1) {
-        cx = bx0 - 2.5 - cw;
+        cx = bx0 - 2 - cw;
         side = 'left';
       }
       item.callout = {
         box: { x: cx, y: 0, w: cw, h: ch },
         text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
-        leader: side === 'right' ? [bx1, item.h / 2, cx, Math.min(ch, item.h) / 2] : [bx0, item.h / 2, cx + cw, Math.min(ch, item.h) / 2],
+        leader: calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
       };
       pieces.push({ item, fx0: Math.min(bx0, cx), fx1: Math.max(bx1, cx + cw), h: Math.max(item.h, ch), sortX: bx0, sortW: w });
     } else {
@@ -439,11 +463,16 @@ function milestonePiece(
   const style = box.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
   const color = MILESTONE_COLORS[style.color] ?? MILESTONE_COLORS.blue;
   const size = base * 1.6;
-  const lines = [...(style.showDate ? [formatShort(finishIso)] : []), ...wrapLines(rawLines, calloutMax, base, measure)];
-  const lw = widest(lines, base, measure) + 2 * PAD_X;
+  const flag = style.symbol === 'flag';
+  // Excel: datoen i vanlig skrift, teksten fet for rutermilepæler
+  const textLines = wrapLines(rawLines, calloutMax, base, measure, !flag);
+  const lines = [...(style.showDate ? [formatShort(finishIso)] : []), ...textLines];
+  const boldLines = [...(style.showDate ? [false] : []), ...textLines.map(() => !flag)];
+  const lw = Math.max(widest(lines.filter((_, i) => !boldLines[i]), base, measure), widest(lines.filter((_, i) => boldLines[i]), base, measure, true)) + 2 * PAD_X;
   const lhTot = lines.length * lh + 2 * PAD_Y;
-  let lx = x + size / 2 + 1;
-  if (lx + lw > rightLimit) lx = x - size / 2 - 1 - lw;
+  // Flagg: stangen står på datoen og teksten rett til høyre. Ruter: teksten litt til høyre for symbolet.
+  let lx = flag ? x + 0.4 : x + size / 2 + 1.5;
+  if (lx + lw > rightLimit) lx = flag ? x - 0.4 - lw : x - size / 2 - 1.5 - lw;
   const h = Math.max(size, lhTot);
   const item: MilestoneItem = {
     kind: 'milestone',
@@ -453,41 +482,98 @@ function milestonePiece(
     size,
     symbol: style.symbol === 'flag' ? 'flag' : 'diamond',
     color: color.fill,
-    label: { x: lx + PAD_X, y: PAD_Y + base * 0.85, lines, size: base, color: '#000000', anchor: 'start' },
+    label: { x: lx + PAD_X, y: PAD_Y + base * 0.85, lines, boldLines, size: base, color: '#000000', anchor: 'start' },
     labelBox: { x: lx, y: 0, w: lw, h: lhTot },
     verticalLine: !!style.verticalLine,
   };
-  return { item, fx0: Math.min(x - size / 2, lx), fx1: Math.max(x + size / 2, lx + lw), h, sortX: x - size / 2, sortW: 0 };
+  const sx0 = flag ? x - size : x - size / 2;
+  return { item, fx0: Math.min(sx0, lx), fx1: Math.max(x + size / 2, lx + lw), h, sortX: sx0, sortW: 0 };
 }
 
-function calendarRows(axis: TimeAxis, top: number, rowH: number, size: number, measure: Measure, bottom: boolean): CalendarRow[] {
+const MONTH_DARK = '#B4B4B4';
+const MONTH_LIGHT = '#F7F7F7';
+const BAND_DARK = '#EBEBEB';
+const BAND_LIGHT = '#F7F7F7';
+const monthIndex = (label: string) => Math.max(0, MONTHS_NB.indexOf(label));
+
+/** Annenhver måned mørk (jan, mar, mai …) i planområdet. */
+function monthBands(axis: TimeAxis): Band[] {
+  const bands: Band[] = [];
+  for (const c of axis.columns) {
+    const fill = monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
+    const last = bands[bands.length - 1];
+    if (last && last.fill === fill && Math.abs(last.x1 - c.x0) < 1e-6) last.x1 = c.x1;
+    else bands.push({ x0: c.x0, x1: c.x1, fill });
+  }
+  return bands;
+}
+
+/** Strek fra innsiden av boksen, ut til siden og bort til streken foran callout-teksten. */
+function calloutLeader(bx0: number, bx1: number, h: number, tx: number, side: 'right' | 'left'): number[] {
+  const w = bx1 - bx0;
+  const reach = Math.min(w * 0.7, 6);
+  if (side === 'right') {
+    const inX = Math.max(bx0 + 0.3, bx1 - reach);
+    return [inX, h * 0.62, bx1 + 0.8, h * 0.4, tx, h * 0.5];
+  }
+  const inX = Math.min(bx1 - 0.3, bx0 + reach);
+  return [inX, h * 0.62, bx0 - 0.8, h * 0.4, tx, h * 0.5];
+}
+
+function calendarRows(axis: TimeAxis, top: number, rowH: number, monthRowH: number, size: number, measure: Measure, bottom: boolean): CalendarRow[] {
   const group = (key: (c: (typeof axis.columns)[number]) => string) => {
     const cells: CalendarRow['cells'] = [];
     for (const c of axis.columns) {
       const k = key(c);
       const last = cells[cells.length - 1];
       if (last && last.label === k && last.x1 === c.x0) last.x1 = c.x1;
-      else cells.push({ x0: c.x0, x1: c.x1, label: k, strong: true });
+      else cells.push({ x0: c.x0, x1: c.x1, label: k, strong: true, fill: MONTH_DARK });
     }
     return cells;
   };
-  const fitLabel = (cells: CalendarRow['cells']) =>
+  const fitLabel = (cells: CalendarRow['cells'], rotated = false) =>
     cells.map((c) => {
-      const w = c.x1 - c.x0 - 0.6;
+      const w = rotated ? monthRowH - 1.5 : c.x1 - c.x0 - 0.6;
+      if (rotated && c.x1 - c.x0 < size * 1.1) return { ...c, label: '' };
       if (measure(c.label, size) <= w) return c;
       if (measure(c.label.slice(0, 1), size) <= w) return { ...c, label: c.label.slice(0, 1) };
       return { ...c, label: '' };
     });
 
   const years = fitLabel(group((c) => String(c.year)));
-  const rows: CalendarRow['cells'][] =
+  const shade = (label: string) => (monthIndex(label) % 2 === 0 ? MONTH_DARK : MONTH_LIGHT);
+  const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number }[] =
     axis.mode === 'month'
-      ? [years, fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false })))]
+      ? [
+          { cells: years, h: rowH, rotate: false, size: size * 1.15 },
+          {
+            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: shade(c.label) })), true),
+            h: monthRowH,
+            rotate: true,
+            size,
+          },
+        ]
       : [
-          years,
-          fitLabel(group((c) => `${c.monthLabel}|${c.year}`).map((c) => ({ ...c, label: c.label.split('|')[0] }))),
-          fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false }))),
+          { cells: years, h: rowH, rotate: false, size: size * 1.15 },
+          {
+            cells: fitLabel(group((c) => `${c.monthLabel}|${c.year}`).map((c) => ({ ...c, label: c.label.split('|')[0], fill: shade(c.label.split('|')[0]) }))),
+            h: rowH,
+            rotate: false,
+            size,
+          },
+          { cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: shade(c.monthLabel) }))), h: rowH, rotate: false, size },
         ];
   const ordered = bottom ? [...rows].reverse() : rows;
-  return ordered.map((cells, i) => ({ y: top + i * rowH, h: rowH, cells, size }));
+  let y = top;
+  return ordered.map((r) => {
+    const row = { y, h: r.h, cells: r.cells, size: r.size, rotate: r.rotate };
+    y += r.h;
+    return row;
+  });
+}
+
+/** dd.mm.åååå */
+function formatLong(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
 }
