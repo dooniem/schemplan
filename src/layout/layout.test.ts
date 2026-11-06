@@ -1,12 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { testform, testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
-import type { PlanFile } from '../format/types';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
 import { computeLayout, fitAlternatives, pack, packVariants, type Item } from './layout';
 import { approxMeasure } from './text';
 
-const example = (): PlanFile => JSON.parse(readFileSync(new URL('../../examples/eksempelplan.json', import.meta.url), 'utf8'));
+const example = testplan;
 
 const footprint = (it: Item) =>
   it.kind === 'box'
@@ -128,7 +127,7 @@ describe('Excel-utseende', () => {
   });
 });
 
-const shape = (name: string): PlanFile => JSON.parse(readFileSync(new URL(`../../examples/former/${name}.json`, import.meta.url), 'utf8'));
+const shape = testform;
 
 describe('lane-titler', () => {
   it('"|" i lane-navnet gir linjeskift', () => {

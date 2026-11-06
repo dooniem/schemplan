@@ -1,4 +1,4 @@
-// Tolker bokstekst slik DrawBox gjør i VBA.
+// Tolker bokstekst: linjeskift, loddrett strek og tvunget callout.
 export interface BoxText {
   lines: string[];
   forcedCallout: boolean;
@@ -14,7 +14,6 @@ export function splitLines(raw: string): string[] {
 export function parseBoxText(raw: string): BoxText {
   let s = raw;
   let forcedCallout = false;
-  // VBA bytter "|" før den sjekker "*", men "*" kan bare stå først, så rekkefølgen spiller ingen rolle
   if (s.startsWith('*')) {
     forcedCallout = true;
     s = s.slice(1);

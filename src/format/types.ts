@@ -1,5 +1,4 @@
-// Planformat v1: det VBA-eksporten (Generate in Web) skriver, og det appen leser.
-// Beskrevet for mennesker i docs/planformat.md. Endres formatet, økes `version`.
+// Planformat v1. Endres formatet, økes `version`.
 
 export const FORMAT_NAME = 'schemplan';
 export const FORMAT_VERSION = 1;
@@ -40,7 +39,7 @@ export interface PlanSettings {
     calloutMaxWidthCm: number;
     /** Background size fra Excel-løpet. Brukes ikke av web-appen, tas med for sammenligning. */
     excelWidthMultiplier: number;
-    /** Valgene fra appen, lagret i arbeidsfilen så planen åpnes likt igjen. Mangler i eksport fra Project. */
+    /** Valgene fra appen, lagret i arbeidsfilen så planen åpnes likt igjen. */
     paper?: 'A3' | 'A2' | 'A1';
     style?: 'excel' | 'ny';
     fitToSheet?: boolean;
@@ -72,7 +71,7 @@ export interface Lane {
   id: string;
   name: string;
   fill: HexColor | null;
-  /** false = skjult av lane-filter i userformen. */
+  /** false = skjult. */
   shown: boolean;
   boxes: Box[];
 }
@@ -80,7 +79,7 @@ export interface Lane {
 export type Rotation = 0 | 90 | -90;
 
 export interface Box {
-  /** "laneId_boxId", som pTwoID i VBA. */
+  /** "laneId_boxId". */
   id: string;
   /** Teksten slik den er lagret: "|" = linjeskift, "/|" = loddrett strek, "*" først = tvunget callout. */
   text: string;
@@ -92,7 +91,7 @@ export interface Box {
   callout?: 'auto' | 'on' | 'off';
   /** Hvilken side callouten står på (valgfritt). */
   calloutSide?: 'auto' | 'left' | 'right';
-  /** Det Excel ville tegnet. null = tegnes ikke (ingen gyldige aktiviteter, eller utenfor Flag20-utvalget). */
+  /** Det som tegnes. null = tegnes ikke. */
   resolved: ResolvedBox | null;
 }
 
