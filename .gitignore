@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+# Ekte prosjektdata skal aldri inn i repoet
+*.mpp
+*.xlsx
+*.xlsm
