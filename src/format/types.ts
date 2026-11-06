@@ -115,6 +115,8 @@ export interface Box {
   manual?: boolean;
   /** Lanen boksen lå i før den ble flyttet i appen (valgfritt). */
   fromLane?: string;
+  /** Overskriftsboks (valgfritt): teksten står øverst, og andre bokser kan ligge inne i den. */
+  header?: boolean;
 }
 
 export interface MilestoneStyle {

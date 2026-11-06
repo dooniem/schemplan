@@ -44,7 +44,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -61,6 +61,7 @@ export function resetBox(b: Box): void {
   delete b.height;
   delete b.top;
   delete b.hidden;
+  delete b.header;
 }
 
 /** Lanen boksen ligger i nå. */
@@ -223,6 +224,26 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     host.redraw();
     buildPanel();
     syncTools();
+  };
+
+  /** Gjør boksen til overskriftsboks: fast plass, og litt høyere så det er plass til bokser inne i den. */
+  const setHeader = (id: string, on: boolean) => {
+    const L = layoutNow;
+    const it = L?.items.find((i) => i.id === id);
+    const ln = it && laneAt(it.y);
+    commit((pl) => {
+      const b = findBox(pl, id);
+      if (!b) return;
+      if (!on) {
+        delete b.header;
+        return;
+      }
+      b.header = true;
+      if (L && it?.kind === 'box' && ln) {
+        if (b.top === undefined) b.top = lines(it.y - ln.top, L.unit);
+        b.height = Math.max(b.height ?? 0, lines(it.h, L.unit) + 2);
+      }
+    });
   };
 
   const copySelected = () => {
@@ -402,6 +423,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ),
       );
       panel.append(
+        segmented('Type', b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskriftsboks']], (v) => setHeader(b.id, v === 'header')),
+      );
+      if (b.header) panel.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
+      panel.append(
         segmented<Rotation>('Rotert tekst', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
           change((x) => {
             keepOriginal(x);
@@ -473,7 +498,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
     for (const ln of layoutNow.lanes) {
       if (ln.manual) line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { stroke: ACCENT, 'stroke-width': 3 });
-      line(layoutNow.laneTitleX, layoutNow.plot.x1, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
+      line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
     }
     const sel = layoutNow.items.find((i) => i.id === selected);
     if (sel?.kind === 'box') {
@@ -592,10 +617,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         g?.remove();
         if (Math.abs(y - r.y0) < 1e-6 && lane === home) return;
         selected = it.id;
+        // En overskriftsboks tar med seg boksene som ligger inne i den
+        const kids = it.kind === 'box' && it.header
+          ? L.items.filter((o) => {
+              if (o === it) return false;
+              const q = bounds(o);
+              return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
+            }).map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }))
+          : [];
         commit((plan) => {
-          if (lane !== home) moveBox(plan, it.id, lane.id);
-          const b = findBox(plan, it.id);
-          if (b) b.top = lines(y - lane.top, unit);
+          for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
+            if (lane !== home) moveBox(plan, m.id, lane.id);
+            const b = findBox(plan, m.id);
+            if (b) b.top = lines(y + m.dy - lane.top, unit);
+          }
         });
       },
     };
@@ -758,6 +793,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (box) {
       const id = box.id;
       menu.append(el('p', { class: 'pop-title' }, 'Boks'));
+      if (!box.resolved?.isMilestone) item('Overskriftsboks', 'Teksten øverst, og andre bokser kan ligge inne i den.', !!box.header, () => setHeader(id, !box.header));
       item('Kopier', 'Kopi rett under, som følger ikke Project.', null, () => {
         selected = id;
         copySelected();
