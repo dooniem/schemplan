@@ -5,6 +5,7 @@ import { a3Size, type Orientation } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatShort, MONTHS_NB, parseIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
+import { autoTextColor, derivedBorder } from './color';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -13,7 +14,11 @@ export interface LayoutOptions {
   textSizePt: number;
   /** Krymp teksten til planen får plass på arket. */
   fitToSheet: boolean;
+  /** 'excel' etterligner VBA-utskriften, 'ny' er lesbarhetsforslaget. */
+  style?: PlanStyle;
 }
+
+export type PlanStyle = 'excel' | 'ny';
 
 export interface TextBlock {
   x: number;
@@ -92,6 +97,8 @@ export interface LegendEntry {
   border: string | null;
   textColor: string;
   label: TextBlock;
+  /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
+  symbol?: 'diamond' | 'flag' | 'holiday';
 }
 
 export interface Layout {
@@ -114,6 +121,7 @@ export interface Layout {
   legend: LegendEntry[];
   /** Planen er høyere enn arket, selv etter krymping. */
   overflow: boolean;
+  style: PlanStyle;
 }
 
 const MARGIN = 8;
@@ -162,6 +170,7 @@ export function computeLayout(file: PlanFile, opts: LayoutOptions, measure: Meas
 
 function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: number): Layout {
   const { width: W, height: H } = a3Size(opts.orientation);
+  const ny = opts.style === 'ny';
   const base = opts.textSizePt * PT_TO_MM * scale;
   const lh = base * LINE_HEIGHT;
   const colors = new Map<string, TradeColor>(file.colors.map((c) => [c.name, c]));
@@ -180,13 +189,16 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const calSize = base * 0.9;
   const rowH = calSize * 1.8;
   // Månedsvisning: loddrette månedsnavn, raden må være høy nok til "Mai"/"Des"
-  const monthRowH = axis.mode === 'month' ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
+  const colW = axis.columns.length ? (axis.x1 - axis.x0) / axis.columns.length : 0;
+  // Ny stil: vannrette månedsnavn når de får plass
+  const rotateMonths = axis.mode === 'month' && !(ny && measure('Aug', calSize, true) + 1.5 <= colW);
+  const monthRowH = rotateMonths ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
   const calH = axis.mode === 'month' ? rowH + monthRowH : rowH * 3;
   const bottomCal = file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
   const lanes = file.lanes.filter((l) => l.shown);
-  const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor));
+  const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
 
   // ---- Lane-titler og innholdshøyde ----
   const titleLines = lanes.map((l) => wrapLines([l.name], LANE_TITLE_W - 2 * PAD_X - 2, base, measure, true));
@@ -201,7 +213,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Legend ----
   const usedTrades = new Set<string>();
   lanePieces.flat().forEach((p) => p.item.kind === 'box' && usedTrades.add((p.item as BoxItem & { trade?: string }).trade ?? ''));
-  const legendSize = base * 0.85;
+  const legendSize = base * (ny ? 1 : 0.85);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (file.plan.options.legend) {
@@ -212,9 +224,19 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
     let lx = MARGIN;
     let row = 0;
-    for (const c of file.colors) {
-      if (!usedTrades.has(c.name)) continue;
-      const w = sw + 1.5 + measure(c.name, legendSize) + 5;
+    const usedSymbols = new Set(lanePieces.flat().map((p) => (p.item.kind === 'milestone' ? p.item.symbol : '')));
+    const symbolEntries: { name: string; symbol: 'diamond' | 'flag' | 'holiday' }[] = ny
+      ? [
+          ...(usedSymbols.has('diamond') ? [{ name: 'Milepæl', symbol: 'diamond' as const }] : []),
+          ...(usedSymbols.has('flag') ? [{ name: 'Delmilepæl', symbol: 'flag' as const }] : []),
+          ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
+        ]
+      : [];
+    const tradeEntries = file.colors.filter((c) => usedTrades.has(c.name));
+    const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol }))];
+    for (const { c, symbol } of entries) {
+      const name = ny && c.name === '(none)' ? 'Uten fag' : c.name;
+      const w = sw + 1.5 + measure(name, legendSize) + 5;
       if (lx + w > lxMax && lx > MARGIN) {
         lx = MARGIN;
         row++;
@@ -225,9 +247,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         w: sw,
         h: sh,
         fill: c.fill ?? '#FFFFFF',
-        border: c.border,
+        border: ny ? derivedBorder(c.fill ?? '#FFFFFF') : c.border,
         textColor: c.text ?? '#000000',
-        label: { x: lx + sw + 1.5, y: row * rowStep + sh * 0.8, lines: [c.name], size: legendSize, color: '#000000', anchor: 'start' },
+        symbol,
+        label: { x: lx + sw + 1.5, y: row * rowStep + sh * 0.8, lines: [name], size: legendSize, color: '#000000', anchor: 'start' },
       });
       lx += w;
     }
@@ -260,12 +283,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       y1: y0 + h,
       fill: lane.fill,
       title: {
-        x: laneTitleX + LANE_TITLE_W / 2,
+        x: ny ? laneTitleX + PAD_X + 1 : laneTitleX + LANE_TITLE_W / 2,
         y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
         lines: tl,
         size: base,
         color: '#000000',
-        anchor: 'middle',
+        anchor: ny ? 'start' : 'middle',
         bold: true,
       },
     });
@@ -274,8 +297,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const plotBottom = y;
 
   // ---- Kalenderrader ----
-  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false);
-  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true) : [];
+  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny);
+  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny) : [];
   const legendTop = plotBottom + (bottomCal ? calH : 0) + 2;
   const legend = legendEntries.map((e) => ({
     ...e,
@@ -300,7 +323,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     strong: c.year !== axis.columns[i].year,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
-  const bands: Band[] = monthBands(axis);
+  const bands: Band[] = monthBands(axis, ny);
   const holidays = file.holidays
     .map((h) => ({ s: parseIso(h.start), e: parseIso(h.end) }))
     .filter((h) => h.e >= axis.start && h.s < axis.end)
@@ -325,6 +348,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     items,
     legend,
     overflow,
+    style: ny ? 'ny' : 'excel',
   };
 }
 
@@ -358,6 +382,7 @@ function buildPieces(
   measure: Measure,
   colors: Map<string, TradeColor>,
   noneColor: TradeColor,
+  ny = false,
 ): Piece[] {
   const pieces: Piece[] = [];
   const calloutMax = Math.max(15, file.plan.layout.calloutMaxWidthCm * 6);
@@ -376,7 +401,8 @@ function buildPieces(
 
     const c = colors.get(r.trade) ?? noneColor;
     const fill = c.fill ?? '#FFFFFF';
-    const textColor = c.text ?? '#000000';
+    // Ny stil: svart eller hvit tekst etter kontrast, kant i mørkere utgave av fyllet
+    const textColor = ny ? autoTextColor(fill) : (c.text ?? '#000000');
     const bx0 = axis.xStart(Math.max(s, axis.start));
     const bx1 = Math.max(bx0 + 0.6, axis.xEnd(Math.min(f, addDays(axis.end, -1))));
     const w = bx1 - bx0;
@@ -389,7 +415,7 @@ function buildPieces(
       y: 0,
       h: 0,
       fill,
-      border: c.border,
+      border: ny ? derivedBorder(fill) : c.border,
       text: null,
       callout: null,
       arrowLeft: s < axis.start,
@@ -437,7 +463,11 @@ function buildPieces(
       item.callout = {
         box: { x: cx, y: 0, w: cw, h: ch },
         text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
-        leader: calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
+        leader: ny
+          ? side === 'right'
+            ? [bx1, item.h / 2, cx, item.h / 2]
+            : [bx0, item.h / 2, cx + cw, item.h / 2]
+          : calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
       };
       pieces.push({ item, fx0: Math.min(bx0, cx), fx1: Math.max(bx1, cx + cw), h: Math.max(item.h, ch), sortX: bx0, sortW: w });
     } else {
@@ -497,10 +527,10 @@ const BAND_LIGHT = '#F7F7F7';
 const monthIndex = (label: string) => Math.max(0, MONTHS_NB.indexOf(label));
 
 /** Annenhver måned mørk (jan, mar, mai …) i planområdet. */
-function monthBands(axis: TimeAxis): Band[] {
+function monthBands(axis: TimeAxis, ny = false): Band[] {
   const bands: Band[] = [];
   for (const c of axis.columns) {
-    const fill = monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
+    const fill = ny ? (monthIndex(c.monthLabel) % 2 === 0 ? '#F3F3F3' : '#FFFFFF') : monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
     const last = bands[bands.length - 1];
     if (last && last.fill === fill && Math.abs(last.x1 - c.x0) < 1e-6) last.x1 = c.x1;
     else bands.push({ x0: c.x0, x1: c.x1, fill });
@@ -520,14 +550,26 @@ function calloutLeader(bx0: number, bx1: number, h: number, tx: number, side: 'r
   return [inX, h * 0.62, bx0 - 0.8, h * 0.4, tx, h * 0.5];
 }
 
-function calendarRows(axis: TimeAxis, top: number, rowH: number, monthRowH: number, size: number, measure: Measure, bottom: boolean): CalendarRow[] {
+function calendarRows(
+  axis: TimeAxis,
+  top: number,
+  rowH: number,
+  monthRowH: number,
+  size: number,
+  measure: Measure,
+  bottom: boolean,
+  rotateMonths = true,
+  ny = false,
+): CalendarRow[] {
+  const DARK = ny ? '#FFFFFF' : MONTH_DARK;
+  const LIGHT = ny ? '#FFFFFF' : MONTH_LIGHT;
   const group = (key: (c: (typeof axis.columns)[number]) => string) => {
     const cells: CalendarRow['cells'] = [];
     for (const c of axis.columns) {
       const k = key(c);
       const last = cells[cells.length - 1];
       if (last && last.label === k && last.x1 === c.x0) last.x1 = c.x1;
-      else cells.push({ x0: c.x0, x1: c.x1, label: k, strong: true, fill: MONTH_DARK });
+      else cells.push({ x0: c.x0, x1: c.x1, label: k, strong: true, fill: DARK });
     }
     return cells;
   };
@@ -541,15 +583,15 @@ function calendarRows(axis: TimeAxis, top: number, rowH: number, monthRowH: numb
     });
 
   const years = fitLabel(group((c) => String(c.year)));
-  const shade = (label: string) => (monthIndex(label) % 2 === 0 ? MONTH_DARK : MONTH_LIGHT);
+  const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
   const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number }[] =
     axis.mode === 'month'
       ? [
           { cells: years, h: rowH, rotate: false, size: size * 1.15 },
           {
-            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: shade(c.label) })), true),
+            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: shade(c.label) })), rotateMonths),
             h: monthRowH,
-            rotate: true,
+            rotate: rotateMonths,
             size,
           },
         ]
