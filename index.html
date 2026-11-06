@@ -21,12 +21,12 @@
       </section>
       <section class="panel">
         <h2>Åpne fil</h2>
-        <p class="muted">Velg en plan på din egen maskin. Filen leses bare lokalt i nettleseren.</p>
+        <p class="muted">Velg planfilen fra Generate in Web i Project. Filen leses bare lokalt i nettleseren.</p>
         <label class="button">
           Velg fil
-          <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
+          <input id="file-input" type="file" accept=".json,application/json" hidden />
         </label>
-        <p id="file-info" class="muted"></p>
+        <div id="file-info" aria-live="polite"></div>
       </section>
       <section class="panel">
         <h2>Ark</h2>

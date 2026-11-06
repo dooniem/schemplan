@@ -76,3 +76,10 @@ main {
 .sheet .paper { fill: #ffffff; stroke: var(--border); stroke-width: 0.5; }
 .sheet .margin { fill: none; stroke: var(--muted); stroke-width: 0.3; stroke-dasharray: 2 2; }
 .sheet .sheet-label { fill: #6b6b66; font-size: 8px; text-anchor: middle; }
+
+.error { color: #b3261e; font-weight: 600; }
+.ok { font-weight: 600; }
+.messages { margin: 4px 0 8px; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+.summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0; font-size: 14px; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; }

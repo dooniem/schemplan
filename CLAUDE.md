@@ -11,6 +11,9 @@ Publiseres som statisk side på GitHub Pages: https://dooniem.github.io/schempla
 - All layout i millimeter på A3-arket (1 SVG-enhet = 1 mm), samme mål på skjerm og i PDF.
 - Brukergrensesnitt og kommentarer på norsk.
 
+## Planformat
+Se `docs/planformat.md`. VBA-eksporten ligger i `vba/`, typene i `src/format/types.ts`.
+
 ## Kommandoer
 - `npm run dev` – utviklingsserver (uten CSP, fordi Vite trenger websocket)
 - `npm test` – enhetstester (Vitest)
