@@ -2,6 +2,7 @@
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
+import { CRITICAL_DEFAULT } from './layout/critical';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -116,6 +117,7 @@ export function copyBox(plan: PlanFile, id: string): Box | null {
   delete b.original;
   delete b.fromLane;
   delete b.hidden;
+  delete b.critical;
   lane.boxes.splice(lane.boxes.indexOf(src) + 1, 0, b);
   return b;
 }
@@ -245,6 +247,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const marksBtn = tools.querySelector<HTMLButtonElement>('#show-marks');
   /** Blå prikk på bokser brukeren har endret. Kan skjules for å se planen slik den blir. */
   let showMarks = true;
+  const criticalBtn = tools.querySelector<HTMLButtonElement>('#critical-mode');
+  /** Kritisk linje: klikk på en boks tar den med i linjen eller ut av den. */
+  let criticalMode = false;
 
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
@@ -254,6 +259,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
+    criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
+    sheet.classList.toggle('critical-mode', active && criticalMode);
   };
 
   /** Tar vare på planen før en endring, så den kan angres. */
@@ -515,6 +522,85 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
+  const setCritical = (ids: string[], on: boolean) =>
+    commit((pl) => ids.forEach((id) => {
+      const x = findBox(pl, id);
+      if (!x) return;
+      if (on) x.critical = true;
+      else delete x.critical;
+    }));
+
+  const CRITICAL_COLORS: [string, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#C000C0', 'Lilla'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
+  const buildCriticalPanel = (plan: PlanFile) => {
+    const head = el('div', { class: 'panel-head' });
+    head.append(el('h2', {}, 'Kritisk linje'));
+    const close = el('button', { type: 'button', class: 'icon', title: 'Ferdig (Esc)', 'aria-label': 'Ferdig' }, '×');
+    close.addEventListener('click', () => setCriticalMode(false));
+    head.append(close);
+    panel.append(head);
+    const marked = plan.lanes.flatMap((l) => l.boxes.filter((x) => x.critical));
+    panel.append(el('p', { class: 'muted small' }, marked.length
+      ? `${marked.length} ${marked.length === 1 ? 'boks' : 'bokser'} i linjen. Klikk en boks for å ta den med eller ut. Linjen følger datoene, så rekkefølgen du klikker i spiller ingen rolle.`
+      : 'Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge og går utenom teksten.'));
+    const style = plan.plan.layout.criticalLine ?? CRITICAL_DEFAULT;
+
+    const ww = el('div', { class: 'prop' });
+    const wl = el('label', { class: 'prop-label', for: 'critical-width' }, 'Tykkelse');
+    const wv = el('span', { class: 'muted' }, `${style.width.toFixed(1).replace('.', ',')} mm`);
+    const wr = el('div', { class: 'row' });
+    const range = el('input', { type: 'range', id: 'critical-width', min: '0.2', max: '3', step: '0.1', value: String(style.width) }) as HTMLInputElement;
+    // Ett angre-steg per dra i glideren; linjen tegnes på nytt mens du drar
+    let sliding = false;
+    range.addEventListener('input', () => {
+      const pl = host.getPlan();
+      if (!pl) return;
+      if (!sliding) snapshot();
+      sliding = true;
+      pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), width: Number(range.value) };
+      wv.textContent = `${Number(range.value).toFixed(1).replace('.', ',')} mm`;
+      host.redraw();
+    });
+    range.addEventListener('change', () => {
+      sliding = false;
+      syncTools();
+    });
+    wr.append(range, wv);
+    ww.append(wl, wr);
+    panel.append(ww);
+
+    const cw = el('div', { class: 'prop' });
+    cw.append(el('span', { class: 'prop-label' }, 'Farge'));
+    const sw = el('div', { class: 'swatches' });
+    for (const [c, name] of CRITICAL_COLORS) {
+      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(style.color.toUpperCase() === c) });
+      s.style.background = c;
+      s.addEventListener('click', () => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), color: c })));
+      sw.append(s);
+    }
+    cw.append(sw);
+    panel.append(cw);
+
+    const clear = el('button', { type: 'button', class: 'button', title: 'Tar alle boksene ut av linjen' }, 'Fjern linjen');
+    clear.disabled = !marked.length;
+    clear.addEventListener('click', () => setCritical(marked.map((x) => x.id), false));
+    const done = el('button', { type: 'button', class: 'button primary' }, 'Ferdig');
+    done.addEventListener('click', () => setCriticalMode(false));
+    const foot = el('div', { class: 'panel-foot row' });
+    foot.append(done, clear);
+    panel.append(foot);
+  };
+
+  const setCriticalMode = (on: boolean) => {
+    criticalMode = on;
+    selected = null;
+    selectedLane = null;
+    selectedTrade = null;
+    group = [];
+    buildPanel();
+    overlay();
+    syncTools();
+  };
+
   const buildGroupPanel = (plan: PlanFile) => {
     const boxes = group.map((id) => findBox(plan, id)).filter((x): x is Box => !!x);
     const head = el('div', { class: 'panel-head' });
@@ -595,8 +681,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill');
     reset.disabled = !boxes.some(isEdited);
     reset.addEventListener('click', () => commit((pl) => group.forEach((id) => resetBoxInPlan(pl, id))));
+    const inLine = boxes.every((x) => x.critical);
+    const crit = el('button', { type: 'button', class: 'button', title: 'Den kritiske linjen trekkes gjennom de merkede boksene' }, inLine ? 'Ta ut av kritisk linje' : 'Legg i kritisk linje');
+    crit.addEventListener('click', () => setCritical(boxes.map((x) => x.id), !inLine));
     const foot = el('div', { class: 'panel-foot row' });
-    foot.append(del, reset);
+    foot.append(del, reset, crit);
     panel.append(foot);
   };
 
@@ -668,6 +757,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.hidden = !active || !plan;
     panel.replaceChildren();
     if (!plan || !active) return;
+    if (criticalMode) return buildCriticalPanel(plan);
     if (!b && group.length > 1) return buildGroupPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
@@ -850,6 +940,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       if (b.rotation !== 0) panel.append(el('p', { class: 'hint' }, 'Rotert tekst får ikke callout.'));
     }
+    panel.append(segmented('Kritisk linje', b.critical ? 'on' : 'off', [['off', 'Ikke med'], ['on', 'Med']], (v) => setCritical([b.id], v === 'on')));
     const pw = el('div', { class: 'prop' });
     pw.append(el('span', { class: 'prop-label' }, 'Høyde og plass'));
     const prow = el('div', { class: 'row' });
@@ -894,6 +985,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         const rect = document.createElementNS(NS, 'rect');
         const pad = 0.6;
         for (const [k, v] of Object.entries({ x: r.x0 - pad, y: r.y0 - pad, width: r.x1 - r.x0 + 2 * pad, height: r.y1 - r.y0 + 2 * pad, fill: 'none', stroke: ACCENT, 'stroke-width': 0.5, rx: 0.6 }))
+          rect.setAttribute(k, String(v));
+        g.append(rect);
+      }
+      if (criticalMode && b?.critical) {
+        const rect = document.createElementNS(NS, 'rect');
+        for (const [k, v] of Object.entries({ x: r.x0 - 0.5, y: r.y0 - 0.5, width: r.x1 - r.x0 + 1, height: r.y1 - r.y0 + 1, fill: '#E00000', 'fill-opacity': 0.08, stroke: '#E00000', 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
@@ -1263,6 +1360,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     const g = itemOf(e);
+    if (criticalMode) {
+      const id = g?.getAttribute('data-id');
+      const b = id ? findBox(host.getPlan()!, id) : null;
+      if (b) setCritical([b.id], !b.critical);
+      return;
+    }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
     if (g && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(g.getAttribute('data-id')!);
@@ -1287,7 +1390,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.select();
   });
   sheet.addEventListener('pointerdown', (e) => {
-    if (!active || e.button !== 0 || !layoutNow) return;
+    if (!active || e.button !== 0 || !layoutNow || criticalMode) return;
     const t = e.target as Element;
     let d: Drag | null = null;
     if (t.closest('.box-handle')) {
@@ -1429,6 +1532,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   toggle.addEventListener('click', () => {
     active = !active;
     if (!active) {
+      criticalMode = false;
       selected = null;
       selectedLane = null;
       group = [];
@@ -1437,6 +1541,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     overlay();
     syncTools();
   });
+  criticalBtn?.addEventListener('click', () => setCriticalMode(!criticalMode));
   marksBtn?.addEventListener('click', () => {
     showMarks = !showMarks;
     marksBtn.setAttribute('aria-pressed', String(showMarks));
@@ -1463,6 +1568,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const mod = e.ctrlKey || e.metaKey;
     if (e.key === 'Escape') {
       if (inField) t.blur();
+      else if (criticalMode) setCriticalMode(false);
       else select(null);
       return;
     }

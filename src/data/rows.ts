@@ -16,6 +16,8 @@ export interface DataRow {
   /** Hva som er endret i appen, med vanlige ord. */
   changes: string[];
   hidden: boolean;
+  /** Med i den kritiske linjen. */
+  critical: boolean;
   movedFrom: string;
   taskIds: string;
   taskNames: string;
@@ -69,6 +71,7 @@ export function planRows(plan: PlanFile): DataRow[] {
         edited: changes.length > 0 || !!l.hidden,
         changes: l.hidden ? [...changes, 'lanen er skjult'] : changes,
         hidden: !!b.hidden || !!l.hidden,
+        critical: !!b.critical,
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         taskIds: b.taskIds.join(', '),
         taskNames: b.taskIds.map((id) => names.get(id) ?? '').filter(Boolean).join('; '),
@@ -91,6 +94,7 @@ export const COLUMNS: { key: keyof DataRow; title: string; width: number; date?:
   { key: 'edited', title: 'Redigert', width: 9 },
   { key: 'changes', title: 'Endret', width: 30 },
   { key: 'hidden', title: 'Skjult', width: 8 },
+  { key: 'critical', title: 'Kritisk linje', width: 12 },
   { key: 'movedFrom', title: 'Flyttet fra', width: 20 },
   { key: 'fill', title: 'Farge', width: 9 },
   { key: 'taskIds', title: 'Aktivitets-ID', width: 14 },

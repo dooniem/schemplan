@@ -106,6 +106,11 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(tc) || !Object.values(tc).every((v) => isObj(v) && hex(v.fill) && (v.text === undefined || hex(v.text))))
           err('plan.layout.tradeColors', 'må ha fill (og eventuelt text) som farge #RRGGBB for hvert fag');
       }
+      if (lay.criticalLine !== undefined) {
+        const c = lay.criticalLine;
+        if (!isObj(c) || !(typeof c.width === 'number' && c.width > 0 && c.width <= 10) || !(typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color)))
+          err('plan.layout.criticalLine', 'må ha width (mm, over 0 og høyst 10) og color som #RRGGBB');
+      }
     }
     const opt = plan.options;
     if (!isObj(opt)) err('plan.options', 'mangler');
@@ -202,7 +207,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         optPos(b, 'height', bp);
-        for (const k of ['hidden', 'manual', 'header'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        for (const k of ['hidden', 'manual', 'header', 'critical'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
         if (b.milestoneStyle !== undefined) {
           const m = b.milestoneStyle;

@@ -265,3 +265,7 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .data-table td:nth-child(3), .data-table td:nth-child(4) { font-variant-numeric: tabular-nums; }
 .data-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 1px solid var(--border); border-radius: 2px; vertical-align: -1px; }
 .work[hidden] { display: none; }
+
+/* Kritisk linje: klikk tar boksen med eller ut */
+.sheet-host.critical-mode g[data-id] { cursor: pointer; }
+.panel input[type='range'] { flex: 1; min-width: 0; accent-color: var(--accent); }

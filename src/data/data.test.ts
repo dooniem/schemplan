@@ -77,7 +77,7 @@ describe('Excel-fil', () => {
     expect([...files.keys()]).toEqual(['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/worksheets/sheet1.xml']);
     const sheet = files.get('xl/worksheets/sheet1.xml')!;
     expect(sheet.match(/<row /g)).toHaveLength(rows.length + 1);
-    expect(sheet).toContain('<autoFilter ref="A1:N');
+    expect(sheet).toContain('<autoFilter ref="A1:O');
     // Datoer lagres som tall med datoformat
     expect(sheet).toContain(`<c r="C2" s="2"><v>${excelDate(rows[0].start)}</v></c>`);
   });

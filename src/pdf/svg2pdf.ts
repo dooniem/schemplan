@@ -2,6 +2,10 @@
 // Bare det renderPlan bruker er støttet: rect, line, path (M L C Z), text/tspan, g,
 // fill-opacity, rotate() på tekst og skravurmønsteret for ferier.
 import {
+  LineCapStyle,
+  LineJoinStyle,
+  setLineCap,
+  setLineJoin,
   PDFDocument,
   PDFFont,
   PDFName,
@@ -98,6 +102,8 @@ function paint(c: Ctx, el: Element): 'f' | 's' | 'b' | null {
   const fo = Number(attr(el, 'fill-opacity') ?? '1');
   if (fillC) c.ops.push(setFillingRgbColor(...fillC));
   if (strokeC && sw > 0) c.ops.push(setStrokingRgbColor(...strokeC), setLineWidth(sw));
+  if (strokeC && attr(el, 'stroke-linejoin') === 'round') c.ops.push(setLineJoin(LineJoinStyle.Round));
+  if (strokeC && attr(el, 'stroke-linecap') === 'round') c.ops.push(setLineCap(LineCapStyle.Round));
   if (fo < 1) c.ops.push(setGraphicsState(alphaState(c, fo)));
   const s = !!strokeC && sw > 0;
   return fillC && s ? 'b' : fillC ? 'f' : s ? 's' : null;
