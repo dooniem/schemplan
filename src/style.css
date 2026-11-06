@@ -238,3 +238,30 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .search input:disabled { cursor: not-allowed; }
 .search-count { font-size: 12px; white-space: nowrap; }
 .search-count:empty { display: none; }
+
+/* Datafanen */
+.data-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
+.data-view[hidden] { display: none; }
+.data-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.data-filter { display: inline-flex; align-items: center; gap: 8px; }
+.data-filter span { color: var(--muted); }
+.data-filter input { font: inherit; width: 240px; max-width: 60vw; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.data-bar .check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#data-status { margin: 0; padding: 0 12px; }
+#data-status:empty { display: none; }
+.data-scroll { flex: 1; min-height: 0; overflow: auto; }
+.data-table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: max-content; min-width: 100%; }
+.data-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); border-bottom: 1px solid var(--border); text-align: left; padding: 0; }
+.data-table th button { font: inherit; font-weight: 600; padding: 6px 8px; width: 100%; text-align: left; border: 0; background: none; color: var(--text); cursor: pointer; white-space: nowrap; }
+.data-table th button:hover { background: var(--bg); }
+.data-table th[aria-sort='ascending'] button::after { content: ' ▲'; color: var(--accent); }
+.data-table th[aria-sort='descending'] button::after { content: ' ▼'; color: var(--accent); }
+.data-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+.data-table tbody tr[data-id] { cursor: pointer; }
+.data-table tbody tr[data-id]:hover td { background: var(--bg); }
+.data-table tr.is-hidden td { color: var(--muted); cursor: default; }
+.data-table td.yes { color: var(--accent); font-weight: 600; }
+.data-table td.empty { color: var(--muted); padding: 16px 8px; }
+.data-table td:nth-child(3), .data-table td:nth-child(4) { font-variant-numeric: tabular-nums; }
+.swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 1px solid var(--border); border-radius: 2px; vertical-align: -1px; }
+.work[hidden] { display: none; }

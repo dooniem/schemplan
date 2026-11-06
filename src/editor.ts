@@ -26,6 +26,8 @@ export interface Editor {
   /** Bytter ut hele planen (f.eks. etter oppdatering fra Project), så det kan angres. */
   replacePlan(p: PlanFile): void;
   markSaved(): void;
+  /** Slår på redigering og velger boksen (f.eks. fra datafanen). */
+  focusBox(id: string): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string) => {
@@ -1519,6 +1521,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     },
     markSaved() {
       dirty = false;
+    },
+    focusBox(id) {
+      if (!active) toggle.click();
+      select(id);
     },
     replacePlan(p) {
       snapshot();

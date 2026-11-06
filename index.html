@@ -22,6 +22,11 @@
         Innstillinger
       </button>
       <span class="sep" aria-hidden="true"></span>
+      <div class="tbgroup" role="group" aria-label="Visning">
+        <button type="button" id="view-plan" class="tb" aria-pressed="true" title="Vis planen">Plan</button>
+        <button type="button" id="view-data" class="tb" aria-pressed="false" disabled title="Tabell over alle bokser med datoer og lane, kan eksporteres til Excel">Data</button>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
       <button type="button" id="edit" class="tb" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon">Rediger</button>
       <div class="tbgroup" id="edit-tools" role="group" aria-label="Redigering" hidden>
         <button type="button" id="undo" class="tb icon" title="Angre (Ctrl+Z)" aria-label="Angre" disabled>↶</button>
@@ -119,6 +124,7 @@
       <p><strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument.<br /><strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved.</p>
       <p>Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte. Shift + dobbeltklikk viser hele arket.</p>
       <p>Redigering: klikk en boks for å velge den, dobbeltklikk for å skrive. Ctrl+Z angrer, Ctrl+Y gjør om, Esc fjerner valget.</p>
+      <p><strong>Data</strong>: tabell over alle bokser med lane, tekst og datoer slik planen er nå. Filtrer, sorter, klikk en rad for å finne boksen, og eksporter til Excel.</p>
       <p class="muted">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
     </div>
 
@@ -139,6 +145,20 @@
         <div id="sheet" class="sheet-host landscape"></div>
         <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
       </div>
+      <section id="data-view" class="data-view no-print" aria-label="Data" hidden>
+        <div class="data-bar">
+          <label class="data-filter"><span>Filter</span><input type="search" id="data-filter" placeholder="f.eks. lanenavn eller fag" /></label>
+          <label class="check"><input type="checkbox" id="data-edited" /> Bare redigerte</label>
+          <label class="check"><input type="checkbox" id="data-hidden" /> Vis skjulte</label>
+          <span id="data-count" class="muted" aria-live="polite"></span>
+          <span class="spacer"></span>
+          <button type="button" id="data-export" class="tb primary" title="Lagrer radene som vises nå som en Excel-fil">Eksporter til Excel</button>
+        </div>
+        <p id="data-status" class="muted small" aria-live="polite"></p>
+        <div class="data-scroll">
+          <table id="data-table" class="data-table"></table>
+        </div>
+      </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
