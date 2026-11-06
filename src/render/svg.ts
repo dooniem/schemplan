@@ -214,6 +214,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
 
   if (L.logo) node('image', { x: L.logo.x, y: L.logo.y, width: L.logo.w, height: L.logo.h, href: L.logo.href, preserveAspectRatio: 'xMinYMid meet' }, svg);
   text(L.title, svg);
+  if (L.headerRight) text(L.headerRight, svg);
   text(L.subtitle, svg);
   return svg;
 }

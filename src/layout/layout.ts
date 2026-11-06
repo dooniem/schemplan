@@ -30,6 +30,10 @@ export interface LayoutOptions {
 }
 
 export const DEFAULT_TITLE_PT = 16;
+/** Største tekst i forklaringen og datoen nederst, i punkter. */
+export const LEGEND_MAX_PT = 10;
+/** Bredden på fargeruten i forklaringen, i forhold til tekststørrelsen. */
+const SWATCH_W = 1.8;
 
 export type PlanStyle = 'excel' | 'ny';
 
@@ -133,6 +137,10 @@ export interface Layout {
   textScale: number;
   textSizePt: number;
   title: TextBlock;
+  /** Tekst øverst til høyre, hvis noen. */
+  headerRight?: TextBlock;
+  /** Nedre kant av toppfeltet med overskrift, logo og tekst til høyre, i mm. */
+  headerBottom: number;
   subtitle: TextBlock;
   plot: { x0: number; x1: number; y0: number; y1: number };
   laneTitleX: number;
@@ -317,8 +325,16 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const titleSize = (opts.titleSizePt ?? DEFAULT_TITLE_PT) * PT_TO_MM;
   const lg = file.plan.layout.logo;
   const logoH = lg ? Math.max(titleSize * 1.2, 6) : 0;
-  const headerH = Math.max(titleSize * 1.4, logoH + 1.5);
-  const title: TextBlock = { x: W / 2, y: MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
+  // Toppteksten til høyre: litt mindre enn overskriften, midtstilt i høyden i toppfeltet
+  const rightLines = (file.plan.layout.headerRight ?? '').split('|').map((s) => s.trim());
+  while (rightLines.length && !rightLines[rightLines.length - 1]) rightLines.pop();
+  const rightSize = titleSize * 0.6;
+  const rightH = rightLines.length * rightSize * LINE_HEIGHT;
+  const headerH = Math.max(titleSize * 1.4, logoH + 1.5, rightH + 1.5);
+  const title: TextBlock = { x: W / 2, y: MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.layout.title ?? file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
+  const headerRight: TextBlock | undefined = rightLines.length
+    ? { x: W - MARGIN, y: MARGIN + (headerH - rightH) / 2 + rightSize * 0.9, lines: rightLines, size: rightSize, color: '#000000', anchor: 'end' }
+    : undefined;
   const logo = lg ? { x: MARGIN, y: MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
@@ -374,7 +390,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   lanePieces.flat().forEach((p) => p.item.kind === 'box' && usedTrades.add((p.item as BoxItem & { trade?: string }).trade ?? ''));
   // Som overskriften krymper ikke bunnteksten (legend og dato) når planen skaleres ned
   // for å få plass, ellers blir den uleselig på store planer
-  const legendSize = opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85);
+  // men har et tak, så forklaringen ikke tar mer plass enn den trenger når planen forstørres
+  const legendSize = Math.min(opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85), LEGEND_MAX_PT * PT_TO_MM);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (opts.showLegend ?? file.plan.options.legend) {
@@ -393,8 +410,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     // ned mot minste tekststørrelse. Får den fortsatt ikke plass, brytes den til flere rader.
     const room = lxMax - MARGIN;
     const widthAt = (size: number, gap: number) =>
-      names.reduce((sum, n) => sum + size * 2.2 + 1.5 + measure(n, size) + gap, 0) - gap;
-    let gap = 5;
+      names.reduce((sum, n) => sum + size * SWATCH_W + 1.5 + measure(n, size) + gap, 0) - gap;
+    let gap = 4;
     let size = legendSize;
     if (widthAt(size, gap) > room) gap = 3;
     if (widthAt(size, gap) > room) {
@@ -405,11 +422,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       const perSize = (widthAt(legendSize, gap) - fixed) / legendSize;
       size = Math.max(floor, (room - fixed) / perSize);
     }
-    const sw = size * 2.2;
-    const sh = size * 1.3;
+    const sw = size * SWATCH_W;
+    const sh = size * 1.1;
     const rowStep = size * 2;
     // Krympet forklaring står på samme grunnlinje som datoen
-    const dy = (legendSize - size) * 1.3 * 0.8;
+    const dy = (legendSize - size) * 1.1 * 0.8;
     let lx = MARGIN;
     let row = 0;
     for (const [i, { c, symbol, trade }] of entries.entries()) {
@@ -496,7 +513,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const legendSizeMm = legendSize;
   const subtitle: TextBlock = {
     x: x1,
-    y: legendTop + legendSizeMm * 1.3 * 0.8,
+    y: legendTop + legendSizeMm * 1.1 * 0.8,
     lines: [formatLong(file.exportedAt.slice(0, 10))],
     size: legendSizeMm,
     color: '#000000',
@@ -524,6 +541,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     textScale: scale,
     textSizePt: opts.textSizePt * scale,
     title,
+    headerRight,
+    headerBottom: MARGIN + headerH,
     subtitle,
     plot: { x0, x1, y0: plotTop, y1: plotBottom },
     laneTitleX,

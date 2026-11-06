@@ -177,7 +177,8 @@ describe('tilpasning til arket', () => {
     const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 12, fitToSheet: true, minTextPt: 4 };
     const L = computeLayout(shape('middels'), opts, approxMeasure);
     expect(L.textSizePt).toBeLessThan(12);
-    expect(L.subtitle.size).toBeCloseTo(12 * 0.3528 * 0.85, 2);
+    // 12 pt er over taket på 10 pt, så datoen står på taket uansett krymping
+    expect(L.subtitle.size).toBeCloseTo(10 * 0.35278, 2);
     // Forklaringen kan krympe for å holde seg på én rad, men aldri under planteksten
     for (const e of L.legend) expect(e.label.size).toBeGreaterThanOrEqual(L.textSizePt * 0.3528 - 1e-6);
   });
@@ -395,5 +396,33 @@ describe('overskriftsboks', () => {
     expect(c.y).toBeGreaterThan(h.y);
     expect(c.y + c.h).toBeLessThanOrEqual(h.y + h.h + 1e-6);
     expect(hi).toBeLessThan(L.items.findIndex((i) => i.id === '2_2'));
+  });
+});
+
+describe('forklaringen', () => {
+  it('har et tak på tekststørrelsen også når planen forstørres', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 14, fitToSheet: true, minTextPt: 4 };
+    const L = computeLayout(shape('mange-lanes-faa-bokser'), { ...opts, paper: 'A1' }, approxMeasure);
+    for (const e of L.legend) expect(e.label.size).toBeLessThanOrEqual(10 * 0.35278 + 1e-6);
+    expect(L.subtitle.size).toBeLessThanOrEqual(10 * 0.35278 + 1e-6);
+  });
+});
+
+describe('topptekst', () => {
+  const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 9, fitToSheet: true };
+  it('overskrift fra appen går foran den fra Project', () => {
+    const p = structuredClone(shape('middels'));
+    p.plan.layout.title = 'Ny overskrift';
+    expect(computeLayout(p, opts, approxMeasure).title.lines).toEqual(['Ny overskrift']);
+  });
+  it('tekst til høyre er høyrejustert i toppfeltet, og | gir linjeskift', () => {
+    const p = structuredClone(shape('middels'));
+    expect(computeLayout(p, opts, approxMeasure).headerRight).toBeUndefined();
+    p.plan.layout.headerRight = 'Prosjekt 1234|Rev. B';
+    const L = computeLayout(p, opts, approxMeasure);
+    expect(L.headerRight?.lines).toEqual(['Prosjekt 1234', 'Rev. B']);
+    expect(L.headerRight?.anchor).toBe('end');
+    expect(L.headerRight!.x).toBeLessThan(L.width);
+    expect(L.headerRight!.y + L.headerRight!.size * 1.18).toBeLessThanOrEqual(L.headerBottom);
   });
 });
