@@ -13,6 +13,8 @@ import { createSearch } from './search';
 import { createEditor } from './editor';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
+import { createDataView } from './data/view';
+import { cell, COLUMNS } from './data/rows';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -62,6 +64,69 @@ const editor = createEditor(
 );
 viewer.setIgnore((e) => editor.owns(e));
 const search = createSearch($<HTMLInputElement>('#search'), $('#search-count'), () => plan);
+// Datafanen følger planen: tabellen tegnes på nytt etter hver tegning mens den vises
+const dataSection = $<HTMLElement>('#data-view');
+const dataView = createDataView(dataSection, () => plan, (id) => {
+  showView('plan');
+  editor.focusBox(id);
+  host.querySelector(`g[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center', inline: 'center' });
+});
+function showView(v: 'plan' | 'data') {
+  dataSection.hidden = v !== 'data';
+  $<HTMLElement>('.work').hidden = v === 'data';
+  $('#view-plan').setAttribute('aria-pressed', String(v === 'plan'));
+  $('#view-data').setAttribute('aria-pressed', String(v === 'data'));
+  if (v === 'data') dataView.refresh();
+}
+$('#view-plan').addEventListener('click', () => showView('plan'));
+$('#view-data').addEventListener('click', () => showView('data'));
+$<HTMLButtonElement>('#data-export').addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  const msg = $('#data-status');
+  const rows = dataView.visibleRows();
+  if (!plan || !rows.length) return;
+  const name = `${baseName}_data.xlsx`;
+  const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  btn.disabled = true;
+  try {
+    const { buildXlsx } = await import('./data/xlsx');
+    const bytes = buildXlsx('Data', COLUMNS, rows.map((r) => COLUMNS.map((c) => cell(r, c.key))));
+    const saved = await saveFile(name, new Blob([bytes as BlobPart], { type: mime }), 'Excel-arbeidsbok', mime, '.xlsx');
+    if (saved) {
+      msg.textContent = `Lagret ${saved} (${rows.length} rader).`;
+      msg.className = 'ok small';
+    }
+  } catch (err) {
+    msg.textContent = `Excel-filen ble ikke lagret: ${(err as Error).message}`;
+    msg.className = 'error small';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/** Lagre som-dialog der nettleseren har den, ellers vanlig nedlasting. Gir filnavnet, eller null hvis avbrutt. */
+async function saveFile(name: string, blob: Blob, description: string, mime: string, ext: string): Promise<string | null> {
+  const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+  if (picker) {
+    try {
+      const handle = await picker({ suggestedName: name, types: [{ description, accept: { [mime]: [ext] } }] });
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      return handle.name;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return null;
+      throw e;
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  return name;
+}
+
 const status = el('p', '', 'muted small');
 const saveStatus = el('p', '', 'muted small');
 const suggest = el('div', '', 'suggest small');
@@ -86,6 +151,7 @@ function draw() {
   viewer.show(svg, layout.width, layout.height);
   editor.afterDraw(svg, layout);
   search.afterDraw(svg);
+  if (!dataSection.hidden) dataView.refresh();
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
@@ -219,7 +285,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input', '#search']) $<HTMLButtonElement>(id).disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#update-input', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
   draw();
 }
 
