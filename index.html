@@ -8,69 +8,99 @@
   </head>
   <body>
     <header class="topbar no-print">
-      <h1>Skjematisk plan</h1>
-      <span id="version" class="muted"></span>
+      <span class="brand">Skjematisk plan <span id="version" class="muted"></span></span>
+      <label class="tb primary" title="Åpne en planfil (.json) eller en arbeidsfil (.pdf)">
+        Åpne
+        <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
+      </label>
+      <button type="button" class="tb menu" popovertarget="menu-sheet" title="Ark, retning, stil og tekststørrelse"><span id="sheet-summary">A3 liggende</span></button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" id="edit" class="tb" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon">Rediger</button>
+      <div class="tbgroup" id="edit-tools" role="group" aria-label="Redigering" hidden>
+        <button type="button" id="undo" class="tb icon" title="Angre (Ctrl+Z)" aria-label="Angre" disabled>↶</button>
+        <button type="button" id="redo" class="tb icon" title="Gjør om (Ctrl+Y)" aria-label="Gjør om" disabled>↷</button>
+        <button type="button" id="show-marks" class="tb" aria-pressed="true" title="Vis eller skjul de blå prikkene på bokser du har endret">Vis endret</button>
+        <button type="button" id="reset-all" class="tb" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
+      </div>
       <span class="spacer"></span>
-      <span class="muted small">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></span>
+      <div class="tbgroup" role="group" aria-label="Zoom">
+        <button type="button" id="zoom-out" class="tb icon" title="Zoom ut" aria-label="Zoom ut" disabled>−</button>
+        <button type="button" id="zoom-fit" class="tb" title="Vis hele arket (Shift + dobbeltklikk)"><span id="zoom-level">100 %</span></button>
+        <button type="button" id="zoom-in" class="tb icon" title="Zoom inn (eller Ctrl + hjul, dobbeltklikk)" aria-label="Zoom inn">+</button>
+        <button type="button" id="zoom-width" class="tb icon" title="La arket fylle bredden av vinduet" aria-label="Fyll bredden">↔</button>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" id="save-menu" class="tb primary menu" popovertarget="menu-save" disabled>Lagre</button>
+      <button type="button" class="tb icon" popovertarget="menu-help" title="Hjelp" aria-label="Hjelp">?</button>
     </header>
-    <main>
-      <section class="panel no-print">
-        <div class="toolbar">
-          <label class="button primary">
-            Åpne planfil
-            <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
-          </label>
-          <div class="group" role="group" aria-label="Arkretning">
-            <button type="button" data-orientation="landscape" aria-pressed="true">Liggende</button>
-            <button type="button" data-orientation="portrait" aria-pressed="false">Stående</button>
-          </div>
-          <label class="field">Ark
-            <select id="paper">
-              <option value="A3" selected>A3</option>
-              <option value="A2">A2</option>
-              <option value="A1">A1</option>
-            </select>
-          </label>
-          <div class="group" role="group" aria-label="Høyde på lanes">
-            <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
-            <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
-          </div>
-          <div class="group" role="group" aria-label="Stil">
-            <button type="button" data-style="excel" aria-pressed="true" title="Slik Excel-løsningen tegner">Excel-lik</button>
-            <button type="button" data-style="ny" aria-pressed="false" title="Forslag med bedre lesbarhet">Ny</button>
-          </div>
-          <label class="field">Tekst
-            <input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /> pt
-          </label>
-          <label class="field">Tilpasning
-            <select id="fit-mode">
-              <option value="sheet" selected>Tilpass til arket</option>
-              <option value="fixed">Fast tekststørrelse</option>
-            </select>
-          </label>
-          <label class="field" id="min-text-field">Minst
-            <input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt
-          </label>
-          <button type="button" id="edit" class="button" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon">Rediger</button>
-          <div class="group" id="edit-tools" role="group" aria-label="Redigering" hidden>
-            <button type="button" id="undo" title="Angre (Ctrl+Z)" disabled>Angre</button>
-            <button type="button" id="redo" title="Gjør om (Ctrl+Y)" disabled>Gjør om</button>
-            <button type="button" id="reset-all" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
-          </div>
-          <span class="spacer"></span>
-          <div class="group" role="group" aria-label="Zoom">
-            <button type="button" id="zoom-out" title="Zoom ut" aria-label="Zoom ut" disabled>−</button>
-            <button type="button" id="zoom-fit" title="Vis hele arket (Shift + dobbeltklikk)"><span id="zoom-level">100 %</span></button>
-            <button type="button" id="zoom-width" title="La arket fylle bredden av vinduet">Fyll bredden</button>
-            <button type="button" id="zoom-in" title="Zoom inn (eller Ctrl + hjul, dobbeltklikk)" aria-label="Zoom inn">+</button>
-          </div>
-          <button type="button" id="save-work" class="button primary" disabled title="PDF med planen innebygd. Åpne den her igjen for å redigere og oppdatere. Internt dokument.">Lagre arbeidsfil</button>
-          <button type="button" id="save-share" class="button" disabled title="Vanlig PDF til deling og vedlegg. Planen er ikke med, så den kan ikke redigeres videre i appen.">Lagre PDF for deling</button>
-          <button type="button" id="print" class="button" disabled>Skriv ut</button>
+
+    <div id="menu-sheet" class="pop no-print" popover>
+      <div class="pop-row">
+        <span class="pop-label">Retning</span>
+        <div class="group" role="group" aria-label="Arkretning">
+          <button type="button" data-orientation="landscape" aria-pressed="true">Liggende</button>
+          <button type="button" data-orientation="portrait" aria-pressed="false">Stående</button>
         </div>
-        <p class="muted small">Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen. <strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument. <strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved. Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte.</p>
-        <div id="file-info" aria-live="polite"></div>
-      </section>
+      </div>
+      <label class="pop-row"><span class="pop-label">Ark</span>
+        <select id="paper">
+          <option value="A3" selected>A3</option>
+          <option value="A2">A2</option>
+          <option value="A1">A1</option>
+        </select>
+      </label>
+      <div class="pop-row">
+        <span class="pop-label">Lanes</span>
+        <div class="group" role="group" aria-label="Høyde på lanes">
+          <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
+          <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+        </div>
+      </div>
+      <div class="pop-row">
+        <span class="pop-label">Stil</span>
+        <div class="group" role="group" aria-label="Stil">
+          <button type="button" data-style="excel" aria-pressed="true" title="Slik Excel-løsningen tegner">Excel-lik</button>
+          <button type="button" data-style="ny" aria-pressed="false" title="Forslag med bedre lesbarhet">Ny</button>
+        </div>
+      </div>
+      <label class="pop-row"><span class="pop-label">Tilpasning</span>
+        <select id="fit-mode">
+          <option value="sheet" selected>Tilpass til arket</option>
+          <option value="fixed">Fast tekststørrelse</option>
+        </select>
+      </label>
+      <label class="pop-row"><span class="pop-label">Tekst</span>
+        <span><input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /> pt</span>
+      </label>
+      <label class="pop-row" id="min-text-field"><span class="pop-label">Minst</span>
+        <span><input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /> pt</span>
+      </label>
+    </div>
+
+    <div id="menu-save" class="pop pop-menu no-print" popover>
+      <button type="button" id="save-work" disabled>
+        <strong>Lagre arbeidsfil</strong>
+        <span>PDF med planen innebygd. Åpne den her igjen for å redigere. Internt dokument.</span>
+      </button>
+      <button type="button" id="save-share" disabled>
+        <strong>Lagre PDF for deling</strong>
+        <span>Vanlig PDF til å sende ut og legge ved. Kan ikke redigeres videre.</span>
+      </button>
+      <button type="button" id="print" disabled>
+        <strong>Skriv ut</strong>
+      </button>
+    </div>
+
+    <div id="menu-help" class="pop pop-text no-print" popover>
+      <p>Åpne en planfil fra Project (.json) eller en arbeidsfil (.pdf). Filen leses bare lokalt i nettleseren og lagres ingen steder av appen.</p>
+      <p><strong>Arbeidsfil</strong>: PDF du kan åpne her igjen og fortsette å redigere. Internt dokument.<br /><strong>PDF for deling</strong>: vanlig PDF til å sende ut og legge ved.</p>
+      <p>Zoom med Ctrl + hjul eller dobbeltklikk, og dra for å flytte. Shift + dobbeltklikk viser hele arket.</p>
+      <p>Redigering: klikk en boks for å velge den, dobbeltklikk for å skrive. Ctrl+Z angrer, Ctrl+Y gjør om, Esc fjerner valget.</p>
+      <p class="muted">Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
+    </div>
+
+    <main>
+      <div id="file-info" class="statusbar no-print" aria-live="polite"></div>
       <div class="work">
         <div id="sheet" class="sheet-host landscape"></div>
         <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
