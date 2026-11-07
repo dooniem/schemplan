@@ -13,6 +13,8 @@ export interface EditorHost {
   getPlan(): PlanFile | null;
   setPlan(p: PlanFile): void;
   redraw(): void;
+  /** Finner tettest rekkefølge i lanene (null for en lane der tidligst først er like tett). */
+  arrange(p: PlanFile, laneIds: string[]): Map<string, string[] | null>;
 }
 
 export interface Editor {
@@ -147,7 +149,7 @@ export const LANE_COLORS = ['#FFFFFF', '#DDDDDD', '#8DCDF8', '#BEE5B0', '#FCC781
 
 /** Har brukeren endret lanen? */
 export function isLaneEdited(l: Lane): boolean {
-  return !!(l.original || l.height || l.hidden || l.manual);
+  return !!(l.original || l.height || l.hidden || l.manual || l.order);
 }
 
 /** Tar vare på navn og farge fra Project før første endring. */
@@ -164,6 +166,7 @@ export function resetLane(l: Lane): void {
   delete l.original;
   delete l.height;
   delete l.hidden;
+  delete l.order;
 }
 
 /** Ny lane laget i appen, rett etter lanen med id `afterId` (eller først). */
@@ -244,6 +247,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let svgNow: SVGSVGElement | null = null;
   let layoutNow: Layout | null = null;
   let redrawTimer = 0;
+  /** Bokser som ble flyttet av siste omplassering, markert til den godtas eller angres. */
+  let arrangeMoved = new Set<string>();
+  const arrangeBar = document.querySelector<HTMLElement>('#arrange-bar');
 
   const undoBtn = tools.querySelector<HTMLButtonElement>('#undo')!;
   const redoBtn = tools.querySelector<HTMLButtonElement>('#redo')!;
@@ -274,6 +280,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const snapshot = () => {
     const plan = host.getPlan();
     if (!plan) return;
+    // En ny endring godtar omplasseringen
+    endArrange();
     past.push(structuredClone(plan));
     if (past.length > MAX_HISTORY) past.shift();
     future = [];
@@ -395,6 +403,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const prev = from.pop();
     if (!plan || !prev) return;
+    endArrange();
     to.push(structuredClone(plan));
     host.setPlan(prev);
     dirty = true;
@@ -801,6 +810,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit.',
           'Dra i den blå streken under valgt boks for å endre høyden.',
           'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
+          'Omplasser i verktøylinjen pakker lanene på nytt, f.eks. etter at du har endret høyder. Angre om du ikke liker forslaget.',
         ]],
         ['Lanes', [
           'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
@@ -1001,6 +1011,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
+      if (arrangeMoved.has(it.id)) {
+        const rect = document.createElementNS(NS, 'rect');
+        for (const [k, v] of Object.entries({ x: r.x0 - 0.4, y: r.y0 - 0.4, width: r.x1 - r.x0 + 0.8, height: r.y1 - r.y0 + 0.8, fill: ACCENT, 'fill-opacity': 0.1, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
+          rect.setAttribute(k, String(v));
+        g.append(rect);
+      }
       if (showMarks && b && isEdited(b)) {
         const c = document.createElementNS(NS, 'circle');
         for (const [k, v] of Object.entries({ cx: r.x1, cy: r.y0, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
@@ -1120,8 +1136,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           if (!b) return;
           if (h <= minH + 1e-6) delete b.height;
           else b.height = lines(h, unit);
-          // Boksen blir stående der den er; de andre flyttes rundt den
-          if (b.top === undefined) b.top = lines(it.y - lane.top, unit);
+          // Høyden alene fester ikke boksen: appen finner plassen i lanen som før
         });
       },
     };
@@ -1630,6 +1645,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   toggle.addEventListener('click', () => {
     active = !active;
     if (!active) {
+      endArrange();
       criticalMode = false;
       selected = null;
       selectedLane = null;
@@ -1660,6 +1676,108 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     buildPanel();
     syncTools();
   });
+  // ---- Omplasser ----
+  const arrangeMenu = document.querySelector<HTMLElement>('#menu-arrange');
+  const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
+
+  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene). */
+  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string } => {
+    const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
+    if (group.length > 1) {
+      const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
+      return { laneIds: lanes.map((l) => l.id), boxIds: new Set(group), text: `Gjelder ${lanes.length === 1 ? 'lanen' : `de ${lanes.length} lanene`} med de ${group.length} valgte boksene. Bare de valgte løsnes.` };
+    }
+    const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
+    if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
+    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for å omplassere bare dem.' };
+  };
+
+  function endArrange() {
+    if (arrangeBar) arrangeBar.hidden = true;
+    if (!arrangeMoved.size) return;
+    arrangeMoved = new Set();
+    overlay();
+  }
+
+  const showArrangeBar = (text: string, canUndo: boolean) => {
+    if (!arrangeBar) return;
+    arrangeBar.querySelector('.arrange-text')!.textContent = text;
+    arrangeBar.querySelector<HTMLButtonElement>('#arrange-keep')!.textContent = canUndo ? 'Behold' : 'Lukk';
+    arrangeBar.querySelector<HTMLButtonElement>('#arrange-undo')!.hidden = !canUndo;
+    arrangeBar.hidden = false;
+  };
+
+  /** Plass i lanen, i tekstlinjer, så før og etter kan sammenlignes selv om teksten har endret størrelse. */
+  const placeOf = (L: Layout) => {
+    const out = new Map<string, { lane: string; y: number; side: string }>();
+    for (const it of L.items) {
+      const r = bounds(it);
+      const ln = L.lanes.find((l) => r.y0 >= l.y0 - 1e-6 && r.y0 < l.y1 + 1e-6);
+      // Callout eller milepælstekst på den andre siden regnes også som flyttet
+      const side = it.kind === 'box' ? (it.callout ? (it.callout.box.x < it.x0 ? 'v' : 'h') : '') : it.labelBox.x < it.x ? 'v' : 'h';
+      if (ln) out.set(it.id, { lane: ln.id, y: (r.y0 - ln.top) / L.unit, side });
+    }
+    return out;
+  };
+  // Litt slingringsmonn: teksten kan bli større etter omplassering og bryte annerledes
+  const samePlace = (a: { lane: string; y: number; side: string } | undefined, b: { lane: string; y: number; side: string }) =>
+    !!a && a.lane === b.lane && a.side === b.side && Math.abs(a.y - b.y) < 0.5;
+  const contentLines = (L: Layout, ids: Set<string>) => L.lanes.filter((l) => ids.has(l.id)).reduce((s, l) => s + l.minH / L.unit, 0);
+
+  const arrange = (mode: 'tight' | 'chrono') => {
+    const plan = host.getPlan();
+    const before = layoutNow;
+    if (!plan || !before) return;
+    endArrange();
+    const { laneIds, boxIds } = arrangeScope(plan);
+    const next = structuredClone(plan);
+    for (const id of laneIds) {
+      const l = findLane(next, id);
+      if (!l) continue;
+      delete l.order;
+      if (arrangeUnpin?.checked) for (const b of l.boxes) if (!b.header && (!boxIds || boxIds.has(b.id))) delete b.top;
+    }
+    if (mode === 'tight')
+      for (const [id, order] of host.arrange(next, laneIds)) {
+        const l = findLane(next, id);
+        if (l && order) l.order = order;
+      }
+    if (JSON.stringify(next) === JSON.stringify(plan)) {
+      showArrangeBar(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede tidligst først.', false);
+      return;
+    }
+    snapshot();
+    typingSession = false;
+    host.setPlan(next);
+    host.redraw();
+    const after = layoutNow!;
+    const p0 = placeOf(before);
+    const p1 = placeOf(after);
+    const ids = new Set(laneIds);
+    const laneOfItem = new Map(next.lanes.flatMap((l) => l.boxes.map((b) => [b.id, l.id] as const)));
+    arrangeMoved = new Set([...p1].filter(([id, pos]) => ids.has(laneOfItem.get(id) ?? '') && !samePlace(p0.get(id), pos)).map(([id]) => id));
+    const saved = contentLines(before, ids) - contentLines(after, ids);
+    const n = arrangeMoved.size;
+    const moved = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} flyttet` : 'Ingen bokser flyttet';
+    const lower = saved > 0.05 ? `, ${saved.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} ${saved < 1.05 && saved > 0.95 ? 'linje' : 'linjer'} lavere` : '';
+    const grew = after.textSizePt > before.textSizePt + 1e-6 ? `. Teksten ble ${after.textSizePt.toLocaleString('nb-NO')} pt` : '';
+    showArrangeBar(`${moved}${lower}${grew}.`, true);
+    overlay();
+    buildPanel();
+    syncTools();
+  };
+
+  arrangeMenu?.addEventListener('toggle', (e) => {
+    if ((e as ToggleEvent).newState !== 'open') return;
+    const plan = host.getPlan();
+    const scope = document.querySelector('#arrange-scope');
+    if (plan && scope) scope.textContent = arrangeScope(plan).text;
+  });
+  document.querySelector('#arrange-tight')?.addEventListener('click', () => arrange('tight'));
+  document.querySelector('#arrange-chrono')?.addEventListener('click', () => arrange('chrono'));
+  arrangeBar?.querySelector('#arrange-keep')?.addEventListener('click', () => endArrange());
+  arrangeBar?.querySelector('#arrange-undo')?.addEventListener('click', () => undo());
+
   document.addEventListener('keydown', (e) => {
     if (!active) return;
     const t = e.target as HTMLElement;
@@ -1708,6 +1826,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       overlay();
     },
     reset() {
+      endArrange();
       past = [];
       future = [];
       dirty = false;

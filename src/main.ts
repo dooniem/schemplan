@@ -4,7 +4,7 @@ import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile } from './format/types';
 import { setPrintPage } from './print';
-import { computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
+import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
@@ -65,6 +65,7 @@ const editor = createEditor(
     getPlan: () => plan,
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
+    arrange: (p, laneIds) => arrangeLanes(p, opts, measure, laneIds),
   },
   host,
   $<HTMLElement>('#panel'),

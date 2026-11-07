@@ -140,6 +140,7 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
 /** Navn, farge, høyde og skjuling fra appen. Navn og farge gjelder så lenge Project ikke har endret dem. */
 function mergeLane(ol: Lane, lane: Lane, report: MergeReport) {
   if (ol.height) lane.height = ol.height;
+  if (ol.order) lane.order = ol.order;
   if (ol.hidden) lane.hidden = true;
   if (!ol.original) return;
   const orig = { name: lane.name, fill: lane.fill };

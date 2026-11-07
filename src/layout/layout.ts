@@ -309,7 +309,7 @@ export function fitAlternatives(file: PlanFile, opts: LayoutOptions, measure: Me
   return out;
 }
 
-function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: number): Layout {
+function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: number, arrange?: ArrangeRequest): Layout {
   const { width: W, height: H } = sheetSize(opts.paper ?? 'A3', opts.orientation);
   const ny = opts.style === 'ny';
   const base = opts.textSizePt * PT_TO_MM * scale;
@@ -368,7 +368,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
 
   // ---- Lane-titler og innholdshøyde ----
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
-  const contentH = lanes.map((_, i) => {
+  const contentH = lanes.map((lane, i) => {
+    if (arrange?.lanes.has(lane.id)) {
+      const found = tightestOrder(lanePieces[i]);
+      arrange.out.set(lane.id, found && found.map((p) => p.item.id));
+      if (found) lanePieces[i] = found;
+    }
     const pieces = lanePieces[i];
     const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
     pieces.forEach((p, j) => {
@@ -749,7 +754,89 @@ function buildPieces(
   }
 
   // Tidligst først, lengst først ved lik start
-  return pieces.sort((a, b) => a.sortX - b.sortX || b.sortW - a.sortW);
+  pieces.sort((a, b) => a.sortX - b.sortX || b.sortW - a.sortW);
+  return lane.order ? applyOrder(pieces, lane.order) : pieces;
+}
+
+/**
+ * Rekkefølgen valgt med «Omplasser» gjelder for boksene den kjenner. Bokser som er kommet til
+ * siden, settes inn etter startdato: foran den første kjente boksen som starter senere.
+ */
+export function applyOrder<T extends { item: { id: string }; sortX: number }>(pieces: T[], order: string[]): T[] {
+  const pos = new Map(order.map((id, i) => [id, i]));
+  const out = pieces.filter((p) => pos.has(p.item.id)).sort((a, b) => pos.get(a.item.id)! - pos.get(b.item.id)!);
+  for (const p of pieces) {
+    if (pos.has(p.item.id)) continue;
+    const at = out.findIndex((q) => pos.has(q.item.id) && q.sortX > p.sortX + 1e-9);
+    out.splice(at < 0 ? out.length : at, 0, p);
+  }
+  return out;
+}
+
+interface ArrangeRequest {
+  lanes: Set<string>;
+  /** Ny rekkefølge per lane, eller null når den vanlige (tidligst først) er like tett. */
+  out: Map<string, string[] | null>;
+}
+
+/**
+ * Finner rekkefølgen som gir lavest lane når brikkene pakkes en etter en. Starter med vanlig
+ * rekkefølge og noen andre gode gjetninger, og prøver så å flytte én brikke om gangen.
+ * Ved lik høyde foretrekkes rekkefølgen som ligger nærmest tidligst først, så planen er lett å lese.
+ * Gir null når ingen rekkefølge er lavere enn den vanlige. Brikker med fast plass står der de står.
+ */
+export function tightestOrder<P extends { alts?: { fx0: number; fx1: number; h: number }[]; fx0: number; fx1: number; h: number; lock?: number; band?: number }>(pieces: P[], gap = GAP): P[] | null {
+  const free = pieces.map((_, i) => i).filter((i) => pieces[i].lock === undefined);
+  if (free.length < 2) return null;
+  const fixed = pieces.map((_, i) => i).filter((i) => pieces[i].lock !== undefined);
+  const height = (seq: number[]) => {
+    const order = [...fixed, ...seq];
+    const placed = packVariants(order.map((i) => ({ alts: pieces[i].alts ?? [pieces[i]], lock: pieces[i].lock, band: pieces[i].band })), gap);
+    return placed.reduce((m, r, j) => Math.max(m, r.y + (pieces[order[j]].alts ?? [pieces[order[j]]])[r.k].h), 0);
+  };
+  const rank = new Map(free.map((i, k) => [i, k]));
+  const drift = (seq: number[]) => seq.reduce((s, i, k) => s + Math.abs(k - rank.get(i)!), 0);
+  const EPS = 1e-6;
+  const better = (a: { h: number; d: number }, b: { h: number; d: number }) => a.h < b.h - EPS || (a.h <= b.h + EPS && a.d < b.d);
+  const footprint = (i: number) => pieces[i].fx1 - pieces[i].fx0;
+  const starts = [
+    free,
+    [...free].sort((a, b) => pieces[b].h - pieces[a].h || rank.get(a)! - rank.get(b)!),
+    [...free].sort((a, b) => footprint(b) * pieces[b].h - footprint(a) * pieces[a].h || rank.get(a)! - rank.get(b)!),
+  ];
+  const base = { seq: free, h: height(free), d: 0 };
+  let best = base;
+  for (const seq of starts.slice(1)) {
+    const c = { seq, h: height(seq), d: drift(seq) };
+    if (better(c, best)) best = c;
+  }
+  // Fast frø, så samme plan alltid gir samme forslag
+  let seed = 12345 + free.length;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let cur = best;
+  const tries = Math.min(3000, 150 * free.length);
+  for (let t = 0; t < tries; t++) {
+    const seq = cur.seq.slice();
+    const [moved] = seq.splice(Math.floor(rnd() * seq.length), 1);
+    seq.splice(Math.floor(rnd() * (seq.length + 1)), 0, moved);
+    const c = { seq, h: height(seq), d: drift(seq) };
+    // Godta like høye forslag av og til, så søket ikke står fast
+    if (better(c, cur) || (Math.abs(c.h - cur.h) <= EPS && rnd() < 0.1)) cur = c;
+    if (better(cur, best)) best = cur;
+  }
+  if (best.h >= base.h - EPS) return null;
+  return [...fixed, ...best.seq].map((i) => pieces[i]);
+}
+
+/**
+ * Omplasserer lanene: finner for hver lane rekkefølgen som gir lavest lane, ved tekststørrelsen
+ * planen har nå. Gir null for en lane når vanlig rekkefølge er like tett.
+ */
+export function arrangeLanes(file: PlanFile, opts: LayoutOptions, measure: Measure, laneIds: string[]): Map<string, string[] | null> {
+  const scale = computeLayout(file, opts, measure).textScale;
+  const out = new Map<string, string[] | null>();
+  layoutAt(file, opts, measure, scale, { lanes: new Set(laneIds), out });
+  return out;
 }
 
 function milestonePiece(

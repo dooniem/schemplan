@@ -32,6 +32,7 @@
         <button type="button" id="undo" class="tb icon" title="Angre (Ctrl+Z)" aria-label="Angre" disabled>↶</button>
         <button type="button" id="redo" class="tb icon" title="Gjør om (Ctrl+Y)" aria-label="Gjør om" disabled>↷</button>
         <button type="button" id="critical-mode" class="tb" aria-pressed="false" title="Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M3 6h6v6h6v6h6"/></svg>Kritisk linje</button>
+        <button type="button" id="arrange-menu" class="tb menu" popovertarget="menu-arrange" title="Plasser boksene i lanene på nytt, f.eks. etter at du har endret høyder">Omplasser</button>
         <button type="button" id="show-marks" class="tb" aria-pressed="true" title="Vis eller skjul de blå prikkene på bokser du har endret">Vis endret</button>
         <button type="button" id="reset-all" class="tb" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
       </div>
@@ -126,6 +127,22 @@
         </div>
         <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>
       </section>
+    </div>
+
+    <div id="menu-arrange" class="pop pop-menu arrange-menu no-print" popover aria-label="Omplasser">
+      <p class="pop-hint" id="arrange-scope">Gjelder hele planen.</p>
+      <button type="button" id="arrange-tight">
+        <strong>Tettest</strong>
+        <span>Så lave lanes som mulig. Boksene kan komme i en annen rekkefølge enn tidligst først.</span>
+      </button>
+      <button type="button" id="arrange-chrono">
+        <strong>Tidligst først</strong>
+        <span>Som når planen lages: boksen som starter først, ligger øverst.</span>
+      </button>
+      <label class="set-switch">
+        <span><strong>Løsne festede bokser også</strong><small>Ellers blir bokser du har dratt på plass stående. Overskriftsbokser blir alltid stående.</small></span>
+        <input type="checkbox" id="arrange-unpin" role="switch" />
+      </label>
     </div>
 
     <div id="menu-save" class="pop pop-menu no-print" popover>
@@ -235,6 +252,11 @@
           <span class="focus-text"></span>
           <button type="button" class="tb focus-only-btn" aria-pressed="false" hidden title="Skjuler boksene i de andre fagene. Gjelder bare visningen, ikke PDF-en.">Vis bare dette faget</button>
           <button type="button" class="icon" title="Fjern fremhevingen (Esc)" aria-label="Fjern fremhevingen">×</button>
+        </div>
+        <div id="arrange-bar" class="focus-bar arrange-bar no-print" role="status" hidden>
+          <span class="arrange-text"></span>
+          <button type="button" class="tb" id="arrange-keep">Behold</button>
+          <button type="button" class="tb" id="arrange-undo" title="Tilbake til slik det var (Ctrl+Z)">Angre</button>
         </div>
         <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
       </div>

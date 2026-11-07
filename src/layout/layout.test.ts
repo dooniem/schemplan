@@ -2,7 +2,7 @@ import { testform, testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
-import { computeLayout, fitAlternatives, pack, packVariants, type Item } from './layout';
+import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, tightestOrder, type Item } from './layout';
 import { approxMeasure } from './text';
 
 const example = testplan;
@@ -424,5 +424,58 @@ describe('topptekst', () => {
     expect(L.headerRight?.anchor).toBe('end');
     expect(L.headerRight!.x).toBeLessThan(L.width);
     expect(L.headerRight!.y + L.headerRight!.size * 1.18).toBeLessThanOrEqual(L.headerBottom);
+  });
+});
+
+describe('omplassering', () => {
+  const piece = (id: string, fx0: number, fx1: number, h: number, lock?: number) => ({ item: { id }, sortX: fx0, fx0, fx1, h, lock });
+  const height = (ps: ReturnType<typeof piece>[]) => {
+    const r = packVariants(ps.map((p) => ({ alts: [p], lock: p.lock })));
+    return Math.max(...r.map((x, i) => x.y + ps[i].h));
+  };
+
+  it('finner en tettere rekkefølge enn tidligst først', () => {
+    // Tidligst først legger B under A, så C må under B: 4 høy. Med B først blir det 3.
+    const ps = [piece('A', 0, 4, 1), piece('B', 2, 8, 1), piece('C', 5, 10, 2)];
+    expect(height(ps)).toBeCloseTo(4);
+    const found = tightestOrder(ps)!;
+    expect(found).not.toBeNull();
+    expect(height(found)).toBeCloseTo(3);
+    // Samme svar hver gang
+    expect(tightestOrder(ps)!.map((p) => p.item.id)).toEqual(found.map((p) => p.item.id));
+  });
+
+  it('beholder vanlig rekkefølge når den allerede er tettest', () => {
+    expect(tightestOrder([piece('A', 0, 4, 1), piece('B', 2, 8, 1), piece('C', 9, 12, 1)])).toBeNull();
+  });
+
+  it('flytter ikke bokser med fast plass', () => {
+    const ps = [piece('A', 0, 4, 1), piece('B', 2, 8, 1, 3), piece('C', 5, 10, 2)];
+    const found = tightestOrder(ps);
+    const order = found ?? ps;
+    const r = packVariants(order.map((p) => ({ alts: [p], lock: p.lock })));
+    expect(r[order.findIndex((p) => p.item.id === 'B')].y).toBeCloseTo(3);
+  });
+
+  it('nye bokser settes inn etter startdato i en lagret rekkefølge', () => {
+    const ps = [piece('A', 0, 4, 1), piece('N', 3, 5, 1), piece('B', 2, 8, 1), piece('C', 5, 10, 2)].sort((a, b) => a.sortX - b.sortX);
+    expect(applyOrder(ps, ['C', 'B', 'A']).map((p) => p.item.id)).toEqual(['N', 'C', 'B', 'A']);
+    expect(applyOrder(ps, ['B', 'C', 'A']).map((p) => p.item.id)).toEqual(['B', 'N', 'C', 'A']);
+  });
+
+  it('lagret rekkefølge brukes i tegningen og gir aldri overlapp', () => {
+    const p = example();
+    const opts = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: false };
+    const orders = arrangeLanes(p, opts, approxMeasure, p.lanes.map((l) => l.id));
+    expect(orders.size).toBe(p.lanes.filter((l) => l.shown).length);
+    const lane = p.lanes[1];
+    lane.order = lane.boxes.map((b) => b.id).reverse();
+    const L = computeLayout(p, opts, approxMeasure);
+    for (const a of L.items) for (const b of L.items) {
+      if (a === b) continue;
+      const fa = footprint(a), fb = footprint(b);
+      const overlap = fa.x0 < fb.x1 - 1e-6 && fb.x0 < fa.x1 - 1e-6 && fa.y0 < fb.y1 - 1e-6 && fb.y0 < fa.y1 - 1e-6;
+      expect(overlap, `${a.id} og ${b.id}`).toBe(false);
+    }
   });
 });

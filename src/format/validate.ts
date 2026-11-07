@@ -192,6 +192,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needBool(l, 'shown', p);
       optPos(l, 'height', p);
       for (const k of ['hidden', 'manual'] as const) if (l[k] !== undefined && typeof l[k] !== 'boolean') err(`${p}.${k}`, 'må være true eller false');
+      if (l.order !== undefined && !(Array.isArray(l.order) && l.order.every((x: unknown) => typeof x === 'string'))) err(`${p}.order`, 'må være en liste med boks-id-er');
       if (l.original !== undefined) {
         const o = l.original;
         if (!isObj(o) || typeof o.name !== 'string' || !(o.fill === null || (typeof o.fill === 'string' && /^#[0-9A-Fa-f]{6}$/.test(o.fill))))
