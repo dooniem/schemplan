@@ -65,7 +65,7 @@ const editor = createEditor(
     getPlan: () => plan,
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
-    arrange: (p, laneIds) => arrangeLanes(p, opts, measure, laneIds),
+    arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
   },
   host,
   $<HTMLElement>('#panel'),
