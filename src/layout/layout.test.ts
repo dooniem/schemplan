@@ -463,10 +463,29 @@ describe('omplassering', () => {
     expect(applyOrder(ps, ['B', 'C', 'A']).map((p) => p.item.id)).toEqual(['B', 'N', 'C', 'A']);
   });
 
+  it('overskriftsboks flyttes med boksene inni', () => {
+    const p = example();
+    const opts = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: false };
+    const [head, kid] = p.lanes[1].boxes;
+    Object.assign(head, { header: true, height: 5, top: 3 });
+    kid.top = 5;
+    const L = computeLayout(p, opts, approxMeasure);
+    const hb = L.items.find((i) => i.id === head.id) as Extract<Item, { kind: 'box' }>;
+    const kb = L.items.find((i) => i.id === kid.id) as Extract<Item, { kind: 'box' }>;
+    // Boksen ligger inne i overskriftsboksen
+    expect(kb.x0).toBeGreaterThanOrEqual(hb.x0 - 1e-6);
+    expect(kb.y + kb.h).toBeLessThanOrEqual(hb.y + hb.h + 1e-6);
+    delete head.top;
+    delete kid.top;
+    const { pins } = arrangeLanes(p, opts, approxMeasure, [p.lanes[1].id], { mode: 'chrono', groups: new Map([[head.id, [{ id: kid.id, dy: 2 }]]]) });
+    expect(pins.get(head.id)).toBe(0);
+    expect(pins.get(kid.id)).toBe(2);
+  });
+
   it('lagret rekkefølge brukes i tegningen og gir aldri overlapp', () => {
     const p = example();
     const opts = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: false };
-    const orders = arrangeLanes(p, opts, approxMeasure, p.lanes.map((l) => l.id));
+    const { orders } = arrangeLanes(p, opts, approxMeasure, p.lanes.map((l) => l.id));
     expect(orders.size).toBe(p.lanes.filter((l) => l.shown).length);
     const lane = p.lanes[1];
     lane.order = lane.boxes.map((b) => b.id).reverse();

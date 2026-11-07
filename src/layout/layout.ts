@@ -370,9 +370,27 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
   const contentH = lanes.map((lane, i) => {
     if (arrange?.lanes.has(lane.id)) {
-      const found = tightestOrder(lanePieces[i]);
+      // Boksene inne i en overskriftsboks som flyttes, følger den og pakkes ikke for seg
+      const kidIds = new Set([...arrange.groups.values()].flat().map((k) => k.id));
+      const kids = lanePieces[i].filter((p) => kidIds.has(p.item.id));
+      let work = lanePieces[i].filter((p) => !kidIds.has(p.item.id));
+      // Overskriftsboksen sperrer da i hele sin høyde, som en vanlig boks
+      for (const p of work) if (arrange.groups.has(p.item.id)) delete p.band;
+      const found = arrange.mode === 'tight' ? tightestOrder(work) : null;
+      if (found) work = found;
       arrange.out.set(lane.id, found && found.map((p) => p.item.id));
-      if (found) lanePieces[i] = found;
+      if (work.some((p) => arrange.groups.has(p.item.id))) {
+        // Overskriftsbokser har alltid fast plass: der den havnet, og boksene inni like langt ned som før
+        const placed = packVariants(work.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
+        work.forEach((p, j) => {
+          const group = arrange.groups.get(p.item.id);
+          if (!group) return;
+          const top = Math.round((placed[j].y / lh) * 100) / 100;
+          arrange.pins.set(p.item.id, top);
+          for (const k of group) arrange.pins.set(k.id, Math.round((top + k.dy) * 100) / 100);
+        });
+      }
+      lanePieces[i] = [...work, ...kids];
     }
     const pieces = lanePieces[i];
     const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
@@ -773,10 +791,25 @@ export function applyOrder<T extends { item: { id: string }; sortX: number }>(pi
   return out;
 }
 
+export interface ArrangeOptions {
+  mode: 'tight' | 'chrono';
+  /** Overskriftsbokser som skal flyttes, med boksene inni og hvor langt ned i den de står (tekstlinjer). */
+  groups?: Map<string, { id: string; dy: number }[]>;
+}
+
+export interface ArrangeResult {
+  /** Ny rekkefølge per lane, eller null når den vanlige (tidligst først) er like tett. */
+  orders: Map<string, string[] | null>;
+  /** Ny fast plass (tekstlinjer) for overskriftsboksene som ble flyttet og boksene inni dem. */
+  pins: Map<string, number>;
+}
+
 interface ArrangeRequest {
   lanes: Set<string>;
-  /** Ny rekkefølge per lane, eller null når den vanlige (tidligst først) er like tett. */
+  mode: 'tight' | 'chrono';
+  groups: Map<string, { id: string; dy: number }[]>;
   out: Map<string, string[] | null>;
+  pins: Map<string, number>;
 }
 
 /**
@@ -832,11 +865,12 @@ export function tightestOrder<P extends { alts?: { fx0: number; fx1: number; h: 
  * Omplasserer lanene: finner for hver lane rekkefølgen som gir lavest lane, ved tekststørrelsen
  * planen har nå. Gir null for en lane når vanlig rekkefølge er like tett.
  */
-export function arrangeLanes(file: PlanFile, opts: LayoutOptions, measure: Measure, laneIds: string[]): Map<string, string[] | null> {
+export function arrangeLanes(file: PlanFile, opts: LayoutOptions, measure: Measure, laneIds: string[], how: ArrangeOptions = { mode: 'tight' }): ArrangeResult {
   const scale = computeLayout(file, opts, measure).textScale;
   const out = new Map<string, string[] | null>();
-  layoutAt(file, opts, measure, scale, { lanes: new Set(laneIds), out });
-  return out;
+  const pins = new Map<string, number>();
+  layoutAt(file, opts, measure, scale, { lanes: new Set(laneIds), mode: how.mode, groups: how.groups ?? new Map(), out, pins });
+  return { orders: out, pins };
 }
 
 function milestonePiece(

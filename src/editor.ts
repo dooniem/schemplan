@@ -1,7 +1,7 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
-import { MILESTONE_COLORS, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
+import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
@@ -14,7 +14,7 @@ export interface EditorHost {
   setPlan(p: PlanFile): void;
   redraw(): void;
   /** Finner tettest rekkefølge i lanene (null for en lane der tidligst først er like tett). */
-  arrange(p: PlanFile, laneIds: string[]): Map<string, string[] | null>;
+  arrange(p: PlanFile, laneIds: string[], how: ArrangeOptions): ArrangeResult;
 }
 
 export interface Editor {
@@ -1731,17 +1731,49 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     endArrange();
     const { laneIds, boxIds } = arrangeScope(plan);
     const next = structuredClone(plan);
+    const unpin = !!arrangeUnpin?.checked;
+    // Overskriftsbokser flyttes med boksene som ligger inni dem
+    const groups = new Map<string, { id: string; dy: number }[]>();
+    if (unpin)
+      for (const id of laneIds) {
+        const l = findLane(next, id);
+        for (const b of l?.boxes ?? []) {
+          if (!b.header || (boxIds && !boxIds.has(b.id))) continue;
+          const it = before.items.find((x) => x.id === b.id);
+          if (!it) continue;
+          const r = bounds(it);
+          const kids = l!.boxes
+            .filter((k) => k.id !== b.id)
+            .map((k) => before.items.find((x) => x.id === k.id))
+            .filter((o): o is Item => !!o)
+            .filter((o) => {
+              const q = bounds(o);
+              return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
+            })
+            .map((o) => ({ id: o.id, dy: lines(bounds(o).y0 - r.y0, before.unit) }));
+          groups.set(b.id, kids);
+        }
+      }
+    // En overskriftsboks inne i en annen følger den ytterste
+    for (const kids of [...groups.values()]) for (const k of kids) groups.delete(k.id);
+    const inGroup = new Set([...groups.keys(), ...[...groups.values()].flat().map((k) => k.id)]);
     for (const id of laneIds) {
       const l = findLane(next, id);
       if (!l) continue;
       delete l.order;
-      if (arrangeUnpin?.checked) for (const b of l.boxes) if (!b.header && (!boxIds || boxIds.has(b.id))) delete b.top;
+      if (unpin) for (const b of l.boxes) if (inGroup.has(b.id) || (!b.header && (!boxIds || boxIds.has(b.id)))) delete b.top;
     }
-    if (mode === 'tight')
-      for (const [id, order] of host.arrange(next, laneIds)) {
+    if (mode === 'tight' || groups.size) {
+      const res = host.arrange(next, laneIds, { mode, groups });
+      for (const [id, order] of res.orders) {
         const l = findLane(next, id);
         if (l && order) l.order = order;
       }
+      for (const [id, top] of res.pins) {
+        const b = findBox(next, id);
+        if (b) b.top = top;
+      }
+    }
     if (JSON.stringify(next) === JSON.stringify(plan)) {
       showArrangeBar(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede tidligst først.', false);
       return;
