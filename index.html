@@ -17,9 +17,9 @@
         Åpne
         <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
       </label>
-      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, visning, tekst og logo">
+      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, visning, tekst og logo" aria-label="Innstillinger">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.4l-.4 2.7a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.4l.4-2.7a7.4 7.4 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
-        Innstillinger
+        <span class="tb-label">Innstillinger</span>
       </button>
       <span class="sep" aria-hidden="true"></span>
       <div class="tbgroup" role="group" aria-label="Visning">
@@ -50,7 +50,7 @@
       </div>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="save-menu" class="tb primary menu" popovertarget="menu-save" disabled>Lagre</button>
-      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg>Hjelp</button>
+      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen" aria-label="Hjelp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg><span class="tb-label">Hjelp</span></button>
     </header>
 
     <div id="menu-sheet" class="pop settings no-print" popover aria-label="Innstillinger">

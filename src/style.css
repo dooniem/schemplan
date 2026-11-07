@@ -455,3 +455,15 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .flash-ring { fill: none; stroke: #1F5FBF; stroke-width: 0.8; animation: flash-ring 0.8s ease-in-out 3; }
 @keyframes flash-ring { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.15; } }
 @media (prefers-reduced-motion: reduce) { .flash-ring { animation: none; } }
+
+/* Under redigering trengs plassen i topplinjen til verktøyene. Zoom virker fortsatt med
+   Ctrl + hjul, og prosenten viser hele arket ved klikk. */
+.topbar:has(#edit[aria-pressed='true']) :is(#zoom-out, #zoom-in, #zoom-width) { display: none; }
+/* Er vinduet smalere enn det, blir Innstillinger og Hjelp bare ikoner, og søkefeltet kortere */
+@media (max-width: 1599px) {
+  .topbar:has(#edit[aria-pressed='true']) :is(#settings, #help-open) .tb-label,
+  .topbar:has(#edit[aria-pressed='true']) #version { display: none; }
+  .topbar:has(#edit[aria-pressed='true']) #help-open { width: 28px; padding: 0; justify-content: center; }
+  .topbar:has(#edit[aria-pressed='true']) #settings { gap: 2px; padding: 0 8px; }
+  .topbar:has(#edit[aria-pressed='true']) .search input { width: 90px; }
+}
