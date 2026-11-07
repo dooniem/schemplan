@@ -24,10 +24,29 @@ export function placePopovers(root: ParentNode = document) {
       pop.style.maxHeight = `${Math.max(120, vh - top - EDGE)}px`;
     });
   });
-  // Et menyvalg lukker menyen
-  root.querySelectorAll<HTMLElement>('.pop-menu').forEach((menu) =>
+  root.querySelectorAll<HTMLElement>('.pop-menu').forEach((menu) => {
+    // Et menyvalg lukker menyen
     menu.addEventListener('click', (e) => {
       if ((e.target as Element).closest('button')) menu.hidePopover();
-    }),
-  );
+    });
+    // Piltastene flytter mellom valgene, som i høyreklikkmenyene. Menyen selv får fokus når
+    // den åpnes, så tastaturet virker med en gang uten at første valg ser markert ut.
+    menu.tabIndex = -1;
+    menu.addEventListener('toggle', (e) => {
+      if ((e as ToggleEvent).newState === 'open') menu.focus({ preventScroll: true });
+    });
+    menu.addEventListener('keydown', (e) => {
+      const list = [...menu.querySelectorAll<HTMLButtonElement>('.pm-item:not(:disabled):not([hidden])')];
+      if (!list.length) return;
+      const i = list.indexOf(document.activeElement as HTMLButtonElement);
+      let next = -1;
+      if (e.key === 'ArrowDown') next = (i + 1) % list.length;
+      else if (e.key === 'ArrowUp') next = i < 0 ? list.length - 1 : (i - 1 + list.length) % list.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = list.length - 1;
+      if (next < 0) return;
+      e.preventDefault();
+      list[next].focus();
+    });
+  });
 }
