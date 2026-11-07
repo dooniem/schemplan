@@ -98,6 +98,8 @@ export interface Lane {
   manual?: boolean;
   /** Navn og farge før første endring i appen, så de kan tilbakestilles og flettes (valgfritt). */
   original?: { name: string; fill: HexColor | null };
+  /** Rekkefølgen boksene pakkes i, valgt med «Omplasser» (boks-id-er, valgfritt). Uten den: tidligst først. */
+  order?: string[];
 }
 
 export type Rotation = 0 | 90 | -90;

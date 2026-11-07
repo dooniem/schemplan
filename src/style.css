@@ -139,6 +139,8 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .pop-menu button:hover:not(:disabled), .pop-menu button:focus-visible { background: var(--bg); outline: none; }
 .pop-menu button:disabled { opacity: 0.4; cursor: default; }
 .pop-menu button span { color: var(--muted); font-size: 12px; }
+.arrange-menu .set-switch { margin: 4px 10px 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.arrange-menu .pop-hint { margin: 6px 10px 2px; }
 /* Melding når nettleseren mangler funksjoner appen trenger */
 .compat-note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border); background: #fdecea; background: color-mix(in srgb, var(--error) 10%, var(--surface)); color: var(--error); font-size: 13px; }
 /* Høyreklikkmenyer (ctxmenu.ts): én linje per valg, gruppert, forklaring nederst */
