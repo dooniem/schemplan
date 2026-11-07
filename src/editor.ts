@@ -3,7 +3,7 @@
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
-import { createCtxMenu } from './ctxmenu';
+import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -410,18 +410,112 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const redo = () => restore(future, past);
 
   // ---- Panelet ----
-  const segmented = <T extends string | number>(label: string, value: T, options: [T, string][], onPick: (v: T) => void) => {
-    const wrap = el('div', { class: 'prop' });
+  /** Tittel, en linje under (datoer, fag) og lukkeknapp. */
+  const panelHead = (title: string, sub?: string, onClose: () => void = () => select(null), closeLabel = 'Lukk') => {
+    const h = el('div', { class: 'panel-head' });
+    const t = el('div', { class: 'panel-title' });
+    t.append(el('h2', {}, title));
+    if (sub) t.append(el('p', { class: 'panel-sub' }, sub));
+    const close = el('button', { type: 'button', class: 'icon', title: `${closeLabel} (Esc)`, 'aria-label': closeLabel });
+    close.append(icon('close', 'pico'));
+    close.addEventListener('click', onClose);
+    h.append(t, close);
+    panel.append(h);
+  };
+  /** Del av panelet med egen overskrift. */
+  const section = (title: string) => {
+    const s = el('section', { class: 'psec', 'aria-label': title });
+    s.append(el('h3', {}, title));
+    panel.append(s);
+    return s;
+  };
+  /** Valg på én linje: navnet til venstre, knappene til høyre. */
+  const segmented = <T extends string | number>(label: string, value: T, options: ([T, string] | [T, string, IconName])[], onPick: (v: T) => void) => {
+    const wrap = el('div', { class: 'prop prop-inline' });
     wrap.append(el('span', { class: 'prop-label' }, label));
     const g = el('div', { class: 'group', role: 'group', 'aria-label': label });
-    for (const [v, text] of options) {
-      const b = el('button', { type: 'button', 'aria-pressed': String(v === value) }, text);
+    for (const [v, text, ico] of options) {
+      const b = el('button', { type: 'button', 'aria-pressed': String(v === value) });
+      if (ico) b.append(icon(ico, 'pico'));
+      b.append(text);
       b.addEventListener('click', () => onPick(v));
       g.append(b);
     }
     wrap.append(g);
     return wrap;
   };
+  /** Av/på-bryter med navnet til venstre. */
+  const switchRow = (label: string, on: boolean, onChange: (v: boolean) => void, title?: string) => {
+    const w = el('label', { class: 'pswitch' });
+    if (title) w.title = title;
+    const inp = el('input', { type: 'checkbox', role: 'switch' }) as HTMLInputElement;
+    inp.checked = on;
+    inp.addEventListener('change', () => onChange(inp.checked));
+    w.append(el('span', {}, label), inp);
+    return w;
+  };
+  /** Knapp med ikon foran teksten. */
+  const btn = (text: string, ico: IconName | null, onClick: () => void, title?: string, cls = 'button') => {
+    const b = el('button', { type: 'button', class: cls });
+    if (title) b.title = title;
+    if (ico) b.append(icon(ico, 'pico'));
+    b.append(text);
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  /** Fargeruter. Like farger vises bare én gang. */
+  const swatches = (current: string | null, list: [string, string][], onPick: (fill: string) => void) => {
+    const sw = el('div', { class: 'swatches' });
+    const seen = new Set<string>();
+    for (const [fill, name] of list) {
+      const key = fill.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(current === key) });
+      s.style.background = fill;
+      s.addEventListener('click', () => onPick(key));
+      sw.append(s);
+    }
+    return sw;
+  };
+  /** Egen farge, og eventuelt en knapp tilbake til fargen den ellers ville hatt. */
+  const colorRow = (value: string, onPick: (fill: string) => void, back?: { text: string; disabled: boolean; onClick: () => void }) => {
+    const row = el('div', { class: 'row color-row' });
+    const lab = el('label', { class: 'custom-color' });
+    const inp = el('input', { type: 'color' }) as HTMLInputElement;
+    inp.value = value.toLowerCase();
+    inp.addEventListener('change', () => onPick(inp.value.toUpperCase()));
+    lab.append(inp, 'Egen farge');
+    row.append(lab);
+    if (back) {
+      const b = btn(back.text, null, back.onClick, undefined, 'button small');
+      b.disabled = back.disabled;
+      row.append(b);
+    }
+    return row;
+  };
+  /** Linje som sier at noe er låst, med knapp for å løse det opp. Vises bare når det gjelder. */
+  const lockedRow = (text: string, button: string, title: string, onClick: () => void) => {
+    const r = el('div', { class: 'row locked-row' });
+    r.append(el('span', {}, text), btn(button, null, onClick, title, 'button small'));
+    return r;
+  };
+  /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
+  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => {
+    const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
+    ta.value = value;
+    ta.addEventListener('focus', () => (typingSession = false));
+    ta.addEventListener('input', () => onInput(ta.value));
+    ta.addEventListener('blur', () => {
+      typingSession = false;
+      syncTools();
+    });
+    return ta;
+  };
+  const textColorKey = (c?: string) => (c === '#000000' ? 'black' : c === '#FFFFFF' ? 'white' : 'auto');
+  const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
+  const fmtDate = (d: string) => d.split('-').reverse().join('.');
+  const tradeName = (t: string) => (t === '(none)' ? 'Uten fag' : t);
 
   /** Overskrift og tekst øverst til høyre. Lagres i planen og beholdes ved oppdatering fra Project. */
   const changeHeader = (fn: (lay: PlanFile['plan']['layout']) => void, typing: boolean) => {
@@ -440,109 +534,64 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   const buildHeaderPanel = (plan: PlanFile) => {
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, 'Topptekst'));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
-    close.addEventListener('click', () => select(null));
-    head.append(close);
-    panel.append(head);
+    panelHead('Topptekst', 'Beholdes når du oppdaterer fra Project');
     const lay = plan.plan.layout;
-    const field = (id: string, label: string, value: string, rows: string, set: (v: string) => void, hint: string) => {
-      const w = el('label', { class: 'prop' });
-      w.append(el('span', { class: 'prop-label' }, label));
-      const ta = el('textarea', { id, rows, spellcheck: 'true' }) as HTMLTextAreaElement;
-      ta.value = value;
-      ta.addEventListener('focus', () => (typingSession = false));
-      ta.addEventListener('input', () => changeHeader(() => set(ta.value), true));
-      ta.addEventListener('blur', () => {
-        typingSession = false;
-        syncTools();
-      });
-      w.append(ta, el('span', { class: 'hint' }, hint));
-      panel.append(w);
-    };
-    field('header-title', 'Overskrift', lay.title ?? plan.plan.title, '2', (v) => (lay.title = v), 'Midt øverst på arket.');
-    if (lay.title !== undefined && lay.title !== plan.plan.title) {
-      const reset = el('button', { type: 'button', class: 'linkish' }, 'Bruk navnet fra Project');
-      reset.addEventListener('click', () => changeHeader((l) => delete l.title, false));
-      panel.append(reset);
-    }
-    field('header-right', 'Tekst til høyre', lay.headerRight ?? '', '3', (v) => {
-      if (v.trim()) lay.headerRight = v;
-      else delete lay.headerRight;
-    }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Skriv | for linjeskift.');
-    panel.append(el('p', { class: 'hint' }, 'Begge beholdes når du oppdaterer fra Project.'));
+    const s1 = section('Overskrift');
+    s1.append(textField('header-title', 'Overskrift', lay.title ?? plan.plan.title, '2', (v) => changeHeader((l) => (l.title = v), true)));
+    s1.append(el('p', { class: 'hint' }, 'Midt øverst på arket.'));
+    if (lay.title !== undefined && lay.title !== plan.plan.title)
+      s1.append(btn('Bruk navnet fra Project', null, () => changeHeader((l) => delete l.title, false), undefined, 'linkish'));
+    const s2 = section('Tekst til høyre');
+    s2.append(
+      textField('header-right', 'Tekst til høyre', lay.headerRight ?? '', '3', (v) =>
+        changeHeader((l) => {
+          if (v.trim()) l.headerRight = v;
+          else delete l.headerRight;
+        }, true),
+      ),
+    );
+    s2.append(el('p', { class: 'hint' }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Skriv | for linjeskift.'));
   };
 
   const buildLanePanel = (plan: PlanFile, l: Lane) => {
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, 'Lane'));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
-    close.addEventListener('click', () => select(null));
-    head.append(close);
-    panel.append(head);
-    if (l.manual) panel.append(el('p', { class: 'muted small' }, 'Laget i appen, følger ikke Project.'));
+    panelHead('Lane', l.manual ? 'Laget i appen, følger ikke Project' : undefined);
 
-    const nw = el('label', { class: 'prop' });
-    nw.append(el('span', { class: 'prop-label' }, 'Navn'));
-    const ta = el('textarea', { id: 'lane-name', rows: '2', spellcheck: 'true' }) as HTMLTextAreaElement;
-    ta.value = l.name;
-    ta.addEventListener('focus', () => (typingSession = false));
-    ta.addEventListener('input', () =>
-      changeLane((x) => {
-        keepLaneOriginal(x);
-        x.name = ta.value;
-      }, { typing: true, rebuild: false }),
-    );
-    ta.addEventListener('blur', () => {
-      typingSession = false;
-      syncTools();
-    });
-    nw.append(ta, el('span', { class: 'hint' }, 'Skriv | for linjeskift.'));
-    panel.append(nw);
-
-    const cw = el('div', { class: 'prop' });
-    cw.append(el('span', { class: 'prop-label' }, 'Farge'));
-    const sw = el('div', { class: 'swatches' });
-    const now = (l.fill ?? '#FFFFFF').toUpperCase();
-    const seen = new Set<string>();
-    const swatch = (fill: string, name: string) => {
-      const key = fill.toUpperCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(now === key) });
-      s.style.background = fill;
-      s.addEventListener('click', () =>
+    const sn = section('Navn');
+    sn.append(
+      textField('lane-name', 'Navn', l.name, '2', (v) =>
         changeLane((x) => {
           keepLaneOriginal(x);
-          x.fill = key;
-        }),
-      );
-      sw.append(s);
-    };
-    LANE_COLORS.forEach((c) => swatch(c, c === '#FFFFFF' ? 'Hvit' : 'Lanefarge'));
-    plan.lanes.filter((x) => x.fill).forEach((x) => swatch(x.fill!, 'Brukt i planen'));
-    cw.append(sw);
-    const row = el('div', { class: 'row' });
-    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
-    custom.value = now.toLowerCase();
-    custom.addEventListener('change', () =>
+          x.name = v;
+        }, { typing: true, rebuild: false }),
+      ),
+      el('p', { class: 'hint' }, 'Skriv | for linjeskift.'),
+    );
+
+    const sc = section('Farge');
+    const now = (l.fill ?? '#FFFFFF').toUpperCase();
+    const setFill = (f: string) =>
       changeLane((x) => {
         keepLaneOriginal(x);
-        x.fill = custom.value.toUpperCase();
-      }),
+        x.fill = f;
+      });
+    sc.append(
+      swatches(now, [
+        ...LANE_COLORS.map((c): [string, string] => [c, c === '#FFFFFF' ? 'Hvit' : 'Lanefarge']),
+        ...plan.lanes.filter((x) => x.fill).map((x): [string, string] => [x.fill!, 'Brukt i planen']),
+      ], setFill),
     );
-    row.append(custom, el('span', { class: 'small' }, 'Egen farge'));
-    if (l.original) {
-      const back = el('button', { type: 'button', class: 'button small' }, 'Fargen fra Project');
-      back.disabled = (l.original.fill ?? '').toUpperCase() === (l.fill ?? '').toUpperCase();
-      back.addEventListener('click', () => changeLane((x) => (x.fill = x.original ? x.original.fill : x.fill)));
-      row.append(back);
-    }
-    cw.append(row);
-    panel.append(cw);
+    sc.append(
+      colorRow(now, setFill, l.original
+        ? {
+            text: 'Fargen fra Project',
+            disabled: (l.original.fill ?? '').toUpperCase() === (l.fill ?? '').toUpperCase(),
+            onClick: () => changeLane((x) => (x.fill = x.original ? x.original.fill : x.fill)),
+          }
+        : undefined),
+    );
 
-    panel.append(
+    const sp = section('Plass');
+    sp.append(
       segmented('Høyde', l.height ? 'fixed' : 'auto', [['auto', 'Automatisk'], ['fixed', 'Fast']], (v) => {
         const ln = layoutNow?.lanes.find((x) => x.id === l.id);
         const unit = layoutNow?.unit;
@@ -554,29 +603,24 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     );
     const vis = plan.lanes.filter((x) => x.shown && !x.hidden);
     const pos = vis.findIndex((x) => x.id === l.id);
-    const ow = el('div', { class: 'prop' });
+    const ow = el('div', { class: 'prop prop-inline' });
     ow.append(el('span', { class: 'prop-label' }, 'Rekkefølge'));
-    const orow = el('div', { class: 'row' });
-    const up = el('button', { type: 'button', class: 'button small' }, '↑ Flytt opp');
+    const og = el('div', { class: 'group', role: 'group', 'aria-label': 'Rekkefølge' });
+    const up = btn('Opp', 'up', () => stepLane(l.id, -1), 'Flytt lanen ett hakk opp', '');
     up.disabled = pos <= 0;
-    up.addEventListener('click', () => stepLane(l.id, -1));
-    const down = el('button', { type: 'button', class: 'button small' }, '↓ Flytt ned');
+    const down = btn('Ned', 'down', () => stepLane(l.id, 1), 'Flytt lanen ett hakk ned', '');
     down.disabled = pos < 0 || pos >= vis.length - 1;
-    down.addEventListener('click', () => stepLane(l.id, 1));
-    orow.append(up, down);
-    ow.append(orow, el('p', { class: 'hint' }, 'Du kan også dra lane-navnet opp eller ned.'));
-    panel.append(ow);
+    og.append(up, down);
+    ow.append(og);
+    sp.append(ow, el('p', { class: 'hint' }, 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
 
-    const add = el('button', { type: 'button', class: 'button', title: 'Ny lane rett under denne' }, 'Ny lane');
-    add.addEventListener('click', () => addLane(l.id));
-    const del = el('button', { type: 'button', class: 'button', title: l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk et lane-navn for å vise den igjen. (Delete)' }, l.manual ? 'Slett' : 'Skjul');
+    const foot = el('div', { class: 'panel-foot' });
+    const del = btn(l.manual ? 'Slett' : 'Skjul', l.manual ? 'trash' : 'hide', () => removeLaneById(l.id),
+      l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk et lane-navn for å vise den igjen. (Delete)');
     del.disabled = vis.length <= 1 && pos >= 0;
-    del.addEventListener('click', () => removeLaneById(l.id));
-    const reset = el('button', { type: 'button', class: 'button', title: 'Navn og farge fra Project, og automatisk høyde' }, 'Tilbakestill lane');
+    const reset = btn('Tilbakestill', 'undo', () => changeLane((x) => resetLane(x)), 'Navn og farge fra Project, og automatisk høyde', 'button push');
     reset.disabled = l.manual || !isLaneEdited(l);
-    reset.addEventListener('click', () => changeLane((x) => resetLane(x)));
-    const foot = el('div', { class: 'panel-foot row' });
-    foot.append(add, del, reset);
+    foot.append(btn('Ny lane', 'laneAdd', () => addLane(l.id), 'Ny lane rett under denne'), del, reset);
     panel.append(foot);
   };
 
@@ -590,21 +634,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const CRITICAL_COLORS: [string, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#C000C0', 'Lilla'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
   const buildCriticalPanel = (plan: PlanFile) => {
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, 'Kritisk linje'));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Ferdig (Esc)', 'aria-label': 'Ferdig' }, '×');
-    close.addEventListener('click', () => setCriticalMode(false));
-    head.append(close);
-    panel.append(head);
     const marked = plan.lanes.flatMap((l) => l.boxes.filter((x) => x.critical));
-    panel.append(el('p', { class: 'muted small' }, marked.length
-      ? `${marked.length} ${marked.length === 1 ? 'boks' : 'bokser'} i linjen. Klikk en boks for å ta den med eller ut. Linjen følger datoene, så rekkefølgen du klikker i spiller ingen rolle.`
+    panelHead('Kritisk linje', marked.length ? `${marked.length} ${marked.length === 1 ? 'boks' : 'bokser'} i linjen` : 'Ingen bokser ennå', () => setCriticalMode(false), 'Ferdig');
+    panel.append(el('p', { class: 'panel-note' }, marked.length
+      ? 'Klikk en boks for å ta den med eller ut. Linjen følger datoene, så rekkefølgen du klikker i spiller ingen rolle.'
       : 'Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge og går utenom teksten.'));
     const style = plan.plan.layout.criticalLine ?? CRITICAL_DEFAULT;
+    const setStyle = (v: Partial<typeof style>) => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), ...v }));
 
-    const ww = el('div', { class: 'prop' });
+    const s = section('Utseende');
+    const ww = el('div', { class: 'prop prop-inline' });
     const wl = el('label', { class: 'prop-label', for: 'critical-width' }, 'Tykkelse');
-    const wv = el('span', { class: 'muted' }, `${style.width.toFixed(1).replace('.', ',')} mm`);
+    const wv = el('span', { class: 'range-value' }, `${style.width.toFixed(1).replace('.', ',')} mm`);
     const wr = el('div', { class: 'row' });
     const range = el('input', { type: 'range', id: 'critical-width', min: '0.2', max: '3', step: '0.1', value: String(style.width) }) as HTMLInputElement;
     // Ett angre-steg per dra i glideren; linjen tegnes på nytt mens du drar
@@ -624,32 +665,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
     wr.append(range, wv);
     ww.append(wl, wr);
-    panel.append(ww);
+    s.append(ww);
+    const cw = el('div', { class: 'prop prop-inline' });
+    cw.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(style.color.toUpperCase(), CRITICAL_COLORS, (c) => setStyle({ color: c })));
+    s.append(cw);
+    s.append(segmented('Strek', style.dash ?? 'solid', [['solid', 'Hel'], ['dashed', 'Stiplet'], ['dotted', 'Prikket']], (v) => setStyle({ dash: v })));
 
-    const cw = el('div', { class: 'prop' });
-    cw.append(el('span', { class: 'prop-label' }, 'Farge'));
-    const sw = el('div', { class: 'swatches' });
-    for (const [c, name] of CRITICAL_COLORS) {
-      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(style.color.toUpperCase() === c) });
-      s.style.background = c;
-      s.addEventListener('click', () => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), color: c })));
-      sw.append(s);
-    }
-    cw.append(sw);
-    panel.append(cw);
-    panel.append(
-      segmented('Strek', style.dash ?? 'solid', [['solid', 'Hel'], ['dashed', 'Stiplet'], ['dotted', 'Prikket']], (v) =>
-        commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), dash: v })),
-      ),
-    );
-
-    const clear = el('button', { type: 'button', class: 'button', title: 'Tar alle boksene ut av linjen' }, 'Fjern linjen');
+    const foot = el('div', { class: 'panel-foot' });
+    const clear = btn('Fjern linjen', 'trash', () => setCritical(marked.map((x) => x.id), false), 'Tar alle boksene ut av linjen', 'button push');
     clear.disabled = !marked.length;
-    clear.addEventListener('click', () => setCritical(marked.map((x) => x.id), false));
-    const done = el('button', { type: 'button', class: 'button primary' }, 'Ferdig');
-    done.addEventListener('click', () => setCriticalMode(false));
-    const foot = el('div', { class: 'panel-foot row' });
-    foot.append(done, clear);
+    foot.append(btn('Ferdig', 'check', () => setCriticalMode(false), undefined, 'button primary'), clear);
     panel.append(foot);
   };
 
@@ -667,15 +692,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const buildGroupPanel = (plan: PlanFile) => {
     const boxes = group.map((id) => findBox(plan, id)).filter((x): x is Box => !!x);
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, `${boxes.length} valgt`));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
-    close.addEventListener('click', () => select(null));
-    head.append(close);
-    panel.append(head);
     const plain = boxes.filter((x) => !x.resolved?.isMilestone);
     const ms = boxes.length - plain.length;
-    panel.append(el('p', { class: 'muted small' }, ms ? `${plain.length} bokser og ${ms} milepæler. Farger og callout gjelder bare boksene.` : 'Endringene gjelder alle de valgte boksene.'));
+    panelHead(`${boxes.length} valgt`, ms ? `${plain.length} bokser og ${ms} milepæler` : 'Endringene gjelder alle');
+    if (ms) panel.append(el('p', { class: 'panel-note' }, 'Farger og callout gjelder bare boksene.'));
     const all = (fn: (x: Box) => void, onlyBoxes = true) =>
       commit((pl) => group.forEach((id) => {
         const x = findBox(pl, id);
@@ -683,73 +703,45 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }));
     const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
 
-    const cw = el('div', { class: 'prop' });
-    cw.append(el('span', { class: 'prop-label' }, 'Bakgrunn'));
-    const sw = el('div', { class: 'swatches' });
-    const seen = new Set<string>();
+    const sc = section('Farge');
     const cur = same((x) => (x.fill ?? '').toUpperCase());
-    const swatch = (fill: string, name: string) => {
-      const key = fill.toUpperCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(cur === key) });
-      s.style.background = fill;
-      s.addEventListener('click', () => all((x) => (x.fill = key)));
-      sw.append(s);
-    };
-    plan.colors.filter((c) => c.fill).forEach((c) => swatch(c.fill!, c.name === '(none)' ? 'Uten fag' : c.name));
-    plan.lanes.filter((l) => l.fill).forEach((l) => swatch(l.fill!, 'Lanefarge'));
-    cw.append(sw);
-    const row = el('div', { class: 'row' });
-    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
-    custom.value = (cur || '#FFFFFF').toLowerCase();
-    custom.addEventListener('change', () => all((x) => (x.fill = custom.value.toUpperCase())));
-    const tradeBtn = el('button', { type: 'button', class: 'button small' }, 'Fagets farge');
-    tradeBtn.disabled = !plain.some((x) => x.fill);
-    tradeBtn.addEventListener('click', () => all((x) => delete x.fill));
-    row.append(custom, el('span', { class: 'small' }, 'Egen farge'), tradeBtn);
-    cw.append(row);
-    panel.append(cw);
+    sc.append(
+      swatches(cur, [
+        ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+        ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
+      ], (f) => all((x) => (x.fill = f))),
+      colorRow(cur || '#FFFFFF', (f) => all((x) => (x.fill = f)), { text: 'Fagets farge', disabled: !plain.some((x) => x.fill), onClick: () => all((x) => delete x.fill) }),
+      segmented('Tekstfarge', same((x) => textColorKey(x.textColor)) ?? '', TEXT_COLORS, (v) =>
+        all((x) => {
+          if (v === 'auto') delete x.textColor;
+          else x.textColor = v === 'black' ? '#000000' : '#FFFFFF';
+        })),
+    );
 
-    const tcNow = same((x) => (x.textColor === '#000000' ? 'black' : x.textColor === '#FFFFFF' ? 'white' : 'auto'));
-    panel.append(segmented('Tekstfarge', tcNow ?? '', [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']], (v) =>
-      all((x) => {
-        if (v === 'auto') delete x.textColor;
-        else x.textColor = v === 'black' ? '#000000' : '#FFFFFF';
-      })));
-    panel.append(segmented('Callout', same((x) => x.callout ?? 'auto') ?? '', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
-      all((x) => {
-        if (v === 'auto') delete x.callout;
-        else x.callout = v as 'on' | 'off';
-      })));
-    panel.append(segmented('Callout-side', same((x) => x.calloutSide ?? 'auto') ?? '', [['auto', 'Auto'], ['left', 'Venstre'], ['right', 'Høyre']], (v) =>
-      all((x) => {
-        if (v === 'auto') delete x.calloutSide;
-        else x.calloutSide = v as 'left' | 'right';
-      })));
-    const pw = el('div', { class: 'prop' });
-    pw.append(el('span', { class: 'prop-label' }, 'Høyde og plass'));
-    const prow = el('div', { class: 'row' });
-    const hb = el('button', { type: 'button', class: 'button small' }, 'Standard høyde');
-    hb.disabled = !plain.some((x) => x.height);
-    hb.addEventListener('click', () => all((x) => delete x.height));
-    const lb = el('button', { type: 'button', class: 'button small' }, 'Løsne');
-    lb.disabled = !boxes.some((x) => x.top !== undefined);
-    lb.addEventListener('click', () => all((x) => delete x.top, false));
-    prow.append(hb, lb);
-    pw.append(prow);
-    panel.append(pw);
+    const so = section('Callout');
+    so.append(
+      segmented('Vis', same((x) => x.callout ?? 'auto') ?? '', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
+        all((x) => {
+          if (v === 'auto') delete x.callout;
+          else x.callout = v as 'on' | 'off';
+        })),
+      segmented('Side', same((x) => x.calloutSide ?? 'auto') ?? '', [['auto', 'Auto'], ['left', 'Venstre'], ['right', 'Høyre']], (v) =>
+        all((x) => {
+          if (v === 'auto') delete x.calloutSide;
+          else x.calloutSide = v as 'left' | 'right';
+        })),
+    );
 
-    const del = el('button', { type: 'button', class: 'button', title: 'Skjuler bokser fra Project og sletter bokser laget i appen (Delete)' }, 'Skjul/slett');
-    del.addEventListener('click', () => removeGroup());
-    const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill');
-    reset.disabled = !boxes.some(isEdited);
-    reset.addEventListener('click', () => commit((pl) => group.forEach((id) => resetBoxInPlan(pl, id))));
+    const sp = section('Plassering');
     const inLine = boxes.every((x) => x.critical);
-    const crit = el('button', { type: 'button', class: 'button', title: 'Den kritiske linjen trekkes gjennom de merkede boksene' }, inLine ? 'Ta ut av kritisk linje' : 'Legg i kritisk linje');
-    crit.addEventListener('click', () => setCritical(boxes.map((x) => x.id), !inLine));
-    const foot = el('div', { class: 'panel-foot row' });
-    foot.append(del, reset, crit);
+    sp.append(switchRow('Med i kritisk linje', inLine, (v) => setCritical(boxes.map((x) => x.id), v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
+    if (boxes.some((x) => x.top !== undefined)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all((x) => delete x.top, false)));
+
+    const foot = el('div', { class: 'panel-foot' });
+    const reset = btn('Tilbakestill', 'undo', () => commit((pl) => group.forEach((id) => resetBoxInPlan(pl, id))), 'Fjerner det du har endret på de valgte', 'button push');
+    reset.disabled = !boxes.some(isEdited);
+    foot.append(btn('Skjul/slett', 'hide', () => removeGroup(), 'Skjuler bokser fra Project og sletter bokser laget i appen (Delete)'), reset);
     panel.append(foot);
   };
 
@@ -764,54 +756,27 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
 
   const buildTradePanel = (plan: PlanFile, trade: string) => {
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, 'Fag'));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
-    close.addEventListener('click', () => select(null));
-    head.append(close);
-    panel.append(head);
     const pc = plan.colors.find((c) => c.name === trade)!;
     const own = plan.plan.layout.tradeColors?.[trade];
     const fill = (own?.fill ?? pc.fill ?? '#FFFFFF').toUpperCase();
     const count = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && !b.resolved.isMilestone).length, 0);
     const own1 = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && b.fill).length, 0);
-    panel.append(el('p', { class: 'prop-label' }, trade === '(none)' ? 'Uten fag' : trade));
-    panel.append(el('p', { class: 'muted small' }, `${count} bokser${own1 ? `, ${own1} av dem med egen farge som ikke endres` : ''}.`));
+    panelHead(tradeName(trade), `Fag · ${count} ${count === 1 ? 'boks' : 'bokser'}`);
+    if (own1) panel.append(el('p', { class: 'panel-note' }, `${own1} av boksene har egen farge og endres ikke.`));
 
-    const cw = el('div', { class: 'prop' });
-    cw.append(el('span', { class: 'prop-label' }, 'Farge for hele faget'));
-    const sw = el('div', { class: 'swatches' });
-    const seen = new Set<string>();
-    const swatch = (f: string, name: string) => {
-      const key = f.toUpperCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(fill === key) });
-      s.style.background = f;
-      s.addEventListener('click', () => setTradeColor(trade, { fill: key, ...(own?.text ? { text: own.text } : {}) }));
-      sw.append(s);
-    };
-    plan.colors.filter((c) => c.fill).forEach((c) => swatch(c.fill!, c.name === '(none)' ? 'Uten fag' : c.name));
-    LANE_COLORS.forEach((c) => swatch(c, 'Lys farge'));
-    cw.append(sw);
-    const row = el('div', { class: 'row' });
-    const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
-    custom.value = fill.toLowerCase();
-    custom.addEventListener('change', () => setTradeColor(trade, { fill: custom.value.toUpperCase(), ...(own?.text ? { text: own.text } : {}) }));
-    row.append(custom, el('span', { class: 'small' }, 'Egen farge'));
-    const back = el('button', { type: 'button', class: 'button small' }, 'Fargen fra Project');
-    back.disabled = !own;
-    back.addEventListener('click', () => setTradeColor(trade, undefined));
-    row.append(back);
-    cw.append(row);
-    panel.append(cw);
-    const tc = own?.text === '#000000' ? 'black' : own?.text === '#FFFFFF' ? 'white' : 'auto';
-    const tcw = segmented('Tekstfarge', tc, [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']], (v) =>
-      setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
+    const s = section('Farge for hele faget');
+    const keepText = own?.text ? { text: own.text } : {};
+    s.append(
+      swatches(fill, [
+        ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+        ...LANE_COLORS.map((c): [string, string] => [c, 'Lys farge']),
+      ], (f) => setTradeColor(trade, { fill: f, ...keepText })),
+      colorRow(fill, (f) => setTradeColor(trade, { fill: f, ...keepText }), { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
+      segmented('Tekstfarge', textColorKey(own?.text), TEXT_COLORS, (v) =>
+        setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
+      ),
+      el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
     );
-    if (!own) tcw.querySelectorAll('button').forEach((x) => (x.disabled = true));
-    panel.append(tcw);
-    panel.append(el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'));
   };
 
   const buildPanel = () => {
@@ -829,45 +794,63 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
-      const tips = el('ul', { class: 'tips' });
-      for (const t of [
-        'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
-        'Dra en boks opp eller ned for å gi den fast plass i lanen.',
-        'Dra i den blå streken under valgt boks for å endre høyden.',
-        'Dra i nederste kant av en lane for å gi den fast høyde.',
-        'Dra en boks til en annen lane for å flytte den dit.',
-        'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
-        'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
-        'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
-        'Høyreklikk et lane-navn for ny lane, lanehøyde og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
-        'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
-        'Ctrl+D kopierer valgt boks. Delete skjuler den.',
-        'Ctrl+Z angrer, Ctrl+Y gjør om.',
-      ])
-        tips.append(el('li', {}, t));
-      panel.append(tips);
+      panel.append(el('p', { class: 'panel-note' }, 'Klikk noe på arket for å endre det.'));
+      const groups: [string, string[]][] = [
+        ['Bokser', [
+          'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
+          'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit.',
+          'Dra i den blå streken under valgt boks for å endre høyden.',
+          'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
+        ]],
+        ['Lanes', [
+          'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
+          'Dra i nederste kant av en lane for å gi den fast høyde.',
+          'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
+        ]],
+        ['Arket', [
+          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
+          'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
+        ]],
+      ];
+      for (const [title, tips] of groups) {
+        const s = section(title);
+        const ul = el('ul', { class: 'tips' });
+        tips.forEach((t) => ul.append(el('li', {}, t)));
+        s.append(ul);
+      }
+      const keys = section('Hurtigtaster');
+      const dl = el('dl', { class: 'keys' });
+      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Kopier boks'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
+        const kbd = el('kbd', {}, k);
+        const dt = el('dt', {});
+        dt.append(kbd);
+        dl.append(dt, el('dd', {}, t));
+      }
+      keys.append(dl);
       return;
     }
     const ms = !!b.resolved?.isMilestone;
-    const head = el('div', { class: 'panel-head' });
-    head.append(el('h2', {}, ms ? 'Milepæl' : 'Boks'));
-    const close = el('button', { type: 'button', class: 'icon', title: 'Lukk (Esc)', 'aria-label': 'Lukk' }, '×');
-    close.addEventListener('click', () => select(null));
-    head.append(close);
-    panel.append(head);
-    if (b.manual && b.resolved) {
-      // Boks laget i appen: datoene velges her
-      const dw = el('div', { class: 'prop' });
-      dw.append(el('span', { class: 'prop-label' }, 'Laget i appen, følger ikke Project'));
+    const r = b.resolved;
+    const when = r ? (ms || r.start === r.finish ? fmtDate(r.start) : `${fmtDate(r.start)} – ${fmtDate(r.finish)}`) : '';
+    const sub = b.manual ? 'Laget i appen, følger ikke Project' : `${when}${r?.trade && r.trade !== '(none)' ? `\n${r.trade}` : ''}`;
+    panelHead(ms ? 'Milepæl' : 'Boks', sub || undefined);
+    if (b.manual && r) {
+      // Boks laget i appen: datoene velges her. En milepæl har én dato.
+      const sd = section(ms ? 'Dato' : 'Datoer');
       const row = el('div', { class: 'row dates' });
       const mk = (key: 'start' | 'finish', label: string) => {
-        const lab = el('label', { class: 'small' }, label);
-        const inp = el('input', { type: 'date', value: b.resolved![key], min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
+        const lab = el('label', {}, label);
+        const inp = el('input', { type: 'date', value: r[key], min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
         inp.addEventListener('change', () => {
           const v = inp.value;
           if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
           change((x) => {
             if (!x.resolved) return;
+            if (ms) {
+              x.resolved.start = v;
+              x.resolved.finish = v;
+              return;
+            }
             x.resolved[key] = v;
             if (x.resolved.start > x.resolved.finish) x.resolved[key === 'start' ? 'finish' : 'start'] = v;
           });
@@ -875,34 +858,28 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         lab.append(inp);
         row.append(lab);
       };
-      mk('start', 'Fra');
-      mk('finish', 'Til');
-      dw.append(row);
-      panel.append(dw);
-    } else if (b.resolved) panel.append(el('p', { class: 'muted small' }, `${b.resolved.start.split('-').reverse().join('.')} til ${b.resolved.finish.split('-').reverse().join('.')}${b.resolved.trade && b.resolved.trade !== '(none)' ? ` · ${b.resolved.trade}` : ''}`));
+      if (ms) mk('start', 'Dato');
+      else {
+        mk('start', 'Fra');
+        mk('finish', 'Til');
+      }
+      sd.append(row);
+    }
 
-    // Tekst
-    const tw = el('label', { class: 'prop' });
-    tw.append(el('span', { class: 'prop-label' }, 'Tekst'));
-    const ta = el('textarea', { id: 'box-text', rows: '3', spellcheck: 'true' }) as HTMLTextAreaElement;
-    ta.value = b.text;
-    ta.addEventListener('focus', () => (typingSession = false));
-    ta.addEventListener('input', () =>
-      change((x) => {
-        keepOriginal(x);
-        x.text = ta.value;
-      }, { typing: true, rebuild: false }),
+    const st = section('Tekst');
+    st.append(
+      textField('box-text', 'Tekst', b.text, '3', (v) =>
+        change((x) => {
+          keepOriginal(x);
+          x.text = v;
+        }, { typing: true, rebuild: false }),
+      ),
+      el('p', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'),
     );
-    ta.addEventListener('blur', () => {
-      typingSession = false;
-      syncTools();
-    });
-    tw.append(ta, el('span', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'));
-    panel.append(tw);
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
-      const st = { ...base, ...b.milestoneStyle };
+      const stl = { ...base, ...b.milestoneStyle };
       type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate';
       const setMs = (k: MsKey, v: unknown) =>
         change((x) => {
@@ -912,126 +889,90 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           if (Object.keys(m).length) x.milestoneStyle = m as Box['milestoneStyle'];
           else delete x.milestoneStyle;
         });
-      panel.append(segmented('Symbol', st.symbol, [['diamond', '◆ Ruter'], ['flag', '⚑ Flagg']], (v) => setMs('symbol', v)));
-      const cw = el('div', { class: 'prop' });
-      cw.append(el('span', { class: 'prop-label' }, 'Farge'));
-      const sw = el('div', { class: 'swatches' });
+      const su = section('Utseende');
       const names: Record<string, string> = { red: 'Rød', yellow: 'Gul', green: 'Grønn', blue: 'Blå', orange: 'Oransje', black: 'Svart' };
-      for (const [k, c] of Object.entries(MILESTONE_COLORS)) {
-        const s = el('button', { type: 'button', class: 'swatch', title: names[k], 'aria-label': names[k], 'aria-pressed': String(st.color === k) });
-        s.style.background = c.fill;
-        s.addEventListener('click', () => setMs('color', k));
-        sw.append(s);
-      }
-      cw.append(sw);
-      panel.append(cw);
-      panel.append(segmented('Loddrett linje', st.verticalLine ? 'on' : 'off', [['off', 'Av'], ['on', 'På']], (v) => setMs('verticalLine', v === 'on')));
-      panel.append(segmented('Vis dato', st.showDate ? 'on' : 'off', [['off', 'Av'], ['on', 'På']], (v) => setMs('showDate', v === 'on')));
-      if (b.milestoneStyle) {
-        const back = el('button', { type: 'button', class: 'button small' }, 'Utseende fra Project');
-        back.addEventListener('click', () => change((x) => delete x.milestoneStyle));
-        panel.append(back);
-      }
+      const entries = Object.entries(MILESTONE_COLORS);
+      const cw = el('div', { class: 'prop prop-inline' });
+      cw.append(
+        el('span', { class: 'prop-label' }, 'Farge'),
+        swatches(MILESTONE_COLORS[stl.color as keyof typeof MILESTONE_COLORS]?.fill.toUpperCase() ?? null, entries.map(([k, c]): [string, string] => [c.fill, names[k]]), (f) => {
+          const k = entries.find(([, c]) => c.fill.toUpperCase() === f)?.[0];
+          if (k) setMs('color', k);
+        }),
+      );
+      su.append(
+        segmented('Symbol', stl.symbol, [['diamond', 'Ruter', 'diamond'], ['flag', 'Flagg', 'flag']], (v) => setMs('symbol', v)),
+        cw,
+        switchRow('Vis dato', stl.showDate, (v) => setMs('showDate', v)),
+        switchRow('Loddrett linje', stl.verticalLine, (v) => setMs('verticalLine', v), 'Strek fra milepælen ned gjennom planen'),
+      );
+      if (b.milestoneStyle) su.append(btn('Bruk utseendet fra Project', null, () => change((x) => delete x.milestoneStyle), undefined, 'linkish'));
     } else {
       // Bakgrunnsfarge: alle fagfarger og lanefarger, pluss egen farge. Ingen farger fjernes.
-      const cw = el('div', { class: 'prop' });
-      cw.append(el('span', { class: 'prop-label' }, 'Bakgrunn'));
-      const sw = el('div', { class: 'swatches' });
-      const seen = new Set<string>();
-      const swatch = (fill: string, name: string) => {
-        const key = fill.toUpperCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String((b.fill ?? '').toUpperCase() === key) });
-        s.style.background = fill;
-        s.addEventListener('click', () => change((x) => (x.fill = key)));
-        sw.append(s);
-      };
-      plan.colors.filter((c) => c.fill).forEach((c) => swatch(c.fill!, c.name === '(none)' ? 'Uten fag' : c.name));
-      plan.lanes.filter((l) => l.fill).forEach((l) => swatch(l.fill!, 'Lanefarge'));
-      cw.append(sw);
-      const row = el('div', { class: 'row' });
-      const custom = el('input', { type: 'color', title: 'Egen farge', 'aria-label': 'Egen farge' }) as HTMLInputElement;
-      custom.value = b.fill ?? '#FFFFFF';
-      custom.addEventListener('change', () => change((x) => (x.fill = custom.value.toUpperCase())));
-      const tradeBtn = el('button', { type: 'button', class: 'button small' }, 'Fagets farge');
-      tradeBtn.disabled = !b.fill;
-      tradeBtn.addEventListener('click', () => change((x) => delete x.fill));
-      row.append(custom, el('span', { class: 'small' }, 'Egen farge'), tradeBtn);
-      cw.append(row);
-      const trade = b.resolved?.trade;
-      if (trade && plan.colors.some((c) => c.name === trade)) {
-        const tb = el('button', { type: 'button', class: 'linkish small' }, `Endre fargen for hele faget «${trade === '(none)' ? 'Uten fag' : trade}» …`);
-        tb.addEventListener('click', () => selectTrade(trade));
-        cw.append(tb);
-      }
-      panel.append(cw);
-
-      const tc = b.textColor === '#000000' ? 'black' : b.textColor === '#FFFFFF' ? 'white' : 'auto';
-      panel.append(
-        segmented('Tekstfarge', tc, [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']], (v) =>
+      const sc = section('Farge');
+      sc.append(
+        swatches((b.fill ?? '').toUpperCase(), [
+          ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+          ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
+        ], (f) => change((x) => (x.fill = f))),
+        colorRow(b.fill ?? '#FFFFFF', (f) => change((x) => (x.fill = f)), { text: 'Fagets farge', disabled: !b.fill, onClick: () => change((x) => delete x.fill) }),
+        segmented('Tekstfarge', textColorKey(b.textColor), TEXT_COLORS, (v) =>
           change((x) => {
             if (v === 'auto') delete x.textColor;
             else x.textColor = v === 'black' ? '#000000' : '#FFFFFF';
           }),
         ),
       );
-      panel.append(
-        segmented('Callout', b.callout ?? 'auto', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
+      const trade = r?.trade;
+      if (trade && plan.colors.some((c) => c.name === trade))
+        sc.append(btn(`Endre fargen for hele faget «${tradeName(trade)}»`, null, () => selectTrade(trade), undefined, 'linkish'));
+
+      const so = section('Callout');
+      so.append(
+        segmented('Vis', b.callout ?? 'auto', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
           change((x) => {
             if (v === 'auto') delete x.callout;
             else x.callout = v;
           }),
         ),
-      );
-      panel.append(
-        segmented('Callout-side', b.calloutSide ?? 'auto', [['auto', 'Auto'], ['left', 'Venstre'], ['right', 'Høyre']], (v) =>
+        segmented('Side', b.calloutSide ?? 'auto', [['auto', 'Auto'], ['left', 'Venstre'], ['right', 'Høyre']], (v) =>
           change((x) => {
             if (v === 'auto') delete x.calloutSide;
             else x.calloutSide = v;
           }),
         ),
       );
-      panel.append(
-        segmented('Type', b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskriftsboks']], (v) => setHeader(b.id, v === 'header')),
+      if (b.rotation !== 0) so.append(el('p', { class: 'hint' }, 'Rotert tekst får ikke callout.'));
+
+      const sf = section('Form');
+      sf.append(
+        segmented('Type', b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskrift']], (v) => setHeader(b.id, v === 'header')),
       );
-      if (b.header) panel.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
-      panel.append(
-        segmented<Rotation>('Rotert tekst', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
+      if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
+      sf.append(
+        segmented<Rotation>('Rotasjon', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
           change((x) => {
             keepOriginal(x);
             x.rotation = v;
           }),
         ),
       );
-      if (b.rotation !== 0) panel.append(el('p', { class: 'hint' }, 'Rotert tekst får ikke callout.'));
     }
-    panel.append(segmented('Kritisk linje', b.critical ? 'on' : 'off', [['off', 'Ikke med'], ['on', 'Med']], (v) => setCritical([b.id], v === 'on')));
-    const pw = el('div', { class: 'prop' });
-    pw.append(el('span', { class: 'prop-label' }, 'Høyde og plass'));
-    const prow = el('div', { class: 'row' });
-    if (!ms) {
-      const hb = el('button', { type: 'button', class: 'button small', title: 'Så høy som teksten krever' }, 'Standard høyde');
-      hb.disabled = !b.height;
-      hb.addEventListener('click', () => change((x) => delete x.height));
-      prow.append(hb);
-    }
-    const lb = el('button', { type: 'button', class: 'button small', title: 'La appen velge plassen i lanen igjen' }, 'Løsne');
-    lb.disabled = b.top === undefined;
-    lb.addEventListener('click', () => change((x) => delete x.top));
-    prow.append(lb);
-    pw.append(prow, el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden.'));
-    panel.append(pw);
-    const reset = el('button', { type: 'button', class: 'button' }, 'Tilbakestill boks');
+
+    const sp = section('Plassering');
+    sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
+    if (b.top !== undefined) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change((x) => delete x.top)));
+    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden.'));
+
+    const foot = el('div', { class: 'panel-foot' });
+    const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
     reset.disabled = !isEdited(b);
-    reset.title = 'Fjerner det du har endret, så appens forslag gjelder igjen';
-    reset.addEventListener('click', () => commit((pl) => resetBoxInPlan(pl, b.id)));
-    const copy = el('button', { type: 'button', class: 'button', title: 'Lag en kopi rett under (Ctrl+D)' }, 'Kopier');
-    copy.addEventListener('click', () => copySelected());
-    const del = el('button', { type: 'button', class: 'button', title: b.manual ? 'Slett boksen (Delete)' : 'Skjul boksen. Høyreklikk lanen for å vise den igjen. (Delete)' }, b.manual ? 'Slett' : 'Skjul');
-    del.addEventListener('click', () => removeSelected());
-    const foot = el('div', { class: 'panel-foot row' });
-    foot.append(copy, del, reset);
+    foot.append(
+      btn('Kopier', 'copy', () => copySelected(), 'Lag en kopi rett under (Ctrl+D)'),
+      btn(b.manual ? 'Slett' : 'Skjul', b.manual ? 'trash' : 'hide', () => removeSelected(), b.manual ? 'Slett boksen (Delete)' : 'Skjul boksen. Høyreklikk lanen for å vise den igjen. (Delete)'),
+      reset,
+    );
     panel.append(foot);
   };
 
@@ -1579,7 +1520,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   // boksvalg, og tomt sted i lanen gir ny boks og skjulte bokser.
   const ctx = createCtxMenu();
   const plain = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim();
-  const fmtDate = (d: string) => d.split('-').reverse().join('.');
   sheet.addEventListener('contextmenu', (e) => {
     if (!active || !layoutNow) return;
     const plan = host.getPlan();

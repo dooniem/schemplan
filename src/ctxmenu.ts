@@ -20,6 +20,13 @@ const ICONS = {
   auto: 'M5 4h14 M12 8v12 M8.5 16.5L12 20l3.5-3.5',
   target: 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  close: 'M6 6l12 12 M18 6L6 18',
+  up: 'M12 19V5 M6 11l6-6 6 6',
+  down: 'M12 5v14 M6 13l6 6 6-6',
+  diamond: 'M12 4l8 8-8 8-8-8z',
+  flag: 'M6 21V4 M6 4h11l-2.5 4 2.5 4H6',
+  undo: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-4',
+  unpin: 'M12 16v5 M8 3h8 M9 3v5l-3 5h12l-3-5V3 M3 3l18 18',
 } as const;
 export type IconName = keyof typeof ICONS;
 
@@ -44,11 +51,11 @@ export interface CtxGroup {
   items: CtxItem[];
 }
 
-function icon(name: IconName): SVGSVGElement {
+export function icon(name: IconName, cls = 'ctx-ico'): SVGSVGElement {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('class', 'ctx-ico');
+  svg.setAttribute('class', cls);
   const p = document.createElementNS(NS, 'path');
   p.setAttribute('d', ICONS[name]);
   svg.append(p);
