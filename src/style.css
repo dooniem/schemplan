@@ -134,13 +134,25 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 #logo-pick:has(input:disabled) { opacity: 0.5; pointer-events: none; }
 .pop select, .pop input[type='number'] { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .pop input[type='number'] { width: 60px; }
-.pop-menu { padding: 4px; width: 300px; }
-.pop-menu button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 6px 10px; font: inherit; text-align: left; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
-.pop-menu button:hover:not(:disabled), .pop-menu button:focus-visible { background: var(--bg); outline: none; }
-.pop-menu button:disabled { opacity: 0.4; cursor: default; }
-.pop-menu button span { color: var(--muted); font-size: 12px; }
-.arrange-menu .set-switch { margin: 4px 10px 6px; padding-top: 8px; border-top: 1px solid var(--border); }
-.arrange-menu .pop-hint { margin: 6px 10px 2px; }
+/* Lagre og Omplasser: samme uttrykk som høyreklikkmenyene, men med en forklaring under hvert
+   valg, siden det er få valg og de skiller seg mest i hva de gjør */
+.pop-menu { padding: 4px; width: 320px; outline: none; }
+.pm-group { display: flex; flex-direction: column; padding: 4px 0; }
+.pm-group + .pm-group, .pop-menu .ctx-head + .pm-group { border-top: 1px solid var(--border); }
+.pm-item { display: grid; grid-template-columns: 16px 1fr auto; align-items: start; gap: 10px; width: 100%; padding: 7px 10px; font: inherit; text-align: left; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+.pm-item[hidden] { display: none; }
+.pm-item:hover:not(:disabled), .pm-item:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); outline: none; }
+.pm-item:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.pm-item:disabled { color: var(--muted); cursor: default; }
+.pm-item:disabled .pm-text, .pm-item:disabled .ctx-ico { opacity: 0.6; }
+.pm-item .ctx-ico { margin-top: 1px; color: var(--muted); }
+.pm-item:hover:not(:disabled) .ctx-ico, .pm-item:focus-visible .ctx-ico { color: var(--accent); }
+.pm-item .ctx-kbd { line-height: 18px; }
+.pm-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pm-text strong { font-weight: 600; line-height: 18px; }
+.pm-desc { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.arrange-menu .set-switch { padding: 6px 10px; }
+.arrange-menu .ctx-sub { line-height: 1.4; }
 /* Melding når nettleseren mangler funksjoner appen trenger */
 .compat-note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border); background: #fdecea; background: color-mix(in srgb, var(--error) 10%, var(--surface)); color: var(--error); font-size: 13px; }
 /* Høyreklikkmenyer (ctxmenu.ts): én linje per valg, gruppert, forklaring nederst */
@@ -443,3 +455,15 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .flash-ring { fill: none; stroke: #1F5FBF; stroke-width: 0.8; animation: flash-ring 0.8s ease-in-out 3; }
 @keyframes flash-ring { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.15; } }
 @media (prefers-reduced-motion: reduce) { .flash-ring { animation: none; } }
+
+/* Under redigering trengs plassen i topplinjen til verktøyene. Zoom virker fortsatt med
+   Ctrl + hjul, og prosenten viser hele arket ved klikk. */
+.topbar:has(#edit[aria-pressed='true']) :is(#zoom-out, #zoom-in, #zoom-width) { display: none; }
+/* Er vinduet smalere enn det, blir Innstillinger og Hjelp bare ikoner, og søkefeltet kortere */
+@media (max-width: 1599px) {
+  .topbar:has(#edit[aria-pressed='true']) :is(#settings, #help-open) .tb-label,
+  .topbar:has(#edit[aria-pressed='true']) #version { display: none; }
+  .topbar:has(#edit[aria-pressed='true']) #help-open { width: 28px; padding: 0; justify-content: center; }
+  .topbar:has(#edit[aria-pressed='true']) #settings { gap: 2px; padding: 0 8px; }
+  .topbar:has(#edit[aria-pressed='true']) .search input { width: 90px; }
+}

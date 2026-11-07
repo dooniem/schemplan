@@ -17,9 +17,9 @@
         Åpne
         <input id="file-input" type="file" accept=".json,.pdf,application/json,application/pdf" hidden />
       </label>
-      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, visning, tekst og logo">
+      <button type="button" id="settings" class="tb menu" popovertarget="menu-sheet" title="Ark, visning, tekst og logo" aria-label="Innstillinger">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.4l-.4 2.7a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.4l.4-2.7a7.4 7.4 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
-        Innstillinger
+        <span class="tb-label">Innstillinger</span>
       </button>
       <span class="sep" aria-hidden="true"></span>
       <div class="tbgroup" role="group" aria-label="Visning">
@@ -50,7 +50,7 @@
       </div>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="save-menu" class="tb primary menu" popovertarget="menu-save" disabled>Lagre</button>
-      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg>Hjelp</button>
+      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen" aria-label="Hjelp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg><span class="tb-label">Hjelp</span></button>
     </header>
 
     <div id="menu-sheet" class="pop settings no-print" popover aria-label="Innstillinger">
@@ -129,38 +129,50 @@
       </section>
     </div>
 
-    <div id="menu-arrange" class="pop pop-menu arrange-menu no-print" popover aria-label="Omplasser">
-      <p class="pop-hint" id="arrange-scope">Gjelder hele planen.</p>
-      <button type="button" id="arrange-tight">
-        <strong>Tettest</strong>
-        <span>Så lave lanes som mulig. Boksene kan komme i en annen rekkefølge enn tidligst først.</span>
-      </button>
-      <button type="button" id="arrange-chrono">
-        <strong>Tidligst først</strong>
-        <span>Som når planen lages: boksen som starter først, ligger øverst.</span>
-      </button>
-      <label class="set-switch">
-        <span><strong>Løsne festede bokser også</strong><small>Ellers blir bokser du har dratt på plass stående. Overskriftsbokser flyttes med boksene inni.</small></span>
-        <input type="checkbox" id="arrange-unpin" role="switch" />
-      </label>
+    <div id="menu-arrange" class="pop pop-menu arrange-menu no-print" popover aria-labelledby="arrange-title">
+      <div class="ctx-head">
+        <span class="ctx-title" id="arrange-title">Omplasser</span>
+        <span class="ctx-sub" id="arrange-scope">Gjelder hele planen.</span>
+      </div>
+      <div class="pm-group">
+        <button type="button" id="arrange-tight" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16 M12 3v6 M9 6l3 3 3-3 M12 21v-6 M9 18l3-3 3 3"/></svg>
+          <span class="pm-text"><strong>Tettest</strong><span class="pm-desc">Så lave lanes som mulig. Boksene kan komme i en annen rekkefølge enn tidligst først.</span></span>
+        </button>
+        <button type="button" id="arrange-chrono" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7 M7 12h8 M10 18h10"/></svg>
+          <span class="pm-text"><strong>Tidligst først</strong><span class="pm-desc">Som når planen lages: boksen som starter først, ligger øverst.</span></span>
+        </button>
+      </div>
+      <div class="pm-group">
+        <label class="set-switch">
+          <span><strong>Løsne festede bokser også</strong><small>Ellers blir bokser du har dratt på plass stående. Overskriftsbokser flyttes med boksene inni.</small></span>
+          <input type="checkbox" id="arrange-unpin" role="switch" />
+        </label>
+      </div>
     </div>
 
-    <div id="menu-save" class="pop pop-menu no-print" popover>
-      <button type="button" id="save-work" disabled>
-        <strong>Lagre arbeidsfil</strong>
-        <span>PDF med planen innebygd. Åpne den her igjen for å redigere. Internt dokument.</span>
-      </button>
-      <button type="button" id="save-share" disabled>
-        <strong>Lagre PDF for deling</strong>
-        <span>Vanlig PDF til å sende ut og legge ved. Kan ikke redigeres videre.</span>
-      </button>
-      <button type="button" id="save-trades" hidden>
-        <strong>Lagre PDF med bare valgte fag</strong>
-        <span id="save-trades-text">Bare boksene i fagene du har valgt i forklaringen.</span>
-      </button>
-      <button type="button" id="print" disabled>
-        <strong>Skriv ut</strong>
-      </button>
+    <div id="menu-save" class="pop pop-menu no-print" popover role="menu" aria-label="Lagre">
+      <div class="pm-group" role="group">
+        <button type="button" id="save-work" class="pm-item" role="menuitem" disabled>
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v5 M7 3v18h5 M14 3v4h4 M15 21v-2.5l4.5-4.5 2.5 2.5-4.5 4.5z"/></svg>
+          <span class="pm-text"><strong>Lagre arbeidsfil</strong><span class="pm-desc">PDF med planen innebygd. Åpne den her igjen for å redigere. Internt dokument.</span></span>
+        </button>
+        <button type="button" id="save-share" class="pm-item" role="menuitem" disabled>
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3 M8 7l4-4 4 4 M5 12v8h14v-8"/></svg>
+          <span class="pm-text"><strong>Lagre PDF for deling</strong><span class="pm-desc">Vanlig PDF til å sende ut og legge ved. Kan ikke redigeres videre.</span></span>
+        </button>
+        <button type="button" id="save-trades" class="pm-item" role="menuitem" hidden>
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
+          <span class="pm-text"><strong>Lagre PDF med bare valgte fag</strong><span class="pm-desc" id="save-trades-text">Bare boksene i fagene du har valgt i forklaringen.</span></span>
+        </button>
+      </div>
+      <div class="pm-group" role="group">
+        <button type="button" id="print" class="pm-item" role="menuitem" disabled>
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6 M7 17H4V9h16v8h-3 M7 14h10v7H7z"/></svg>
+          <span class="pm-text"><strong>Skriv ut</strong></span><span class="ctx-kbd">Ctrl+P</span>
+        </button>
+      </div>
     </div>
 
     <dialog id="help" class="help no-print" aria-labelledby="help-title">

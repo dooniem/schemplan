@@ -580,7 +580,7 @@ $<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
   if ((e as ToggleEvent).newState !== 'open') return;
   const t = focus.trades;
   $<HTMLButtonElement>('#save-trades').hidden = !t.length || !plan;
-  $('#save-trades-text').textContent = `${tradeNames(t).join(', ')}. Vanlig PDF til deling, uten de andre fagene.`;
+  $('#save-trades-text').textContent = `Bare ${tradeNames(t).join(', ')}. Vanlig PDF til deling, uten de andre fagene.`;
 });
 // Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
 // Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.
