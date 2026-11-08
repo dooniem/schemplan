@@ -136,8 +136,8 @@ describe('utkikk: tillegg', () => {
   it('miniatyren viser hele planen med perioden markert', () => {
     const p = testplan();
     const v = applyLookahead(p, rule(), '2026-11-08');
-    expect(v.extras.overview.lanes).toBe(5);
-    expect(v.extras.overview.bars.length).toBe(11);
+    expect(v.extras.overview!.lanes).toBe(5);
+    expect(v.extras.overview!.bars.length).toBe(11);
     const L = computeLayout(v.plan, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: true, lookahead: v.extras }, approxMeasure);
     expect(L.overview).not.toBeNull();
     const o = L.overview!;
@@ -161,5 +161,20 @@ describe('utkikk: datafanen', () => {
     expect(columnsFor(null).some((c) => c.key === 'period')).toBe(false);
     const cols = columnsFor({ start: '', end: '' }).map((c) => c.key);
     expect(cols.indexOf('period')).toBe(cols.indexOf('finish') + 1);
+  });
+});
+
+describe('utkikk: miniatyren kan slås av', () => {
+  it('uten miniatyr står bare milepælslinjen igjen, og forklaringen flytter opp', () => {
+    const on = applyLookahead(testplan(), rule(), '2026-11-08');
+    const off = applyLookahead(testplan(), rule({ showOverview: false }), '2026-11-08');
+    expect(off.extras.overview).toBeNull();
+    const o = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
+    const Lon = computeLayout(on.plan, { ...o, lookahead: on.extras }, approxMeasure);
+    const Loff = computeLayout(off.plan, { ...o, lookahead: off.extras }, approxMeasure);
+    expect(Loff.overview).toBeNull();
+    expect(Loff.upcoming?.lines[0]).toMatch(/^Neste milepæler/);
+    expect(Loff.legend[0].y).toBeLessThan(Lon.legend[0].y);
+    expect(readLookahead(rule({ showOverview: false }))?.showOverview).toBe(false);
   });
 });

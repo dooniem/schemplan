@@ -171,8 +171,6 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .lookahead-menu .num input[type='number'] { width: 100%; min-width: 0; padding: 5px 0 5px 8px; border: 0; background: none; font-variant-numeric: tabular-nums; outline: none; }
 .lookahead-menu .la-period .set-switch { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 8px; }
 .lookahead-menu:has(#la-on:not(:checked)) .la-period { opacity: 0.72; }
-.la-note { margin: 0; padding: 8px 10px 6px; border-top: 1px solid var(--border); color: var(--text); }
-.la-note[hidden] { display: none; }
 /* Knappen i topplinjen viser perioden når utkikken er på */
 #lookahead-menu.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Melding når nettleseren mangler funksjoner appen trenger */
@@ -488,4 +486,15 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
   .topbar:has(#edit[aria-pressed='true']) #help-open { width: 28px; padding: 0; justify-content: center; }
   .topbar:has(#edit[aria-pressed='true']) #settings { gap: 2px; padding: 0 8px; }
   .topbar:has(#edit[aria-pressed='true']) .search input { width: 90px; }
+}
+/* Med utkikken på kommer pilene i tillegg. På vanlige bærbare skjermer blir da Innstillinger
+   og Hjelp bare ikoner, så topplinjen holder seg på én rad. */
+@media (max-width: 1439px) {
+  .topbar:has(#lookahead-step:not([hidden])) :is(#settings, #help-open) .tb-label { display: none; }
+  .topbar:has(#lookahead-step:not([hidden])) #help-open { width: 28px; padding: 0; justify-content: center; }
+  .topbar:has(#lookahead-step:not([hidden])) #settings { gap: 2px; padding: 0 8px; }
+}
+@media (max-width: 1279px) {
+  .topbar:has(#lookahead-step:not([hidden])) #version { display: none; }
+  .topbar:has(#lookahead-step:not([hidden])) .search input { width: 110px; }
 }
