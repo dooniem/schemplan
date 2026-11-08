@@ -26,6 +26,7 @@
         <button type="button" id="view-plan" class="tb" aria-pressed="true" title="Vis planen">Plan</button>
         <button type="button" id="view-data" class="tb" aria-pressed="false" disabled title="Tabell over alle bokser med datoer og lane, kan eksporteres til Excel">Data</button>
       </div>
+      <button type="button" id="lookahead-menu" class="tb menu" popovertarget="menu-lookahead" disabled title="Vis bare noen uker av planen, f.eks. de neste tre ukene"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M3.5 9.5h17 M8 3v4 M16 3v4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M7.5 15h9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span class="tb-label" id="lookahead-label">Utkikk</span></button>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="edit" class="tb cta" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span id="edit-label">Rediger</span></button>
       <div class="tbgroup" id="edit-tools" role="group" aria-label="Redigering" hidden>
@@ -152,6 +153,59 @@
       </div>
     </div>
 
+    <div id="menu-lookahead" class="pop pop-menu lookahead-menu no-print" popover aria-labelledby="la-title">
+      <div class="ctx-head">
+        <span class="ctx-title" id="la-title">Utkikk</span>
+        <span class="ctx-sub" id="la-summary">Av. Hele planen vises.</span>
+      </div>
+      <div class="pm-group">
+        <label class="set-switch">
+          <span><strong>Vis bare en periode</strong><small>Planen tegnes på nytt for ukene du velger. Selve planen endres ikke.</small></span>
+          <input type="checkbox" id="la-on" role="switch" />
+        </label>
+      </div>
+      <div class="pm-group la-period" role="group" aria-label="Periode">
+        <div class="set-row">
+          <span class="set-label" id="la-lbl-from">Fra</span>
+          <div class="group" role="group" aria-labelledby="la-lbl-from">
+            <button type="button" data-la-from="now" aria-pressed="true" title="Mandag denne uken. Følger med når uka skifter.">Denne uken</button>
+            <button type="button" data-la-from="week" aria-pressed="false">Velg uke</button>
+          </div>
+        </div>
+        <div class="la-week" id="la-from-week" hidden>
+          <label><span>Uke</span><span class="num"><input id="la-from-w" type="number" min="1" max="53" step="1" inputmode="numeric" /></span></label>
+          <label><span>År</span><span class="num"><input id="la-from-y" type="number" min="1900" max="2200" step="1" inputmode="numeric" /></span></label>
+        </div>
+        <div class="set-row">
+          <span class="set-label" id="la-lbl-len">Lengde</span>
+          <div class="group" role="group" aria-labelledby="la-lbl-len">
+            <button type="button" data-la-len="3" aria-pressed="true">3 uker</button>
+            <button type="button" data-la-len="8" aria-pressed="false">8 uker</button>
+            <button type="button" data-la-len="custom" aria-pressed="false" title="Velg antall uker selv">Annet</button>
+            <button type="button" data-la-len="until" aria-pressed="false" title="Til og med en bestemt uke">Til uke</button>
+          </div>
+        </div>
+        <div class="la-week" id="la-len-custom" hidden>
+          <label><span>Antall uker</span><span class="num"><input id="la-len-n" type="number" min="1" max="52" step="1" inputmode="numeric" /><i>uker</i></span></label>
+        </div>
+        <div class="la-week" id="la-len-until" hidden>
+          <label><span>Til og med uke</span><span class="num"><input id="la-until-w" type="number" min="1" max="53" step="1" inputmode="numeric" /></span></label>
+          <label><span>År</span><span class="num"><input id="la-until-y" type="number" min="1900" max="2200" step="1" inputmode="numeric" /></span></label>
+        </div>
+        <label class="set-switch">
+          <span><strong>Ta med uken før</strong><small>Én uke ekstra foran, så det som skulle vært ferdig også vises.</small></span>
+          <input type="checkbox" id="la-prev" role="switch" />
+        </label>
+      </div>
+      <div class="pm-group">
+        <label class="set-switch">
+          <span><strong>Skjul tomme lanes</strong><small>Lanes uten bokser i perioden tas bort, så resten får plass.</small></span>
+          <input type="checkbox" id="la-empty" role="switch" checked />
+        </label>
+      </div>
+      <p class="pop-hint la-note" id="la-note" role="status" hidden></p>
+    </div>
+
     <div id="menu-save" class="pop pop-menu no-print" popover role="menu" aria-label="Lagre">
       <div class="pm-group" role="group">
         <button type="button" id="save-work" class="pm-item" role="menuitem" disabled>
@@ -214,6 +268,7 @@
             <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
             <li>Hold musen over en boks for datoer.</li>
             <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Shift-klikk velger flere.</li>
+            <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
           </ul>
           <h4>Rediger</h4>
           <ul>

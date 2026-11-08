@@ -61,6 +61,8 @@ export interface PlanSettings {
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
     /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */
     criticalLine?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
+    /** Utkikk: planen tegnes bare for noen uker. Lagres som regel, så perioden ruller videre. */
+    lookahead?: Lookahead;
   };
   options: {
     legend: boolean;
@@ -68,6 +70,24 @@ export interface PlanSettings {
     filterOutput: boolean;
     colorBy: 'trade' | 'lane';
   };
+}
+
+export interface IsoWeek {
+  year: number;
+  week: number;
+}
+
+export interface Lookahead {
+  /** Slått på: planen tegnes bare for perioden. */
+  on: boolean;
+  /** Startuke. null = denne uken, som ruller med dagens dato. */
+  from: IsoWeek | null;
+  /** Ta med uken før startuken. */
+  prevWeek: boolean;
+  /** Antall uker fra og med startuken, eller til og med en ISO-uke. */
+  length: { weeks: number } | IsoWeek;
+  /** Ta bort lanes uten bokser i perioden. */
+  hideEmptyLanes: boolean;
 }
 
 export interface TradeColor {
