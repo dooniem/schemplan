@@ -211,6 +211,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
     node('rect', { x: w.x0, y: o.y0 - 0.4, width: w.x1 - w.x0, height: o.y1 - o.y0 + 0.8, fill: 'none', stroke: '#C00000', 'stroke-width': 0.45 }, ov);
   }
 
+  if (L.upcoming) text(L.upcoming, node('g', { class: 'overview' }, svg));
+
   // Legend
   const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {

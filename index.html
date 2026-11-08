@@ -160,7 +160,7 @@
     <div id="menu-lookahead" class="pop pop-menu lookahead-menu no-print" popover aria-labelledby="la-title">
       <div class="pm-group la-head">
         <label class="set-switch">
-          <span><strong id="la-title">Utkikk</strong><small id="la-summary">Av. Hele planen vises.</small></span>
+          <span><strong id="la-title">Utkikk</strong><small id="la-summary" role="status">Av. Hele planen vises.</small></span>
           <input type="checkbox" id="la-on" role="switch" />
         </label>
       </div>
@@ -202,8 +202,11 @@
           <span><strong>Skjul tomme lanes</strong><small>Lanes uten bokser i perioden tas bort, så resten får plass.</small></span>
           <input type="checkbox" id="la-empty" role="switch" checked />
         </label>
+        <label class="set-switch">
+          <span><strong>Vis hele planen nederst</strong><small>En stripe som viser hvor i planen perioden ligger. Blir med på PDF og utskrift.</small></span>
+          <input type="checkbox" id="la-overview" role="switch" checked />
+        </label>
       </div>
-      <p class="pop-hint la-note" id="la-note" role="status" hidden></p>
     </div>
 
     <div id="menu-save" class="pop pop-menu no-print" popover role="menu" aria-label="Lagre">

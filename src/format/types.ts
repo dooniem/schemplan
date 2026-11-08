@@ -88,6 +88,8 @@ export interface Lookahead {
   length: { weeks: number } | IsoWeek;
   /** Ta bort lanes uten bokser i perioden. */
   hideEmptyLanes: boolean;
+  /** Vis hele planen i miniatyr under planen, også på PDF og utskrift. Mangler den, vises den. */
+  showOverview?: boolean;
 }
 
 export interface TradeColor {

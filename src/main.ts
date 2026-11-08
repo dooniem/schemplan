@@ -222,20 +222,22 @@ function syncLookahead() {
   put('#la-until-y', untilDefault.year);
   $<HTMLInputElement>('#la-prev').checked = r.prevWeek;
   $<HTMLInputElement>('#la-empty').checked = r.hideEmptyLanes;
-  for (const id of ['#la-prev', '#la-empty']) $<HTMLInputElement>(id).disabled = !plan;
+  $<HTMLInputElement>('#la-overview').checked = r.showOverview !== false;
+  for (const id of ['#la-prev', '#la-empty', '#la-overview']) $<HTMLInputElement>(id).disabled = !plan;
   const period = preview ? `${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)} (${preview.weeks === 1 ? '1 uke' : `${preview.weeks} uker`})` : '';
+  // Alt om perioden står samlet under av/på: hva som tegnes, og hvorfor den er flyttet
+  // Bare grunnen (f.eks. «Planen starter uke 10 2027.»); lengden står allerede i teksten
+  const why = preview?.note ? ` ${preview.note.split('. ')[0].replace(/\.?$/, '.')}` : '';
   $('#la-summary').textContent = !preview
     ? 'Åpne en plan først.'
     : r.on
-      ? `På. Tegner ${period}. Resten av planen er bare skjult, ingenting er slettet.`
-      : `Av. Hele planen vises. Slår du den på, tegnes ${period}.`;
-  const note = $<HTMLElement>('#la-note');
-  note.textContent = preview?.note ?? '';
-  note.hidden = !preview?.note;
+      ? `På. Tegner ${period}.${why} Resten av planen er bare skjult, ingenting er slettet.`
+      : `Av. Hele planen vises. Slår du den på, tegnes ${period}.${why}`;
 }
 $<HTMLInputElement>('#la-on').addEventListener('change', (e) => setLookahead({ on: (e.target as HTMLInputElement).checked }));
 $<HTMLInputElement>('#la-prev').addEventListener('change', (e) => setLookahead({ on: true, prevWeek: (e.target as HTMLInputElement).checked }));
 $<HTMLInputElement>('#la-empty').addEventListener('change', (e) => setLookahead({ hideEmptyLanes: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#la-overview').addEventListener('change', (e) => setLookahead({ showOverview: (e.target as HTMLInputElement).checked }));
 /** Uke og år fra to felt, eller null om uken ikke finnes. */
 function readWeek(wId: string, yId: string): { year: number; week: number } | null {
   const week = Number($<HTMLInputElement>(wId).value);

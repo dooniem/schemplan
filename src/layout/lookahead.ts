@@ -127,11 +127,12 @@ export function applyLookahead(file: PlanFile, rule: Lookahead, today: string): 
     },
     lanes,
   };
-  return { plan, window, extras: lookaheadExtras(file, window) };
+  return { plan, window, extras: lookaheadExtras(file, window, rule.showOverview !== false) };
 }
 
 /** Det som tegnes i tillegg i utkikken: hele planen i miniatyr og de neste milepælene. */
 export interface LookaheadExtras {
+  /** null når miniatyren er slått av. */
   overview: {
     /** Hele planen: første dag og første dag etter, ms UTC. */
     start: number;
@@ -141,7 +142,7 @@ export interface LookaheadExtras {
     winEnd: number;
     lanes: number;
     bars: { start: number; end: number; lane: number; trade: string; fill?: string }[];
-  };
+  } | null;
   /** «Tett hus uke 52», de neste milepælene etter perioden. */
   upcoming: string[];
 }
@@ -149,9 +150,9 @@ export interface LookaheadExtras {
 /** Milepæler etter perioden som nevnes, høyst. */
 const UPCOMING_MAX = 3;
 
-export function lookaheadExtras(file: PlanFile, window: LookaheadWindow): LookaheadExtras {
+export function lookaheadExtras(file: PlanFile, window: LookaheadWindow, withOverview = true): LookaheadExtras {
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
-  const bars: LookaheadExtras['overview']['bars'] = [];
+  const bars: NonNullable<LookaheadExtras['overview']>['bars'] = [];
   const after = toIso(window.end);
   const coming: { date: string; name: string }[] = [];
   lanes.forEach((l, i) => {
@@ -175,7 +176,7 @@ export function lookaheadExtras(file: PlanFile, window: LookaheadWindow): Lookah
       return `${m.name} uke ${w.week}${w.year !== endYear ? ` ${w.year}` : ''}`;
     });
   return {
-    overview: {
+    overview: !withOverview ? null : {
       start: parseIso(file.plan.calendar.start),
       end: addDays(parseIso(file.plan.calendar.end), 1),
       winStart: window.start,
@@ -213,7 +214,8 @@ export function readLookahead(v: unknown): Lookahead | null {
     if (!w) return null;
     length = w;
   }
-  return { on: o.on, from, prevWeek: o.prevWeek, length, hideEmptyLanes: o.hideEmptyLanes };
+  if (o.showOverview !== undefined && typeof o.showOverview !== 'boolean') return null;
+  return { on: o.on, from, prevWeek: o.prevWeek, length, hideEmptyLanes: o.hideEmptyLanes, ...(o.showOverview === false ? { showOverview: false } : {}) };
 }
 
 /** ISO-uken en dato ligger i. */

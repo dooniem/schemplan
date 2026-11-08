@@ -184,6 +184,8 @@ export interface Layout {
   unit: number;
   /** Utkikk: hele planen i miniatyr under planen. */
   overview: Overview | null;
+  /** Utkikk uten miniatyr: linjen med de neste milepælene står alene. */
+  upcoming: TextBlock | null;
 }
 
 const MARGIN = 8;
@@ -501,8 +503,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const la = opts.lookahead;
   const ovLabelSize = legendSize * 0.8;
   const ovUpH = la?.upcoming.length ? legendSize * 1.7 : 0;
-  const ovStripH = la ? Math.min(12, Math.max(6, la.overview.lanes * 0.3)) : 0;
-  const ovH = la ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : 0;
+  const ovStripH = la?.overview ? Math.min(12, Math.max(6, la.overview.lanes * 0.3)) : 0;
+  // Uten miniatyr står bare milepælslinjen igjen
+  const ovH = !la ? 0 : la.overview ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : ovUpH ? 1 + ovUpH : 0;
 
   // ---- Høydebudsjett ----
   const plotTop = MARGIN + headerH + calH;
@@ -555,7 +558,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny) : [];
   const ovTop = plotBottom + (bottomCal ? calH : 0) + 2;
   let overview: Overview | null = null;
-  if (la) {
+  const upcoming: TextBlock | null = la?.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null;
+  if (la?.overview) {
     const o = la.overview;
     const span = Math.max(1, o.end - o.start);
     const xOf = (t: number) => x0 + ((Math.min(Math.max(t, o.start), o.end) - o.start) / span) * (x1 - x0);
@@ -586,11 +590,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       months,
       years,
       label: { x: laneTitleX + LANE_TITLE_W / 2, y: sy0 + ovStripH / 2 + ovLabelSize * 0.35, lines: ['Hele planen'], size: ovLabelSize, color: '#595959', anchor: 'middle' },
-      upcoming: la.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null,
+      upcoming,
     };
   }
   // Forklaringen står rett under miniatyren
-  const legendTop = ovTop + (la ? ovH - 1 : 0);
+  const legendTop = ovTop + (ovH ? ovH - 1 : 0);
   const legend = legendEntries.map((e) => ({
     ...e,
     y: e.y + legendTop,
@@ -647,6 +651,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
     unit: lh,
     overview,
+    upcoming: overview ? null : upcoming,
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
