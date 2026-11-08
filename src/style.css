@@ -156,7 +156,8 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 /* Utkikk: samme byggeklosser som Innstillinger, i menyens uttrykk. Valgene for perioden er
    alltid synlige; endrer man dem, slås utkikken på. */
 .pop.lookahead-menu { width: min(368px, calc(100vw - 16px)); }
-.lookahead-menu .ctx-sub { line-height: 1.4; }
+.lookahead-menu .la-head strong { font-weight: 600; }
+.lookahead-menu .la-head small { font-variant-numeric: tabular-nums; }
 .lookahead-menu .set-switch, .lookahead-menu .set-row, .la-week { padding-inline: 10px; }
 .lookahead-menu .set-row { grid-template-columns: 52px 1fr; gap: 10px; padding-block: 4px; }
 .lookahead-menu .set-row + .set-row { margin-top: 0; }
