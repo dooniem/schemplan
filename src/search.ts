@@ -7,7 +7,11 @@ const HIT = '#F5A000';
 
 const norm = (s: string) => s.toLocaleLowerCase('nb').replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
 
-/** Id-ene til boksene som passer. Alle ordene må finnes i boksteksten, aktivitetsnavnene, faget eller lanenavnet. */
+/**
+ * Id-ene til boksene som passer. Alle ordene må finnes i boksteksten, aktivitetsnavnene, faget
+ * eller lanenavnet, og minst ett av dem i selve boksen. Lanenavnet snevrer altså bare inn
+ * («Bygg A betong»); et søk som bare passer lanenavnet, gjør ikke hele lanen til treff.
+ */
 export function findMatches(plan: PlanFile, query: string): string[] {
   const words = norm(query).split(' ').filter(Boolean);
   if (!words.length) return [];
@@ -15,13 +19,21 @@ export function findMatches(plan: PlanFile, query: string): string[] {
   const out: string[] = [];
   for (const l of plan.lanes) {
     if (!l.shown || l.hidden) continue;
+    const lane = norm(l.name);
     for (const b of l.boxes) {
       if (!b.shown || b.hidden) continue;
-      const hay = norm([b.text, ...b.taskIds.map((id) => names.get(id) ?? ''), b.resolved?.trade ?? '', l.name].join(' '));
-      if (words.every((w) => hay.includes(w))) out.push(b.id);
+      const own = norm([b.text, ...b.taskIds.map((id) => names.get(id) ?? ''), b.resolved?.trade ?? ''].join(' '));
+      if (words.every((w) => own.includes(w) || lane.includes(w)) && words.some((w) => own.includes(w))) out.push(b.id);
     }
   }
   return out;
+}
+
+/** Lanene der hele søket står i navnet, til meldingen når ingen bokser passer. */
+export function matchingLanes(plan: PlanFile, query: string): string[] {
+  const words = norm(query).split(' ').filter(Boolean);
+  if (!words.length) return [];
+  return plan.lanes.filter((l) => l.shown && !l.hidden && words.every((w) => norm(l.name).includes(w))).map((l) => l.name.replace(/\/?\|/g, ' ').trim());
 }
 
 export interface Search {
@@ -38,7 +50,15 @@ export function createSearch(input: HTMLInputElement, count: HTMLElement, getPla
 
   const paint = () => {
     svg?.querySelector('g.search-hits')?.remove();
-    count.textContent = input.value.trim() ? (hits.length ? `${current + 1 > 0 ? `${current + 1} av ` : ''}${hits.length} treff` : 'Ingen treff') : '';
+    const plan = getPlan();
+    const lanes = !hits.length && plan ? matchingLanes(plan, input.value) : [];
+    count.textContent = input.value.trim()
+      ? hits.length
+        ? `${current + 1 > 0 ? `${current + 1} av ` : ''}${hits.length} treff`
+        : lanes.length
+          ? `Ingen bokser. Passer lanen ${lanes[0]}${lanes.length > 1 ? ` og ${lanes.length - 1} til` : ''}`
+          : 'Ingen treff'
+      : '';
     if (!svg || !hits.length) return;
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'edit-overlay search-hits');
