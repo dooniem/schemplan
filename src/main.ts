@@ -223,7 +223,12 @@ function syncLookahead() {
   $<HTMLInputElement>('#la-prev').checked = r.prevWeek;
   $<HTMLInputElement>('#la-empty').checked = r.hideEmptyLanes;
   for (const id of ['#la-prev', '#la-empty']) $<HTMLInputElement>(id).disabled = !plan;
-  $('#la-summary').textContent = !preview ? 'Åpne en plan først.' : r.on ? `Viser ${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)}, ${preview.weeks === 1 ? '1 uke' : `${preview.weeks} uker`}.` : `Av. Slår du den på, vises ${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)}.`;
+  const period = preview ? `${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)} (${preview.weeks === 1 ? '1 uke' : `${preview.weeks} uker`})` : '';
+  $('#la-summary').textContent = !preview
+    ? 'Åpne en plan først.'
+    : r.on
+      ? `På. Tegner ${period}. Resten av planen er bare skjult, ingenting er slettet.`
+      : `Av. Hele planen vises. Slår du den på, tegnes ${period}.`;
   const note = $<HTMLElement>('#la-note');
   note.textContent = preview?.note ?? '';
   note.hidden = !preview?.note;
