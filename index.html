@@ -27,6 +27,10 @@
         <button type="button" id="view-data" class="tb" aria-pressed="false" disabled title="Tabell over alle bokser med datoer og lane, kan eksporteres til Excel">Data</button>
       </div>
       <button type="button" id="lookahead-menu" class="tb menu" popovertarget="menu-lookahead" disabled title="Vis bare noen uker av planen, f.eks. de neste tre ukene"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M3.5 9.5h17 M8 3v4 M16 3v4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M7.5 15h9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span class="tb-label" id="lookahead-label">Utkikk</span></button>
+      <div class="tbgroup la-step" id="lookahead-step" role="group" aria-label="Bla i utkikken" hidden>
+        <button type="button" id="lookahead-prev" class="tb icon" title="En uke tilbake" aria-label="En uke tilbake"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" id="lookahead-next" class="tb icon" title="En uke fram" aria-label="En uke fram"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="edit" class="tb cta" aria-pressed="false" disabled title="Velg bokser og endre tekst, farge, callout og rotasjon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span id="edit-label">Rediger</span></button>
       <div class="tbgroup" id="edit-tools" role="group" aria-label="Redigering" hidden>
@@ -332,6 +336,7 @@
           <label class="data-filter"><span>Filter</span><input type="search" id="data-filter" placeholder="f.eks. lanenavn eller fag" /></label>
           <label class="check"><input type="checkbox" id="data-edited" /> Bare redigerte</label>
           <label class="check"><input type="checkbox" id="data-hidden" /> Vis skjulte</label>
+          <label class="check" id="data-window-field" hidden><input type="checkbox" id="data-window" checked /> <span id="data-window-label">Bare i utkikken</span></label>
           <span id="data-count" class="muted" aria-live="polite"></span>
           <span class="spacer"></span>
           <button type="button" id="data-export" class="tb primary" title="Lagrer radene som vises nå som en Excel-fil">Eksporter til Excel</button>

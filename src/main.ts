@@ -15,8 +15,8 @@ import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
-import { cell, COLUMNS } from './data/rows';
-import { applyLookahead, LOOKAHEAD_DEFAULT, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
+import { cell } from './data/rows';
+import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
@@ -95,7 +95,11 @@ const dataView = createDataView(dataSection, () => plan, (id) => {
   layer.append(ring);
   g.ownerSVGElement?.append(layer);
   setTimeout(() => layer.remove(), 2600);
-});
+}, () =>
+  lookWindow
+    ? { start: new Date(lookWindow.start).toISOString().slice(0, 10), end: new Date(lookWindow.end - 86_400_000).toISOString().slice(0, 10), label: lookWindow.label }
+    : null,
+);
 function showView(v: 'plan' | 'data') {
   dataSection.hidden = v !== 'data';
   $<HTMLElement>('.work').hidden = v === 'data';
@@ -110,12 +114,13 @@ $<HTMLButtonElement>('#data-export').addEventListener('click', async (e) => {
   const msg = $('#data-status');
   const rows = dataView.visibleRows();
   if (!plan || !rows.length) return;
-  const name = `${baseName}_data.xlsx`;
+  const name = `${baseName}_data${lookWindow && !$<HTMLElement>('#data-window-field').hidden && $<HTMLInputElement>('#data-window').checked ? `_utkikk-${lookWindow.tag}` : ''}.xlsx`;
   const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   btn.disabled = true;
   try {
     const { buildXlsx } = await import('./data/xlsx');
-    const bytes = buildXlsx('Data', COLUMNS, rows.map((r) => COLUMNS.map((c) => cell(r, c.key))));
+    const cols = dataView.columns();
+    const bytes = buildXlsx('Data', cols, rows.map((r) => cols.map((c) => cell(r, c.key))));
     const saved = await saveFile(name, new Blob([bytes as BlobPart], { type: mime }), 'Excel-arbeidsbok', mime, '.xlsx');
     if (saved) {
       msg.textContent = `Lagret ${saved} (${rows.length} rader).`;
@@ -162,10 +167,11 @@ const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? '
 // ---- Utkikk ----
 let lookWindow: LookaheadWindow | null = null;
 /** Planen slik den tegnes: hele, eller bare perioden når utkikken er på. */
-function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null } {
+function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
   const r = p.plan.layout.lookahead;
-  if (!r?.on) return { plan: p, window: null };
-  return applyLookahead(p, r, todayIso());
+  if (!r?.on) return { plan: p, window: null, opts };
+  const v = applyLookahead(p, r, todayIso());
+  return { ...v, opts: { ...opts, lookahead: v.extras } };
 }
 const lookRule = (): Lookahead => plan?.plan.layout.lookahead ?? LOOKAHEAD_DEFAULT;
 function setLookahead(change: Partial<Lookahead>) {
@@ -181,6 +187,7 @@ function syncLookahead() {
   const btn = $<HTMLButtonElement>('#lookahead-menu');
   btn.disabled = !plan;
   btn.classList.toggle('on', !!lookWindow);
+  $<HTMLElement>('#lookahead-step').hidden = !lookWindow;
   $('#lookahead-label').textContent = lookWindow ? `Utkikk ${lookWindow.tag.replace('u', 'uke ').replace('-', '–')}` : 'Utkikk';
   const edit = $<HTMLButtonElement>('#edit');
   if (plan) {
@@ -269,6 +276,20 @@ const untilInput = () => {
 };
 $<HTMLInputElement>('#la-until-w').addEventListener('input', untilInput);
 $<HTMLInputElement>('#la-until-y').addEventListener('input', untilInput);
+// Bla uke for uke: perioden flyttes, og lengden beholdes. Startuken blir da en fast uke.
+function stepWeeks(n: number) {
+  const r = lookRule();
+  if (!plan || !lookWindow) return;
+  const from = lookWindow.start + (r.prevWeek ? 7 : 0) * 86_400_000;
+  const shift = (t: number) => weekOf(new Date(t + n * 7 * 86_400_000).toISOString().slice(0, 10));
+  const next: Lookahead = { ...r, from: shift(from), length: 'weeks' in r.length ? r.length : shift(isoWeekMonday(r.length.year, r.length.week)) };
+  // Ved starten eller slutten av planen står perioden stille
+  const moved = resolveWindow(next, plan, todayIso()).start - lookWindow.start;
+  if (moved * n <= 0) return;
+  setLookahead(next);
+}
+$<HTMLButtonElement>('#lookahead-prev').addEventListener('click', () => stepWeeks(-1));
+$<HTMLButtonElement>('#lookahead-next').addEventListener('click', () => stepWeeks(1));
 // Dagen kan ha skiftet siden planen ble tegnet («denne uken» følger dagens dato)
 $<HTMLElement>('#menu-lookahead').addEventListener('beforetoggle', (e) => {
   if ((e as ToggleEvent).newState === 'open') syncLookahead();
@@ -288,7 +309,7 @@ function draw() {
   // Utkikk: en kopi av planen der kalenderen bare dekker perioden
   const view = viewOf(plan);
   lookWindow = view.window;
-  const layout = computeLayout(view.plan, opts, measure);
+  const layout = computeLayout(view.plan, view.opts, measure);
   const svg = renderPlan(layout);
   shown = { layout, svg };
   viewer.show(svg, layout.width, layout.height);
@@ -325,7 +346,7 @@ function draw() {
     if (plan !== current) return;
     // Beste retning per ark, og et større ark bare når det gir større tekst enn et mindre
     const order: Paper[] = ['A3', 'A2', 'A1'];
-    const alts = fitAlternatives(currentView, opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
+    const alts = fitAlternatives(currentView, view.opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
     const better: typeof alts = [];
     let bestSoFar = tight ? 0 : layout.textSizePt;
     for (const paper of order) {
@@ -667,7 +688,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
       const keep = new Set(onlyTrades);
       for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
       saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
-      const layout = computeLayout(viewOf(saved).plan, opts, measure);
+      const v = viewOf(saved);
+      const layout = computeLayout(v.plan, v.opts, measure);
       target = { layout, svg: renderPlan(layout) };
     }
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);

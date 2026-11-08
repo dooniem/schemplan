@@ -125,3 +125,41 @@ describe('utkikk: lagres i arbeidsfilen', () => {
     expect(validatePlan(JSON.stringify(p)).errors.join()).toMatch(/lookahead/);
   });
 });
+
+describe('utkikk: tillegg', () => {
+  it('neste milepæler etter perioden, med uke', () => {
+    const v = applyLookahead(testplan(), rule(), '2026-11-08');
+    // Perioden er uke 45–47; milepælen 14.12.2026 er i uke 51
+    expect(v.extras.upcoming).toEqual(['Incididuntutla uke 51']);
+  });
+
+  it('miniatyren viser hele planen med perioden markert', () => {
+    const p = testplan();
+    const v = applyLookahead(p, rule(), '2026-11-08');
+    expect(v.extras.overview.lanes).toBe(5);
+    expect(v.extras.overview.bars.length).toBe(11);
+    const L = computeLayout(v.plan, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: true, lookahead: v.extras }, approxMeasure);
+    expect(L.overview).not.toBeNull();
+    const o = L.overview!;
+    expect(o.window.x0).toBeGreaterThan(o.x0 + (o.x1 - o.x0) * 0.8);
+    expect(o.y0).toBeGreaterThan(L.plot.y1);
+    expect(L.legend[0].y).toBeGreaterThan(o.y1);
+    expect(o.upcoming?.lines[0]).toMatch(/^Neste milepæler: Incididuntutla uke 51/);
+  });
+});
+
+describe('utkikk: datafanen', () => {
+  it('sier om boksen starter, slutter eller pågår i perioden', async () => {
+    const { planRows, columnsFor } = await import('../data/rows');
+    const rows = planRows(testplan(), { start: '2026-11-02', end: '2026-11-22' });
+    const by = Object.fromEntries(rows.map((r) => [r.id, r.period]));
+    expect(by['2_1']).toBe('Pågår');
+    expect(by['4_1']).toBe('Slutter');
+    expect(by['4_2']).toBe('Pågår');
+    expect(by['1_1']).toBe('');
+    expect(rows.filter((r) => r.inWindow).map((r) => r.id).sort()).toEqual(['2_1', '4_1', '4_2']);
+    expect(columnsFor(null).some((c) => c.key === 'period')).toBe(false);
+    const cols = columnsFor({ start: '', end: '' }).map((c) => c.key);
+    expect(cols.indexOf('period')).toBe(cols.indexOf('finish') + 1);
+  });
+});

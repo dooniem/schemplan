@@ -7,6 +7,7 @@ import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
+import type { LookaheadExtras } from './lookahead';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -27,6 +28,22 @@ export interface LayoutOptions {
   showLegend?: boolean;
   /** Vis kalenderen også under planen. Standard: valget i planen. */
   showBottomCalendar?: boolean;
+  /** Utkikk: hele planen i miniatyr under planen, og de neste milepælene. */
+  lookahead?: LookaheadExtras;
+}
+
+/** Hele planen i miniatyr med perioden i utkikken markert. */
+export interface Overview {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  bars: { x0: number; x1: number; y: number; h: number; fill: string }[];
+  window: { x0: number; x1: number };
+  months: number[];
+  years: { x: number; label: TextBlock }[];
+  label: TextBlock;
+  upcoming: TextBlock | null;
 }
 
 export const DEFAULT_TITLE_PT = 16;
@@ -165,6 +182,8 @@ export interface Layout {
   critical: CriticalLine | null;
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
   unit: number;
+  /** Utkikk: hele planen i miniatyr under planen. */
+  overview: Overview | null;
 }
 
 const MARGIN = 8;
@@ -478,9 +497,16 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   }
   if (!legendH) legendH = legendSize * 2 + 2; // datoen nede til høyre
 
+  // ---- Utkikk: hele planen i miniatyr og de neste milepælene ----
+  const la = opts.lookahead;
+  const ovLabelSize = legendSize * 0.8;
+  const ovUpH = la?.upcoming.length ? legendSize * 1.7 : 0;
+  const ovStripH = la ? Math.min(12, Math.max(6, la.overview.lanes * 0.3)) : 0;
+  const ovH = la ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : 0;
+
   // ---- Høydebudsjett ----
   const plotTop = MARGIN + headerH + calH;
-  const fixedBottom = (bottomCal ? calH : 0) + legendH + MARGIN;
+  const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
   const overflow = natural > avail + 1e-6;
@@ -527,7 +553,44 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Kalenderrader ----
   const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny);
   const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny) : [];
-  const legendTop = plotBottom + (bottomCal ? calH : 0) + 2;
+  const ovTop = plotBottom + (bottomCal ? calH : 0) + 2;
+  let overview: Overview | null = null;
+  if (la) {
+    const o = la.overview;
+    const span = Math.max(1, o.end - o.start);
+    const xOf = (t: number) => x0 + ((Math.min(Math.max(t, o.start), o.end) - o.start) / span) * (x1 - x0);
+    const sy0 = ovTop + ovUpH;
+    const slot = ovStripH / Math.max(1, o.lanes);
+    const months: number[] = [];
+    const years: Overview['years'] = [];
+    for (let y = new Date(o.start).getUTCFullYear(), m = new Date(o.start).getUTCMonth() + 1; ; m++) {
+      if (m === 12) (m = 0), y++;
+      const t = Date.UTC(y, m, 1);
+      if (t >= o.end) break;
+      months.push(xOf(t));
+      if (m === 0) years.push({ x: xOf(t), label: { x: xOf(t) + 0.6, y: sy0 + ovStripH + ovLabelSize * 1.1, lines: [String(y)], size: ovLabelSize, color: '#595959', anchor: 'start' } });
+    }
+    const firstYear = String(new Date(o.start).getUTCFullYear());
+    years.unshift({ x: x0, label: { x: x0 + 0.6, y: sy0 + ovStripH + ovLabelSize * 1.1, lines: [firstYear], size: ovLabelSize, color: '#595959', anchor: 'start' } });
+    overview = {
+      x0,
+      x1,
+      y0: sy0,
+      y1: sy0 + ovStripH,
+      bars: o.bars.map((b) => {
+        const c = colors.get(b.trade) ?? noneColor;
+        const bx0 = xOf(b.start);
+        return { x0: bx0, x1: Math.max(bx0 + 0.25, xOf(b.end)), y: sy0 + b.lane * slot + slot * 0.1, h: Math.max(0.12, slot * 0.8), fill: b.fill ?? c.fill ?? '#BFBFBF' };
+      }),
+      window: { x0: xOf(o.winStart), x1: Math.max(xOf(o.winStart) + 0.6, xOf(o.winEnd)) },
+      months,
+      years,
+      label: { x: laneTitleX + LANE_TITLE_W / 2, y: sy0 + ovStripH / 2 + ovLabelSize * 0.35, lines: ['Hele planen'], size: ovLabelSize, color: '#595959', anchor: 'middle' },
+      upcoming: la.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null,
+    };
+  }
+  // Forklaringen står rett under miniatyren
+  const legendTop = ovTop + (la ? ovH - 1 : 0);
   const legend = legendEntries.map((e) => ({
     ...e,
     y: e.y + legendTop,
@@ -583,6 +646,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     logo,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
     unit: lh,
+    overview,
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {

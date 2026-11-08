@@ -104,7 +104,7 @@ const overlaps = (r: { start: string; finish: string } | null, s: string, e: str
  * Festet plass (`top`) og fast lanehøyde brukes ikke i utkikken: med færre bokser ville de gi
  * hull. Unntaket er lanes med en overskriftsboks i perioden, der boksene inni er festet til den.
  */
-export function applyLookahead(file: PlanFile, rule: Lookahead, today: string): { plan: PlanFile; window: LookaheadWindow } {
+export function applyLookahead(file: PlanFile, rule: Lookahead, today: string): { plan: PlanFile; window: LookaheadWindow; extras: LookaheadExtras } {
   const window = resolveWindow(rule, file, today);
   const s = toIso(window.start);
   const e = toIso(addDays(window.end, -1));
@@ -127,8 +127,68 @@ export function applyLookahead(file: PlanFile, rule: Lookahead, today: string): 
     },
     lanes,
   };
-  return { plan, window };
+  return { plan, window, extras: lookaheadExtras(file, window) };
 }
+
+/** Det som tegnes i tillegg i utkikken: hele planen i miniatyr og de neste milepælene. */
+export interface LookaheadExtras {
+  overview: {
+    /** Hele planen: første dag og første dag etter, ms UTC. */
+    start: number;
+    end: number;
+    /** Perioden som vises. */
+    winStart: number;
+    winEnd: number;
+    lanes: number;
+    bars: { start: number; end: number; lane: number; trade: string; fill?: string }[];
+  };
+  /** «Tett hus uke 52», de neste milepælene etter perioden. */
+  upcoming: string[];
+}
+
+/** Milepæler etter perioden som nevnes, høyst. */
+const UPCOMING_MAX = 3;
+
+export function lookaheadExtras(file: PlanFile, window: LookaheadWindow): LookaheadExtras {
+  const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
+  const bars: LookaheadExtras['overview']['bars'] = [];
+  const after = toIso(window.end);
+  const coming: { date: string; name: string }[] = [];
+  lanes.forEach((l, i) => {
+    for (const b of l.boxes) {
+      const r = b.resolved;
+      if (!b.shown || b.hidden || !r) continue;
+      if (r.isMilestone) {
+        if (r.finish >= after) coming.push({ date: r.finish, name: plainName(b.text) });
+        continue;
+      }
+      bars.push({ start: parseIso(r.start), end: addDays(parseIso(r.finish), 1), lane: i, trade: r.trade, fill: b.fill });
+    }
+  });
+  const endYear = isoWeek(addDays(window.end, -1)).year;
+  const upcoming = coming
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((m, i, all) => m.name && all.findIndex((n) => n.name === m.name && n.date === m.date) === i)
+    .slice(0, UPCOMING_MAX)
+    .map((m) => {
+      const w = isoWeek(parseIso(m.date));
+      return `${m.name} uke ${w.week}${w.year !== endYear ? ` ${w.year}` : ''}`;
+    });
+  return {
+    overview: {
+      start: parseIso(file.plan.calendar.start),
+      end: addDays(parseIso(file.plan.calendar.end), 1),
+      winStart: window.start,
+      winEnd: window.end,
+      lanes: lanes.length,
+      bars,
+    },
+    upcoming,
+  };
+}
+
+/** Teksten i en boks på én linje: linjeskift og streker blir mellomrom, tvunget callout fjernes. */
+const plainName = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
 
 /** Leser regelen fra en fil. Gir null om den ikke har riktig form. */
 export function readLookahead(v: unknown): Lookahead | null {

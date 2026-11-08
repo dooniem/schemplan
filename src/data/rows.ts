@@ -22,6 +22,16 @@ export interface DataRow {
   taskIds: string;
   taskNames: string;
   fill: string;
+  /** Utkikk: om boksen starter, slutter eller pågår i perioden. Tom uten utkikk. */
+  period: string;
+  /** Med i perioden i utkikken. */
+  inWindow: boolean;
+}
+
+/** Perioden i utkikken, med første og siste dag. */
+export interface DataWindow {
+  start: string;
+  end: string;
 }
 
 /** Teksten slik den leses: linjeskift og streker blir mellomrom, tvunget callout fjernes. */
@@ -45,7 +55,7 @@ function changesOf(b: Box): string[] {
   return c;
 }
 
-export function planRows(plan: PlanFile): DataRow[] {
+export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow[] {
   const names = new Map(plan.tasks.map((t) => [t.uid, t.name]));
   const laneName = new Map(plan.lanes.map((l) => [l.id, plainText(l.name)]));
   const tc = plan.plan.layout.tradeColors ?? {};
@@ -76,10 +86,29 @@ export function planRows(plan: PlanFile): DataRow[] {
         taskIds: b.taskIds.join(', '),
         taskNames: b.taskIds.map((id) => names.get(id) ?? '').filter(Boolean).join('; '),
         fill: (b.fill ?? (r ? tradeFill.get(r.trade) : '') ?? '').toUpperCase(),
+        ...periodOf(r, win),
       });
     }
   });
   return rows;
+}
+
+/** Hva som skjer med boksen i perioden: starter, slutter, begge deler eller pågår. */
+function periodOf(r: Box['resolved'], win: DataWindow | null): { period: string; inWindow: boolean } {
+  if (!win || !r || r.finish < win.start || r.start > win.end) return { period: '', inWindow: false };
+  if (r.isMilestone) return { period: 'Milepæl', inWindow: true };
+  const starts = r.start >= win.start;
+  const ends = r.finish <= win.end;
+  return { period: starts && ends ? 'Starter og slutter' : starts ? 'Starter' : ends ? 'Slutter' : 'Pågår', inWindow: true };
+}
+
+/** Kolonnen som kommer med når utkikken er på, etter Slutt. */
+const PERIOD_COLUMN = { key: 'period' as const, title: 'I utkikken', width: 18 };
+/** Kolonnene i tabellen og Excel-filen, med utkikkens kolonne når den er på. */
+export function columnsFor(win: DataWindow | null): typeof COLUMNS {
+  if (!win) return COLUMNS;
+  const i = COLUMNS.findIndex((c) => c.key === 'finish') + 1;
+  return [...COLUMNS.slice(0, i), PERIOD_COLUMN, ...COLUMNS.slice(i)];
 }
 
 /** Kolonnene i tabellen og i Excel-filen. */
