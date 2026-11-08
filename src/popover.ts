@@ -25,9 +25,9 @@ export function placePopovers(root: ParentNode = document) {
     });
   });
   root.querySelectorAll<HTMLElement>('.pop-menu').forEach((menu) => {
-    // Et menyvalg lukker menyen
+    // Et menyvalg lukker menyen. Knapper som bare stiller inn noe (som i Utkikk), gjør det ikke.
     menu.addEventListener('click', (e) => {
-      if ((e.target as Element).closest('button')) menu.hidePopover();
+      if ((e.target as Element).closest('button.pm-item')) menu.hidePopover();
     });
     // Piltastene flytter mellom valgene, som i høyreklikkmenyene. Menyen selv får fokus når
     // den åpnes, så tastaturet virker med en gang uten at første valg ser markert ut.

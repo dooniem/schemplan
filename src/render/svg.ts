@@ -190,6 +190,27 @@ export function renderPlan(L: Layout): SVGSVGElement {
   node('rect', { x: left, y: yTop, width: x1 - left, height: y1 - yTop, fill: 'none', stroke: '#000000', 'stroke-width': 0.35 }, svg);
   node('line', { x1: x0, x2: x0, y1: yTop, y2: y1, stroke: '#000000', 'stroke-width': 0.35 }, svg);
 
+  // Utkikk: hele planen i miniatyr, med perioden som vises markert
+  if (L.overview) {
+    const o = L.overview;
+    const ov = node('g', { class: 'overview' }, svg);
+    if (o.upcoming) text(o.upcoming, ov);
+    node('rect', { x: left, y: o.y0, width: o.x1 - left, height: o.y1 - o.y0, fill: '#FFFFFF', stroke: '#000000', 'stroke-width': 0.3 }, ov);
+    node('line', { x1: o.x0, x2: o.x0, y1: o.y0, y2: o.y1, stroke: '#000000', 'stroke-width': 0.3 }, ov);
+    text(o.label, ov);
+    o.months.forEach((x) => node('line', { x1: x, x2: x, y1: o.y0, y2: o.y1, stroke: '#E3E3E3', 'stroke-width': 0.12 }, ov));
+    o.years.forEach((y) => {
+      if (y.x > o.x0) node('line', { x1: y.x, x2: y.x, y1: o.y0, y2: o.y1 + 1.2, stroke: '#7F7F7F', 'stroke-width': 0.25 }, ov);
+      text(y.label, ov);
+    });
+    o.bars.forEach((b) => node('rect', { x: b.x0, y: b.y, width: b.x1 - b.x0, height: b.h, fill: b.fill }, ov));
+    // Utenfor perioden tones ned, perioden får ramme
+    const w = o.window;
+    if (w.x0 > o.x0) node('rect', { x: o.x0, y: o.y0, width: w.x0 - o.x0, height: o.y1 - o.y0, fill: '#FFFFFF', 'fill-opacity': 0.6 }, ov);
+    if (w.x1 < o.x1) node('rect', { x: w.x1, y: o.y0, width: o.x1 - w.x1, height: o.y1 - o.y0, fill: '#FFFFFF', 'fill-opacity': 0.6 }, ov);
+    node('rect', { x: w.x0, y: o.y0 - 0.4, width: w.x1 - w.x0, height: o.y1 - o.y0 + 0.8, fill: 'none', stroke: '#C00000', 'stroke-width': 0.45 }, ov);
+  }
+
   // Legend
   const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {

@@ -153,6 +153,27 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .pm-desc { font-size: 12px; line-height: 1.4; color: var(--muted); }
 .arrange-menu .set-switch { padding: 6px 10px; }
 .arrange-menu .ctx-sub { line-height: 1.4; }
+/* Utkikk: samme byggeklosser som Innstillinger, i menyens uttrykk. Valgene for perioden er
+   alltid synlige; endrer man dem, slås utkikken på. */
+.pop.lookahead-menu { width: min(368px, calc(100vw - 16px)); }
+.lookahead-menu .ctx-sub { line-height: 1.4; }
+.lookahead-menu .set-switch, .lookahead-menu .set-row, .la-week { padding-inline: 10px; }
+.lookahead-menu .set-row { grid-template-columns: 52px 1fr; gap: 10px; padding-block: 4px; }
+.lookahead-menu .set-row + .set-row { margin-top: 0; }
+.lookahead-menu .group { display: flex; }
+.lookahead-menu .group button { flex: 1 1 auto; min-height: 30px; padding: 4px 8px; white-space: nowrap; }
+.la-week { display: flex; gap: 8px; padding-left: 72px; padding-block: 2px 6px; }
+.la-week[hidden] { display: none; }
+.la-week label { display: flex; flex-direction: column; gap: 4px; width: 84px; }
+.la-week label:only-child { width: 120px; }
+.la-week label > span:first-child { font-size: 12px; color: var(--muted); }
+.lookahead-menu .num input[type='number'] { width: 100%; min-width: 0; padding: 5px 0 5px 8px; border: 0; background: none; font-variant-numeric: tabular-nums; outline: none; }
+.lookahead-menu .la-period .set-switch { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 8px; }
+.lookahead-menu:has(#la-on:not(:checked)) .la-period { opacity: 0.72; }
+.la-note { margin: 0; padding: 8px 10px 6px; border-top: 1px solid var(--border); color: var(--text); }
+.la-note[hidden] { display: none; }
+/* Knappen i topplinjen viser perioden når utkikken er på */
+#lookahead-menu.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Melding når nettleseren mangler funksjoner appen trenger */
 .compat-note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border); background: #fdecea; background: color-mix(in srgb, var(--error) 10%, var(--surface)); color: var(--error); font-size: 13px; }
 /* Høyreklikkmenyer (ctxmenu.ts): én linje per valg, gruppert, forklaring nederst */

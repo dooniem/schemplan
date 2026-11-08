@@ -15,7 +15,9 @@ import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
-import { cell, COLUMNS } from './data/rows';
+import { cell } from './data/rows';
+import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
+import type { Lookahead } from './format/types';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -93,7 +95,11 @@ const dataView = createDataView(dataSection, () => plan, (id) => {
   layer.append(ring);
   g.ownerSVGElement?.append(layer);
   setTimeout(() => layer.remove(), 2600);
-});
+}, () =>
+  lookWindow
+    ? { start: new Date(lookWindow.start).toISOString().slice(0, 10), end: new Date(lookWindow.end - 86_400_000).toISOString().slice(0, 10), label: lookWindow.label }
+    : null,
+);
 function showView(v: 'plan' | 'data') {
   dataSection.hidden = v !== 'data';
   $<HTMLElement>('.work').hidden = v === 'data';
@@ -108,12 +114,13 @@ $<HTMLButtonElement>('#data-export').addEventListener('click', async (e) => {
   const msg = $('#data-status');
   const rows = dataView.visibleRows();
   if (!plan || !rows.length) return;
-  const name = `${baseName}_data.xlsx`;
+  const name = `${baseName}_data${lookWindow && !$<HTMLElement>('#data-window-field').hidden && $<HTMLInputElement>('#data-window').checked ? `_utkikk-${lookWindow.tag}` : ''}.xlsx`;
   const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   btn.disabled = true;
   try {
     const { buildXlsx } = await import('./data/xlsx');
-    const bytes = buildXlsx('Data', COLUMNS, rows.map((r) => COLUMNS.map((c) => cell(r, c.key))));
+    const cols = dataView.columns();
+    const bytes = buildXlsx('Data', cols, rows.map((r) => cols.map((c) => cell(r, c.key))));
     const saved = await saveFile(name, new Blob([bytes as BlobPart], { type: mime }), 'Excel-arbeidsbok', mime, '.xlsx');
     if (saved) {
       msg.textContent = `Lagret ${saved} (${rows.length} rader).`;
@@ -157,6 +164,137 @@ let suggestTimer = 0;
 const pt = (v: number) => v.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? 'liggende' : 'stående'}`;
 
+// ---- Utkikk ----
+let lookWindow: LookaheadWindow | null = null;
+/** Planen slik den tegnes: hele, eller bare perioden når utkikken er på. */
+function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
+  const r = p.plan.layout.lookahead;
+  if (!r?.on) return { plan: p, window: null, opts };
+  const v = applyLookahead(p, r, todayIso());
+  return { ...v, opts: { ...opts, lookahead: v.extras } };
+}
+const lookRule = (): Lookahead => plan?.plan.layout.lookahead ?? LOOKAHEAD_DEFAULT;
+function setLookahead(change: Partial<Lookahead>) {
+  if (!plan) return;
+  plan.plan.layout.lookahead = { ...lookRule(), ...change };
+  // Redigering skjer på hele planen: i utkikken ville en flyttet boks havnet et annet sted
+  if (plan.plan.layout.lookahead.on && editor.active) $<HTMLButtonElement>('#edit').click();
+  draw();
+}
+/** Viser regelen i menyen og perioden på knappen. */
+function syncLookahead() {
+  const r = lookRule();
+  const btn = $<HTMLButtonElement>('#lookahead-menu');
+  btn.disabled = !plan;
+  btn.classList.toggle('on', !!lookWindow);
+  $<HTMLElement>('#lookahead-step').hidden = !lookWindow;
+  $('#lookahead-label').textContent = lookWindow ? `Utkikk ${lookWindow.tag.replace('u', 'uke ').replace('-', '–')}` : 'Utkikk';
+  const edit = $<HTMLButtonElement>('#edit');
+  if (plan) {
+    edit.disabled = !!lookWindow;
+    if (lookWindow) edit.title = 'Slå av utkikken for å redigere. Endringer gjøres i hele planen.';
+  }
+  const on = $<HTMLInputElement>('#la-on');
+  on.checked = r.on;
+  on.disabled = !plan;
+  const today = weekOf(todayIso());
+  const fromWeek = r.from ?? today;
+  const until = 'weeks' in r.length ? null : r.length;
+  const weeks = 'weeks' in r.length ? r.length.weeks : null;
+  const lenKind = until ? 'until' : weeks === 3 || weeks === 8 ? String(weeks) : 'custom';
+  document.querySelectorAll<HTMLButtonElement>('[data-la-from]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.laFrom === 'week') === !!r.from)));
+  document.querySelectorAll<HTMLButtonElement>('[data-la-len]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.laLen === lenKind)));
+  $<HTMLElement>('#la-from-week').hidden = !r.from;
+  $<HTMLElement>('#la-len-custom').hidden = lenKind !== 'custom';
+  $<HTMLElement>('#la-len-until').hidden = lenKind !== 'until';
+  // Feltene oppdateres ikke mens brukeren skriver i dem
+  const put = (id: string, v: number) => {
+    const i = $<HTMLInputElement>(id);
+    if (document.activeElement !== i) i.value = String(v);
+  };
+  put('#la-from-w', fromWeek.week);
+  put('#la-from-y', fromWeek.year);
+  put('#la-len-n', weeks ?? 3);
+  const preview = plan ? (lookWindow ?? viewOf({ ...plan, plan: { ...plan.plan, layout: { ...plan.plan.layout, lookahead: { ...r, on: true } } } }).window) : null;
+  // Uten valgt sluttuke foreslås den siste uken i perioden som vises
+  const untilDefault = until ?? (preview ? weekOf(new Date(preview.end - 86_400_000).toISOString().slice(0, 10)) : fromWeek);
+  put('#la-until-w', untilDefault.week);
+  put('#la-until-y', untilDefault.year);
+  $<HTMLInputElement>('#la-prev').checked = r.prevWeek;
+  $<HTMLInputElement>('#la-empty').checked = r.hideEmptyLanes;
+  for (const id of ['#la-prev', '#la-empty']) $<HTMLInputElement>(id).disabled = !plan;
+  $('#la-summary').textContent = !preview ? 'Åpne en plan først.' : r.on ? `Viser ${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)}, ${preview.weeks === 1 ? '1 uke' : `${preview.weeks} uker`}.` : `Av. Slår du den på, vises ${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)}.`;
+  const note = $<HTMLElement>('#la-note');
+  note.textContent = preview?.note ?? '';
+  note.hidden = !preview?.note;
+}
+$<HTMLInputElement>('#la-on').addEventListener('change', (e) => setLookahead({ on: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#la-prev').addEventListener('change', (e) => setLookahead({ on: true, prevWeek: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#la-empty').addEventListener('change', (e) => setLookahead({ hideEmptyLanes: (e.target as HTMLInputElement).checked }));
+/** Uke og år fra to felt, eller null om uken ikke finnes. */
+function readWeek(wId: string, yId: string): { year: number; week: number } | null {
+  const week = Number($<HTMLInputElement>(wId).value);
+  const year = Number($<HTMLInputElement>(yId).value);
+  if (!Number.isInteger(week) || !Number.isInteger(year) || year < 1900 || year > 2200 || week < 1 || week > weeksInIsoYear(year)) return null;
+  return { year, week };
+}
+document.querySelectorAll<HTMLButtonElement>('[data-la-from]').forEach((b) =>
+  b.addEventListener('click', () => {
+    if (b.dataset.laFrom === 'now') setLookahead({ on: true, from: null });
+    else setLookahead({ on: true, from: lookRule().from ?? weekOf(todayIso()) });
+    if (b.dataset.laFrom === 'week') $<HTMLInputElement>('#la-from-w').focus();
+  }),
+);
+document.querySelectorAll<HTMLButtonElement>('[data-la-len]').forEach((b) =>
+  b.addEventListener('click', () => {
+    const k = b.dataset.laLen!;
+    if (k === '3' || k === '8') setLookahead({ on: true, length: { weeks: Number(k) } });
+    else if (k === 'custom') {
+      const n = Number($<HTMLInputElement>('#la-len-n').value);
+      setLookahead({ on: true, length: { weeks: Number.isInteger(n) && n >= 1 && n <= LOOKAHEAD_MAX_WEEKS && n !== 3 && n !== 8 ? n : 4 } });
+      $<HTMLInputElement>('#la-len-n').focus();
+    } else {
+      const w = readWeek('#la-until-w', '#la-until-y');
+      if (w) setLookahead({ on: true, length: w });
+      $<HTMLInputElement>('#la-until-w').focus();
+    }
+  }),
+);
+$<HTMLInputElement>('#la-from-w').addEventListener('input', fromInput);
+$<HTMLInputElement>('#la-from-y').addEventListener('input', fromInput);
+function fromInput() {
+  const w = readWeek('#la-from-w', '#la-from-y');
+  if (w) setLookahead({ on: true, from: w });
+}
+$<HTMLInputElement>('#la-len-n').addEventListener('input', (e) => {
+  const n = Number((e.target as HTMLInputElement).value);
+  if (Number.isInteger(n) && n >= 1 && n <= LOOKAHEAD_MAX_WEEKS) setLookahead({ on: true, length: { weeks: n } });
+});
+const untilInput = () => {
+  const w = readWeek('#la-until-w', '#la-until-y');
+  if (w) setLookahead({ on: true, length: w });
+};
+$<HTMLInputElement>('#la-until-w').addEventListener('input', untilInput);
+$<HTMLInputElement>('#la-until-y').addEventListener('input', untilInput);
+// Bla uke for uke: perioden flyttes, og lengden beholdes. Startuken blir da en fast uke.
+function stepWeeks(n: number) {
+  const r = lookRule();
+  if (!plan || !lookWindow) return;
+  const from = lookWindow.start + (r.prevWeek ? 7 : 0) * 86_400_000;
+  const shift = (t: number) => weekOf(new Date(t + n * 7 * 86_400_000).toISOString().slice(0, 10));
+  const next: Lookahead = { ...r, from: shift(from), length: 'weeks' in r.length ? r.length : shift(isoWeekMonday(r.length.year, r.length.week)) };
+  // Ved starten eller slutten av planen står perioden stille
+  const moved = resolveWindow(next, plan, todayIso()).start - lookWindow.start;
+  if (moved * n <= 0) return;
+  setLookahead(next);
+}
+$<HTMLButtonElement>('#lookahead-prev').addEventListener('click', () => stepWeeks(-1));
+$<HTMLButtonElement>('#lookahead-next').addEventListener('click', () => stepWeeks(1));
+// Dagen kan ha skiftet siden planen ble tegnet («denne uken» følger dagens dato)
+$<HTMLElement>('#menu-lookahead').addEventListener('beforetoggle', (e) => {
+  if ((e as ToggleEvent).newState === 'open') syncLookahead();
+});
+
 function draw() {
   // Utskriftsarket følger alltid det som vises, også når dialogen åpnes fra nettleserens meny
   setPrintPage(opts.paper ?? 'A3', opts.orientation);
@@ -168,7 +306,10 @@ function draw() {
     return;
   }
   const t0 = performance.now();
-  const layout = computeLayout(plan, opts, measure);
+  // Utkikk: en kopi av planen der kalenderen bare dekker perioden
+  const view = viewOf(plan);
+  lookWindow = view.window;
+  const layout = computeLayout(view.plan, view.opts, measure);
   const svg = renderPlan(layout);
   shown = { layout, svg };
   viewer.show(svg, layout.width, layout.height);
@@ -188,6 +329,8 @@ function draw() {
       : `Planen får ikke plass på ${here} med ${pt(opts.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
     : `Tegnet på ${ms} ms.${shrunk}`;
   status.className = tight ? 'error small' : 'muted small';
+  if (lookWindow) status.textContent = `Utkikk: ${lookWindow.label.toLowerCase()}.${lookWindow.note ? ` ${lookWindow.note}` : ''} ${status.textContent}`;
+  syncLookahead();
 
   // Forslag til annet ark når planen er trang. Regnes ut litt etterpå, så tegningen ikke venter.
   // De gamle forslagene står til de nye er klare: tømmes linjen imens, endrer arket høyde og
@@ -198,11 +341,12 @@ function draw() {
     return;
   }
   const current = plan;
+  const currentView = view.plan;
   suggestTimer = window.setTimeout(() => {
     if (plan !== current) return;
     // Beste retning per ark, og et større ark bare når det gir større tekst enn et mindre
     const order: Paper[] = ['A3', 'A2', 'A1'];
-    const alts = fitAlternatives(current, opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
+    const alts = fitAlternatives(currentView, view.opts, measure).filter((a) => a.fits && a.textSizePt > layout.textSizePt + 0.2);
     const better: typeof alts = [];
     let bestSoFar = tight ? 0 : layout.textSizePt;
     for (const paper of order) {
@@ -513,7 +657,9 @@ const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : 
 async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: string[] = []) {
   if (!plan || !shown) return;
   const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}` : '';
-  const name = `${baseName}${SUFFIX[variant]}${fileTag}.pdf`;
+  // Utkikken får perioden i filnavnet, så den ikke forveksles med hele planen
+  const lookTag = lookWindow ? `_utkikk-${lookWindow.tag}` : '';
+  const name = `${baseName}${SUFFIX[variant]}${lookTag}${fileTag}.pdf`;
   // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
   const saved: PlanFile = structuredClone(plan);
   Object.assign(saved.plan.layout, {
@@ -542,7 +688,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
       const keep = new Set(onlyTrades);
       for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
       saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
-      const layout = computeLayout(saved, opts, measure);
+      const v = viewOf(saved);
+      const layout = computeLayout(v.plan, v.opts, measure);
       target = { layout, svg: renderPlan(layout) };
     }
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);

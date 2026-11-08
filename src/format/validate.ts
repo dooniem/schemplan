@@ -1,4 +1,5 @@
 import { FORMAT_NAME, FORMAT_VERSION, type PlanFile } from './types';
+import { readLookahead } from '../layout/lookahead';
 
 export interface ValidationResult {
   /** Satt når filen kan brukes. Advarsler kan likevel finnes. */
@@ -116,6 +117,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         else if (c.dash !== undefined && !['solid', 'dashed', 'dotted'].includes(c.dash as string))
           err('plan.layout.criticalLine.dash', 'må være solid, dashed eller dotted');
       }
+      if (lay.lookahead !== undefined && !readLookahead(lay.lookahead))
+        err('plan.layout.lookahead', 'må ha on, from (null eller år og uke), prevWeek, length (weeks eller år og uke) og hideEmptyLanes');
     }
     const opt = plan.options;
     if (!isObj(opt)) err('plan.options', 'mangler');
