@@ -331,6 +331,16 @@ export const DEFAULT_MIN_TEXT_PT = 6;
 export const MAX_TEXT_SCALE = 2;
 export const MIN_TEXT_SCALE = 0.5;
 const clampScale = (s: number | undefined) => Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, s ?? 1));
+/** Lane-navnene er litt større enn teksten i boksene når ingen annen størrelse er valgt. */
+export const LANE_TITLE_DEFAULT = 1.15;
+/** Standardstørrelsen på lane-navnene i forhold til planens tekst, rundet til halve punkter. */
+export function defaultLaneTitleScale(planPt: number): number {
+  return planPt > 0 ? Math.round(planPt * LANE_TITLE_DEFAULT * 2) / 2 / planPt : 1;
+}
+/** Lane-navnenes størrelse i forhold til planens tekst: valgt størrelse, ellers standard. */
+export function laneTitleScaleOf(layout: { laneTitleScale?: number }, planPt: number): number {
+  return clampScale(layout.laneTitleScale ?? defaultLaneTitleScale(planPt));
+}
 /** Lenger ned krymper vi aldri, heller ikke for å få plass. */
 export const ABS_MIN_TEXT_PT = 3;
 
@@ -423,8 +433,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
   const titlePad = 2 * PAD_X + 2;
-  // Lane-titlene har én felles størrelse, i forhold til teksten i boksene
-  const laneSize = base * clampScale(file.plan.layout.laneTitleScale);
+  // Lane-titlene har én felles størrelse, i forhold til teksten i boksene (litt større som standard)
+  const laneSize = base * laneTitleScaleOf(file.plan.layout, opts.textSizePt * scale);
   const laneLh = laneSize * LINE_HEIGHT;
   // "|" i lane-navnet er linjeskift, som i boksteksten
   const laneRaw = lanes.map((l) => splitLines(l.name));
