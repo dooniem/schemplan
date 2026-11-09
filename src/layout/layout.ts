@@ -1125,18 +1125,15 @@ interface WeekFit {
 }
 
 /** Ukenummer deles aldri. Får de ikke plass liggende, står de loddrett (og krymper litt om nødvendig).
-    Er kolonnene for smale også til det, står de liggende igjen, men bare for annenhver eller hver
-    fjerde uke (uke 1 er alltid med). */
+    Er kolonnene for smale også til det, står de fortsatt loddrett, men bare for annenhver eller hver
+    fjerde uke (uke 1 er alltid med). Loddrett gir flere numre enn liggende, siden et loddrett tall
+    bare tar sifferhøyden i bredden. */
 function fitWeekLabels(colW: number, size: number, rowH: number, measure: Measure): WeekFit {
   const cw = colW - 0.4;
   if (measure('53', size) <= cw) return { size, step: 1, rotate: false, h: rowH };
-  // Loddrett bare når det gir nummer på hver uke; ellers er liggende tall lettere å lese
-  const up = Math.min(size, cw / DIGIT_H);
-  if (up >= size * 0.7) return { size: up, step: 1, rotate: true, h: Math.max(rowH, measure('53', up) + 1.6) };
-  const wide = measure('53', size);
-  const sz = Math.max(size * 0.7, (size * cw) / wide);
-  const step = [1, 2, 4, 13].find((k) => measure('53', sz) <= cw * k - 0.4) ?? 0;
-  return { size: sz, step, rotate: false, h: rowH };
+  const up = Math.max(size * 0.7, Math.min(size, cw / DIGIT_H));
+  const step = [1, 2, 4, 13].find((k) => up * DIGIT_H <= cw * k - (k > 1 ? 0.4 : 0) + 1e-9) ?? 0;
+  return { size: up, step, rotate: true, h: Math.max(rowH, measure('53', up) + 1.6) };
 }
 
 function calendarRows(
