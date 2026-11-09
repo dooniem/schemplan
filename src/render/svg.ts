@@ -69,9 +69,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const labelBg = 0.75;
   const left = L.laneTitleX;
 
-  // Annenhver måned skyggelagt
+  // Annenhver måned (eller uke) skyggelagt, lysere i annenhver lane
   const bands = node('g', { class: 'bands' }, svg);
-  L.bands.forEach((b) => node('rect', { x: b.x0, y: y0, width: b.x1 - b.x0, height: y1 - y0, fill: b.fill }, bands));
+  L.bands.forEach((b) => {
+    const top = b.y0 ?? y0;
+    const bottom = b.y1 ?? y1;
+    node('rect', { x: b.x0, y: top, width: b.x1 - b.x0, height: bottom - top, fill: b.fill }, bands);
+  });
 
   // Lanes: tittelcelle med lanefarge, tynne skillelinjer i planområdet
   const lanesG = node('g', { class: 'lanes' }, svg);

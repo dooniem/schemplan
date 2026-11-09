@@ -113,11 +113,40 @@ describe('layout', () => {
 describe('Excel-utseende', () => {
   it('annenhver måned er skyggelagt, og bare årsskifter får kraftig strek', () => {
     const L = computeLayout(example(), { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true }, approxMeasure);
-    expect(L.bands).toHaveLength(12);
-    expect(new Set(L.bands.map((b) => b.fill)).size).toBe(2);
-    expect(L.bands[0].fill).not.toBe(L.bands[1].fill);
+    const full = L.bands.filter((b) => b.y0 === undefined);
+    expect(full).toHaveLength(12);
+    expect(new Set(full.map((b) => b.fill)).size).toBe(2);
+    expect(full[0].fill).not.toBe(full[1].fill);
     expect(L.grid.filter((g) => g.strong)).toHaveLength(0); // eksempelet dekker ett år
     expect(L.calendarTop[1].rotate).toBe(true);
+  });
+
+  it('de mørke feltene er lysere i annenhver lane, som i Excel', () => {
+    for (const style of ['excel', 'ny'] as const) {
+      const L = computeLayout(example(), { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true, style }, approxMeasure);
+      const full = L.bands.filter((b) => b.y0 === undefined);
+      const dark = full[0].fill;
+      const alt = L.bands.filter((b) => b.y0 !== undefined);
+      // Bare lane 2, 4 … får egne felt, og bare over de mørke månedene
+      const odd = L.lanes.filter((_, i) => i % 2 === 1);
+      expect(alt.length, style).toBe(odd.length * full.filter((b) => b.fill === dark).length);
+      for (const b of alt) {
+        expect(b.fill, style).not.toBe(dark);
+        expect(odd.some((ln) => ln.y0 === b.y0 && ln.y1 === b.y1), style).toBe(true);
+      }
+    }
+  });
+
+  it('ukesvisning: oddetallsukene er skyggelagt i planområdet, som i kalenderen', () => {
+    const p = example();
+    p.plan.calendar = { ...p.plan.calendar, mode: 'week' };
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true, style: 'excel' }, approxMeasure);
+    const weeks = L.calendarTop[L.calendarTop.length - 1].cells;
+    const full = L.bands.filter((b) => b.y0 === undefined);
+    for (const w of weeks) {
+      const b = full.find((x) => x.x0 <= w.x0 + 1e-6 && w.x1 <= x.x1 + 1e-6)!;
+      expect(b.fill === full.find((x) => x.fill === '#EBEBEB')?.fill).toBe(w.fill === '#B4B4B4');
+    }
   });
 
   it('ruter-milepæler har fet tekst og vanlig dato', () => {
