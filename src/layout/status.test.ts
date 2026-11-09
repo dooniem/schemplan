@@ -54,8 +54,15 @@ describe('statuslinje: tegning', () => {
     const m = resolveStatus(on(), p, '2026-11-12')!;
     const L = computeLayout(p, { ...O, status: { moment: m, style: on() } }, approxMeasure);
     expect(L.status).not.toBeNull();
-    expect(L.status!.y0).toBeCloseTo(L.plot.y0);
-    expect(L.status!.tag!.y + L.status!.tag!.h).toBeCloseTo(L.plot.y0);
+    // Lappen står over kalenderen, så den ikke dekker måneder eller uker, og streken går opp til den
+    const calTop = L.calendarTop[0].y;
+    expect(L.status!.tag!.y + L.status!.tag!.h).toBeLessThanOrEqual(calTop);
+    expect(L.status!.tag!.y).toBeGreaterThanOrEqual(L.headerBottom - 1e-6);
+    expect(L.status!.y0).toBeCloseTo(L.status!.tag!.y);
+    // Uten lapp er det ingen stripe over kalenderen
+    const plain = computeLayout(p, { ...O, status: { moment: m, style: on({ label: false }) } }, approxMeasure);
+    expect(plain.calendarTop[0].y).toBeLessThan(calTop);
+    expect(plain.status!.y0).toBeCloseTo(plain.plot.y0);
     expect(L.status!.y1).toBeCloseTo(L.plot.y1);
     expect(L.status!.x).toBeGreaterThan(L.plot.x0);
     expect(L.status!.tag?.text.lines).toEqual(['Status 9.11']);

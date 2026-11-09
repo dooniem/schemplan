@@ -534,7 +534,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const ovH = !la ? 0 : la.overview ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : ovUpH ? 1 + ovUpH : 0;
 
   // ---- Høydebudsjett ----
-  const plotTop = MARGIN + headerH + calH;
+  // Statuslappen står i en egen stripe over kalenderen, så den ikke dekker måneder eller uker
+  const statusIn = (() => {
+    const st = opts.status;
+    if (!st?.style.label) return false;
+    const d = parseIso(st.moment.day);
+    return d >= axis.start && d < axis.end;
+  })();
+  const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
+  const plotTop = MARGIN + headerH + statusH + calH;
   const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
@@ -678,7 +686,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,
-    status: statusMark(opts.status, axis, plotTop, plotBottom, base, measure),
+    status: statusMark(opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -1194,7 +1202,7 @@ function calendarRows(
 }
 
 /** dd.mm.åååå */
-function statusMark(st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
+function statusMark(st: LayoutOptions['status'], axis: TimeAxis, calTop: number, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
   if (!st) return null;
   const { moment: m, style } = st;
   const d = parseIso(m.day);
@@ -1208,9 +1216,10 @@ function statusMark(st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1:
     const h = size * 1.35;
     // Lappen står til høyre for streken, eller til venstre når den ellers går utenfor planen.
     const tx = x + w > axis.x1 ? x - w : x;
-    // I nederste kalenderrad, rett over planen, så lappen ikke dekker boksene
-    const ty = y0 - h;
+    // Som et flagg over kalenderen: streken går opp gjennom kalenderen til lappen
+    const ty = calTop - h - 0.3;
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
+    return { x, y0: ty, y1, width: style.width, color: style.color, tag };
   }
   return { x, y0, y1, width: style.width, color: style.color, tag };
 }
