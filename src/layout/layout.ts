@@ -293,6 +293,27 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
   });
 }
 
+/**
+ * Linjene for rotert tekst. Linjene står side om side, så bredden på boksen bestemmer hvor mange
+ * det er plass til. Teksten brytes så kort som mulig innenfor det, så boksen blir lavest mulig.
+ * Er det ikke plass til flere linjer enn teksten har fra før, står hver tekstlinje hel, som før.
+ */
+export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure): string[] {
+  const maxLines = Math.floor((innerW + 1e-6) / (size * LINE_HEIGHT));
+  if (maxLines <= raw.length) return raw;
+  const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
+  let lo = Math.max(0, ...words.map((wd) => measure(wd, size)));
+  let hi = widest(raw, size, measure);
+  if (hi <= lo) return raw;
+  // Korteste linjelengde der teksten får plass i maxLines linjer
+  for (let k = 0; k < 20; k++) {
+    const mid = (lo + hi) / 2;
+    if (wrapLines(raw, mid, size, measure).length <= maxLines) hi = mid;
+    else lo = mid;
+  }
+  return wrapLines(raw, hi, size, measure);
+}
+
 export const DEFAULT_MIN_TEXT_PT = 6;
 /** Tekst i en boks eller lane-titlene er aldri mer enn dobbelt så stor, eller under halvparten av planens tekst. */
 export const MAX_TEXT_SCALE = 2;
@@ -815,8 +836,8 @@ function buildPieces(
     const neverCallout = choice === 'off' || !!box.header;
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
-      // Rotert tekst: én linje per tekstlinje, boksen blir høy nok til teksten
-      lines = rawLines;
+      // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
+      lines = rotatedLines(rawLines, w - 2 * PAD_X, bs, measure);
       item.h = widest(lines, bs, measure) + 2 * PAD_Y + 1;
       item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
