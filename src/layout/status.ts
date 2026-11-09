@@ -7,10 +7,12 @@
 import type { HexColor, IsoDate, PlanFile, ProgressFront, StatusLine } from '../format/types';
 import { addDays, parseIso, toIso, weekday } from './dates';
 
-export const STATUS_DEFAULT: StatusLine = { on: false, source: 'monday', width: 0.5, color: '#E00000', label: true };
+/** Mørkere rød enn den kritiske linjen (#E00000), så de to skiller seg fra hverandre. */
+export const STATUS_RED: HexColor = '#A8003A';
+export const STATUS_DEFAULT: StatusLine = { on: false, source: 'monday', width: 0.5, color: STATUS_RED, label: true };
 export const FRONT_DEFAULT: ProgressFront = { on: false, against: 'plan', late: false, deviation: false };
 export const STATUS_WIDTHS: [number, string][] = [[0.3, 'Tynn'], [0.5, 'Middels'], [0.9, 'Tykk']];
-export const STATUS_COLORS: [HexColor, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
+export const STATUS_COLORS: [HexColor, string][] = [[STATUS_RED, 'Mørk rød'], ['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
 
 export interface StatusMoment {
   /** Dagen streken hører til. */
