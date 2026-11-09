@@ -58,10 +58,11 @@ const firstLast = (which: 'første' | 'siste', n: number) => (n === 1 ? `den ${w
  * Perioden regelen gir for planen. Ligger perioden før planen starter, vises de første ukene
  * av planen; ligger den etter at planen er slutt, de siste. Et tomt ark ser ut som en feil.
  */
-export function resolveWindow(rule: Lookahead, file: PlanFile, today: string): LookaheadWindow {
+export function resolveWindow(rule: Lookahead, file: PlanFile, today: string, statusDay?: string | null): LookaheadWindow {
   const planStart = mondayOf(parseIso(file.plan.calendar.start));
   const planEnd = addDays(mondayOf(parseIso(file.plan.calendar.end)), WEEK);
-  const from = rule.from ? isoWeekMonday(rule.from.year, rule.from.week) : mondayOf(parseIso(today));
+  // «Uken med statuslinjen» bruker denne uken når statuslinjen er av
+  const from = rule.from && rule.from !== 'status' ? isoWeekMonday(rule.from.year, rule.from.week) : mondayOf(parseIso(rule.from === 'status' && statusDay ? statusDay : today));
   let end = 'weeks' in rule.length ? addDays(from, WEEK * rule.length.weeks) : addDays(isoWeekMonday(rule.length.year, rule.length.week), WEEK);
   if (end <= from) end = addDays(from, WEEK);
   let start = rule.prevWeek ? addDays(from, -WEEK) : from;
@@ -104,8 +105,8 @@ const overlaps = (r: { start: string; finish: string } | null, s: string, e: str
  * Festet plass (`top`) og fast lanehøyde brukes ikke i utkikken: med færre bokser ville de gi
  * hull. Unntaket er lanes med en overskriftsboks i perioden, der boksene inni er festet til den.
  */
-export function applyLookahead(file: PlanFile, rule: Lookahead, today: string): { plan: PlanFile; window: LookaheadWindow; extras: LookaheadExtras } {
-  const window = resolveWindow(rule, file, today);
+export function applyLookahead(file: PlanFile, rule: Lookahead, today: string, statusDay?: string | null): { plan: PlanFile; window: LookaheadWindow; extras: LookaheadExtras } {
+  const window = resolveWindow(rule, file, today, statusDay);
   const s = toIso(window.start);
   const e = toIso(addDays(window.end, -1));
   const visible = (b: PlanFile['lanes'][number]['boxes'][number]) => b.shown && !b.hidden && overlaps(b.resolved, s, e);
@@ -201,7 +202,7 @@ export function readLookahead(v: unknown): Lookahead | null {
     return Number.isInteger(y) && Number.isInteger(k) && (y as number) >= 1900 && (y as number) <= 2200 && (k as number) >= 1 && (k as number) <= weeksInIsoYear(y as number) ? { year: y as number, week: k as number } : null;
   };
   if (typeof o.on !== 'boolean' || typeof o.prevWeek !== 'boolean' || typeof o.hideEmptyLanes !== 'boolean') return null;
-  const from = o.from === null ? null : week(o.from);
+  const from = o.from === null || o.from === 'status' ? o.from : week(o.from);
   if (o.from !== null && !from) return null;
   const len = o.length as Record<string, unknown> | null;
   if (typeof len !== 'object' || len === null) return null;

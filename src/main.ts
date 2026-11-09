@@ -2,7 +2,7 @@ import './style.css';
 import { checkOutboundBlocked } from './csp';
 import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
-import type { PlanFile } from './format/types';
+import type { PlanFile, StatusLine } from './format/types';
 import { setPrintPage } from './print';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
@@ -16,6 +16,7 @@ import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
+import { resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
@@ -168,10 +169,13 @@ const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? '
 let lookWindow: LookaheadWindow | null = null;
 /** Planen slik den tegnes: hele, eller bare perioden når utkikken er på. */
 function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
+  const sl = p.plan.layout.statusLine;
+  const moment = sl?.on ? resolveStatus(sl, p, todayIso()) : null;
+  const o: LayoutOptions = { ...opts, status: moment && sl ? { moment, style: sl } : undefined };
   const r = p.plan.layout.lookahead;
-  if (!r?.on) return { plan: p, window: null, opts };
-  const v = applyLookahead(p, r, todayIso());
-  return { ...v, opts: { ...opts, lookahead: v.extras } };
+  if (!r?.on) return { plan: p, window: null, opts: o };
+  const v = applyLookahead(p, r, todayIso(), moment?.day);
+  return { ...v, opts: { ...o, lookahead: v.extras } };
 }
 const lookRule = (): Lookahead => plan?.plan.layout.lookahead ?? LOOKAHEAD_DEFAULT;
 function setLookahead(change: Partial<Lookahead>) {
@@ -198,13 +202,17 @@ function syncLookahead() {
   on.checked = r.on;
   on.disabled = !plan;
   const today = weekOf(todayIso());
-  const fromWeek = r.from ?? today;
+  const fromWeek = r.from && r.from !== 'status' ? r.from : today;
   const until = 'weeks' in r.length ? null : r.length;
   const weeks = 'weeks' in r.length ? r.length.weeks : null;
   const lenKind = until ? 'until' : weeks === 3 || weeks === 8 ? String(weeks) : 'custom';
-  document.querySelectorAll<HTMLButtonElement>('[data-la-from]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.laFrom === 'week') === !!r.from)));
+  const fromKind = r.from === 'status' ? 'status' : r.from ? 'week' : 'now';
+  document.querySelectorAll<HTMLButtonElement>('[data-la-from]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.laFrom === fromKind)));
   document.querySelectorAll<HTMLButtonElement>('[data-la-len]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.laLen === lenKind)));
-  $<HTMLElement>('#la-from-week').hidden = !r.from;
+  $<HTMLElement>('#la-from-week').hidden = fromKind !== 'week';
+  const slOn = !!plan?.plan.layout.statusLine?.on;
+  const statusBtn = $<HTMLButtonElement>('[data-la-from="status"]');
+  statusBtn.title = slOn ? 'Uken statuslinjen står i. Følger med når statusdatoen endres.' : 'Uken statuslinjen står i. Statuslinjen er av, så denne uken brukes. Slå den på under Innstillinger.';
   $<HTMLElement>('#la-len-custom').hidden = lenKind !== 'custom';
   $<HTMLElement>('#la-len-until').hidden = lenKind !== 'until';
   // Feltene oppdateres ikke mens brukeren skriver i dem
@@ -227,7 +235,7 @@ function syncLookahead() {
   const period = preview ? `${preview.label.charAt(0).toLowerCase()}${preview.label.slice(1)} (${preview.weeks === 1 ? '1 uke' : `${preview.weeks} uker`})` : '';
   // Alt om perioden står samlet under av/på: hva som tegnes, og hvorfor den er flyttet
   // Bare grunnen (f.eks. «Planen starter uke 10 2027.»); lengden står allerede i teksten
-  const why = preview?.note ? ` ${preview.note.split('. ')[0].replace(/\.?$/, '.')}` : '';
+  const why = preview?.note ? ` ${preview.note.split('. ')[0].replace(/\.?$/, '.')}` : r.from === 'status' && !slOn ? ' Statuslinjen er av, så perioden starter denne uken.' : '';
   $('#la-summary').textContent = !preview
     ? 'Åpne en plan først.'
     : r.on
@@ -247,8 +255,10 @@ function readWeek(wId: string, yId: string): { year: number; week: number } | nu
 }
 document.querySelectorAll<HTMLButtonElement>('[data-la-from]').forEach((b) =>
   b.addEventListener('click', () => {
+    const cur = lookRule().from;
     if (b.dataset.laFrom === 'now') setLookahead({ on: true, from: null });
-    else setLookahead({ on: true, from: lookRule().from ?? weekOf(todayIso()) });
+    else if (b.dataset.laFrom === 'status') setLookahead({ on: true, from: 'status' });
+    else setLookahead({ on: true, from: cur && cur !== 'status' ? cur : weekOf(lookWindow ? new Date(lookWindow.start).toISOString().slice(0, 10) : todayIso()) });
     if (b.dataset.laFrom === 'week') $<HTMLInputElement>('#la-from-w').focus();
   }),
 );
@@ -529,7 +539,63 @@ $<HTMLInputElement>('#update-pick').addEventListener('change', async (e) => {
   updateError.hidden = false;
 });
 
+// ---- Statuslinje ----
+const statusRule = (): StatusLine => plan?.plan.layout.statusLine ?? STATUS_DEFAULT;
+function setStatus(change: Partial<StatusLine>) {
+  if (!plan) return;
+  plan.plan.layout.statusLine = { ...statusRule(), ...change };
+  syncStatus();
+  draw();
+}
+const slColors = $<HTMLElement>('#sl-colors');
+for (const [c, name] of STATUS_COLORS) {
+  const b = el('button', '', 'swatch') as HTMLButtonElement;
+  b.type = 'button';
+  b.dataset.slColor = c;
+  b.style.background = c;
+  b.title = name;
+  b.setAttribute('aria-label', name);
+  b.addEventListener('click', () => setStatus({ color: c }));
+  slColors.append(b);
+}
+function syncStatus() {
+  const r = statusRule();
+  const on = $<HTMLInputElement>('#sl-on');
+  on.checked = r.on;
+  on.disabled = !plan;
+  $<HTMLElement>('#sl-details').hidden = !r.on || !plan;
+  const hasProject = !!plan && !!resolveStatus({ ...r, source: 'project' }, plan, todayIso());
+  document.querySelectorAll<HTMLButtonElement>('[data-sl-source]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.slSource === r.source)));
+  $<HTMLButtonElement>('[data-sl-source="project"]').title = hasProject ? 'Statusdatoen som er satt i Project' : 'Planen har ingen statusdato fra Project ennå';
+  $<HTMLElement>('#sl-date-row').hidden = r.source !== 'custom';
+  const d = $<HTMLInputElement>('#sl-date');
+  if (document.activeElement !== d) d.value = r.date ?? '';
+  $('#sl-help').textContent = plan ? statusHelp(r, resolveStatus(r, plan, todayIso()), plan) : '';
+  document.querySelectorAll<HTMLButtonElement>('[data-sl-width]').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.slWidth) - r.width) < 0.01)));
+  slColors.querySelectorAll<HTMLButtonElement>('.swatch').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.slColor?.toUpperCase() === r.color.toUpperCase())));
+  $<HTMLInputElement>('#sl-label').checked = r.label;
+}
+$<HTMLInputElement>('#sl-on').addEventListener('change', (e) => setStatus({ on: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#sl-label').addEventListener('change', (e) => setStatus({ label: (e.target as HTMLInputElement).checked }));
+document.querySelectorAll<HTMLButtonElement>('[data-sl-source]').forEach((b) =>
+  b.addEventListener('click', () => {
+    const source = b.dataset.slSource as StatusLine['source'];
+    if (source === 'custom') {
+      // Første gang: dagen streken står på nå, så den ikke hopper
+      const now = plan ? resolveStatus(statusRule(), plan, todayIso()) : null;
+      setStatus({ source, date: statusRule().date ?? now?.day ?? todayIso() });
+      $<HTMLInputElement>('#sl-date').focus();
+    } else setStatus({ source });
+  }),
+);
+$<HTMLInputElement>('#sl-date').addEventListener('change', (e) => {
+  const v = (e.target as HTMLInputElement).value;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) setStatus({ source: 'custom', date: v });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-sl-width]').forEach((b) => b.addEventListener('click', () => setStatus({ width: Number(b.dataset.slWidth) })));
+
 function syncControls() {
+  syncStatus();
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
