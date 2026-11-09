@@ -430,6 +430,19 @@ describe('overskrift, logo og ukeskravering', () => {
       for (let k = 1; k < idx.length; k++) expect(idx[k] - idx[k - 1], style).toBeLessThanOrEqual(4);
     }
   });
+  it('ukenumre som ikke får plass liggende, står loddrett når da hver uke får nummer', () => {
+    const p = example();
+    const weekRowAt = (end: string) => {
+      p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2027-01-04', end };
+      const L = computeLayout(p, { ...o, style: 'excel' }, approxMeasure);
+      return L.calendarTop[L.calendarTop.length - 1];
+    };
+    const short = weekRowAt('2027-12-26');
+    expect(short.rotate).toBe(false);
+    const found = ['2029-06-30', '2029-12-30', '2030-06-30', '2030-12-29'].map(weekRowAt).find((r) => r.rotate);
+    expect(found).toBeTruthy();
+    expect(found!.cells.filter((c) => !c.label).length).toBeLessThanOrEqual(2);
+  });
   it('valget måned eller uke i appen går foran planen, men ikke foran utkikken', () => {
     const p = example();
     p.plan.calendar.mode = 'month';
