@@ -69,6 +69,8 @@ export interface PlanSettings {
     lookahead?: Lookahead;
     /** Statuslinjen: loddrett strek på statusdatoen. */
     statusLine?: StatusLine;
+    /** Lane-titlenes størrelse i forhold til teksten i boksene. Lik for alle lanes. */
+    laneTitleScale?: number;
   };
   options: {
     legend: boolean;
@@ -182,6 +184,8 @@ export interface Box {
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>>;
   /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
   critical?: boolean;
+  /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
+  textScale?: number;
 }
 
 export interface MilestoneStyle {

@@ -37,7 +37,7 @@
         <button type="button" id="undo" class="tb icon" title="Angre (Ctrl+Z)" aria-label="Angre" disabled>↶</button>
         <button type="button" id="redo" class="tb icon" title="Gjør om (Ctrl+Y)" aria-label="Gjør om" disabled>↷</button>
         <button type="button" id="critical-mode" class="tb" aria-pressed="false" title="Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M3 6h6v6h6v6h6"/></svg>Kritisk linje</button>
-        <button type="button" id="arrange-menu" class="tb menu" popovertarget="menu-arrange" title="Plasser boksene i lanene på nytt, f.eks. etter at du har endret høyder">Omplasser</button>
+        <button type="button" id="arrange-menu" class="tb menu" popovertarget="menu-arrange" title="Plasser boksene i lanene på nytt, eller gi dem størst mulig tekst, f.eks. etter at du har endret høyder">Omplasser</button>
         <button type="button" id="show-marks" class="tb" aria-pressed="true" title="Vis eller skjul de blå prikkene på bokser du har endret">Vis endret</button>
         <button type="button" id="reset-all" class="tb" title="Fjern alt du har endret i boksene" disabled>Tilbakestill alt</button>
       </div>
@@ -195,6 +195,16 @@
         <button type="button" id="arrange-chrono" class="pm-item">
           <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7 M7 12h8 M10 18h10"/></svg>
           <span class="pm-text"><strong>Tidligst først</strong><span class="pm-desc">Som når planen lages: boksen som starter først, ligger øverst.</span></span>
+        </button>
+      </div>
+      <div class="pm-group" role="group" aria-label="Tekst">
+        <button type="button" id="fit-text" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19 9 5l5 14 M6 14h6 M17 9v10 M14.5 11.5 17 9l2.5 2.5"/></svg>
+          <span class="pm-text"><strong>Størst mulig tekst</strong><span class="pm-desc">Når boksene er ferdig justert: hver boks får den største teksten som får plass i den, høyst dobbelt så stor som planens. Lane-titlene får én felles, større størrelse.</span></span>
+        </button>
+        <button type="button" id="fit-text-reset" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 10 5l5 14 M7 14h6 M17 13h4"/></svg>
+          <span class="pm-text"><strong>Planens tekststørrelse</strong><span class="pm-desc">All tekst tilbake til samme størrelse. Høydene på boksene blir stående.</span></span>
         </button>
       </div>
       <div class="pm-group">

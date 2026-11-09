@@ -377,6 +377,8 @@ details summary { cursor: pointer; font-size: 13px; }
 #panel .group { display: flex; width: 100%; }
 #panel .group button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 4px; font-size: 12px; white-space: nowrap; }
 #panel .group button .pico { width: 13px; height: 13px; }
+#panel .group.stepper button { flex: 0 0 32px; font-size: 15px; line-height: 1; }
+#panel .group.stepper .step-val { flex: 1; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .pswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
 .pswitch input { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 30px; height: 18px; margin: 0; border-radius: 9px; background: var(--border); cursor: pointer; transition: background-color 160ms ease-out; }
 .pswitch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 160ms ease-out; }

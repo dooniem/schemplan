@@ -3,6 +3,8 @@
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
+import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
+import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -15,6 +17,8 @@ export interface EditorHost {
   redraw(): void;
   /** Finner tettest rekkefølge i lanene (null for en lane der tidligst først er like tett). */
   arrange(p: PlanFile, laneIds: string[], how: ArrangeOptions): ArrangeResult;
+  /** Størst mulig tekst i boksene (og lane-titlene) uten at planen endrer seg ellers. */
+  fitText(p: PlanFile, scope: FitTextScope): FitTextResult;
 }
 
 export interface Editor {
@@ -52,7 +56,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle || b.textScale);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -71,6 +75,7 @@ export function resetBox(b: Box): void {
   delete b.hidden;
   delete b.header;
   delete b.milestoneStyle;
+  delete b.textScale;
 }
 
 /** Lanen boksen ligger i nå. */
@@ -270,7 +275,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
@@ -509,6 +514,39 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     r.append(el('span', {}, text), btn(button, null, onClick, title, 'button small'));
     return r;
   };
+  /**
+   * Tekststørrelse for boksen, i halve punkter. Lagres i forhold til planens tekst, så boksen
+   * følger med når planen krymper eller vokser. Aldri under halvparten eller over det dobbelte.
+   */
+  const textSizeRow = (b: Box, planPt: number) => {
+    const scale = b.textScale ?? 1;
+    const cur = planPt * scale;
+    const lo = planPt * MIN_TEXT_SCALE;
+    const hi = planPt * MAX_TEXT_SCALE;
+    const fmt = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
+    const setPt = (pt: number) =>
+      change((x) => {
+        const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
+        if (Math.abs(s - 1) < 1e-3) delete x.textScale;
+        else x.textScale = Math.round(s * 10000) / 10000;
+      });
+    const wrap = el('div', { class: 'prop prop-inline' });
+    wrap.append(el('span', { class: 'prop-label' }, 'Størrelse'));
+    const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': 'Tekststørrelse' });
+    const down = el('button', { type: 'button', 'aria-label': 'Mindre tekst', title: 'Mindre tekst' }, '−') as HTMLButtonElement;
+    const up = el('button', { type: 'button', 'aria-label': 'Større tekst', title: 'Større tekst' }, '+') as HTMLButtonElement;
+    const val = el('output', { class: 'step-val', 'aria-live': 'polite' }, `${fmt(cur)} pt`);
+    // Neste halve punkt opp eller ned, så størrelsene blir runde tall
+    down.disabled = cur <= lo + 1e-3;
+    up.disabled = cur >= hi - 1e-3;
+    down.addEventListener('click', () => setPt(Math.max(lo, Math.ceil(cur * 2 - 1e-3) / 2 - 0.5)));
+    up.addEventListener('click', () => setPt(Math.min(hi, Math.floor(cur * 2 + 1e-3) / 2 + 0.5)));
+    g.append(down, val, up);
+    wrap.append(g);
+    const out: HTMLElement[] = [wrap];
+    if (b.textScale) out.push(lockedRow(`Egen størrelse, planen har ${fmt(planPt)} pt`, 'Som planen', 'Samme tekststørrelse som resten av planen', () => change((x) => delete x.textScale)));
+    return out;
+  };
   /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
   const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
@@ -744,6 +782,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sp = section('Plassering');
     const inLine = boxes.every((x) => x.critical);
     sp.append(switchRow('Med i kritisk linje', inLine, (v) => setCritical(boxes.map((x) => x.id), v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    if (plain.some((x) => x.textScale)) sp.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
     if (boxes.some((x) => x.top !== undefined)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all((x) => delete x.top, false)));
 
@@ -808,7 +847,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ['Bokser', [
           'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
           'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit.',
-          'Dra i den blå streken under valgt boks for å endre høyden.',
+          'Dra i den blå streken under valgt boks for å endre høyden. Bunnen snapper til kanten av andre bokser, så de kan stilles på linje (hold Alt for å dra fritt).',
           'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
           'Omplasser i verktøylinjen pakker lanene på nytt, f.eks. etter at du har endret høyder. Angre om du ikke liker forslaget.',
         ]],
@@ -886,6 +925,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'),
     );
+    if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
@@ -973,7 +1013,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (b.top !== undefined) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change((x) => delete x.top)));
-    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden.'));
+    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
@@ -1109,6 +1149,52 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const set = (e: Element, attrs: Record<string, string | number>) => Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
 
+  /** Alt holdt nede under dra: ingen snapping. */
+  let snapOff = false;
+  /**
+   * Snapping mot kanten av andre bokser når høyde eller plass dras, så bunner og topper kan
+   * stilles på linje uten øyemål. En stiplet hjelpelinje viser kanten, og boksen den hører til
+   * rammes inn. Gjelder bokser i hele planen, også i andre lanes.
+   */
+  const snapper = (g: SVGGElement, skip: Set<string>) => {
+    const L = layoutNow!;
+    const edges = L.items.filter((o): o is BoxItem => o.kind === 'box' && !skip.has(o.id)).flatMap((o) => [
+      { y: o.y, o },
+      { y: o.y + o.h, o },
+    ]);
+    const guide = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 1.5, 'stroke-dasharray': '5 3', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    const mark = shape(g, 'rect', { fill: 'none', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    // Omtrent seks skjermpunkter, uansett zoom
+    const tol = () => {
+      const a = toMm(0, 0);
+      const b = toMm(0, 6);
+      return Math.abs(b.y - a.y) || 1;
+    };
+    const hide = () => {
+      set(guide, { visibility: 'hidden' });
+      set(mark, { visibility: 'hidden' });
+    };
+    return {
+      /** Finner kanten nærmest en av de dragne kantene (ys). Gir hvor langt den må flyttes, eller null. */
+      find(ys: number[]): { d: number; y: number; o: BoxItem } | null {
+        if (snapOff) return null;
+        const t = tol();
+        let best: { d: number; y: number; o: BoxItem } | null = null;
+        for (const y of ys)
+          for (const e of edges) {
+            const d = e.y - y;
+            if (Math.abs(d) <= t && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, y: e.y, o: e.o };
+          }
+        return best;
+      },
+      show(hit: { y: number; o: BoxItem } | null) {
+        if (!hit) return hide();
+        set(guide, { y1: hit.y, y2: hit.y, visibility: 'visible' });
+        set(mark, { x: hit.o.x0, y: hit.o.y, width: hit.o.x1 - hit.o.x0, height: hit.o.h, visibility: 'visible' });
+      },
+    };
+  };
+
   const startBoxResize = (it: BoxItem): Drag | null => {
     const lane = laneAt(it.y);
     if (!lane || !layoutNow) return null;
@@ -1118,14 +1204,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const maxH = Math.max(minH, lane.y1 - pad - it.y);
     const g = ghostLayer();
     const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+    const snap = snapper(g, new Set([it.id]));
     let h = it.h;
     return {
       startY: it.y + it.h,
       startClient: 0,
       moved: false,
       move(dy) {
-        // Trinn på en kvart tekstlinje
-        h = clamp(Math.round((it.h + dy) / (unit / 4)) * (unit / 4), minH, maxH);
+        // Bunnen snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
+        const hit = snap.find([it.y + it.h + dy]);
+        const want = hit ? it.y + it.h + dy + hit.d - it.y : Math.round((it.h + dy) / (unit / 4)) * (unit / 4);
+        h = clamp(want, minH, maxH);
+        snap.show(hit && Math.abs(h - want) < 1e-6 ? hit : null);
         set(r, { height: h });
       },
       end() {
@@ -1155,6 +1245,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     let rect: SVGRectElement | null = null;
     let target: SVGRectElement | null = null;
     let y = r.y0;
+    let snap: ReturnType<typeof snapper> | null = null;
+    const kidItems = () =>
+      it.kind === 'box' && it.header
+        ? L.items.filter((o) => {
+            if (o === it) return false;
+            const q = bounds(o);
+            return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
+          })
+        : [];
+    const kidsOf = () => kidItems().map((o) => o.id);
+    // Kanten som snapper: selve boksen, ikke callouten
+    const bh = it.kind === 'box' ? it.h : fh;
     return {
       startY: r.y0,
       startClient: 0,
@@ -1172,7 +1274,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         lane = laneAt(clamp(r.y0 + dy + fh / 2, first.y0, last.y1 - 1e-3)) ?? home;
         const pad = lane.top - lane.y0;
         const maxY = Math.max(lane.top, lane.y1 - pad - fh);
-        y = clamp(lane.top + Math.round((r.y0 + dy - lane.top) / (unit / 4)) * (unit / 4), lane.top, maxY);
+        // Topp eller bunn snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
+        if (!snap) snap = snapper(g!, new Set([it.id, ...kidsOf()]));
+        const top = r.y0 + dy;
+        const hit = it.kind === 'box' ? snap.find([top, top + bh]) : null;
+        const want = hit ? top + hit.d : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
+        y = clamp(want, lane.top, maxY);
+        snap.show(hit && Math.abs(y - want) < 1e-6 ? hit : null);
         set(rect!, { y });
         set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
       },
@@ -1181,13 +1289,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         if (Math.abs(y - r.y0) < 1e-6 && lane === home) return;
         selected = it.id;
         // En overskriftsboks tar med seg boksene som ligger inne i den
-        const kids = it.kind === 'box' && it.header
-          ? L.items.filter((o) => {
-              if (o === it) return false;
-              const q = bounds(o);
-              return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
-            }).map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }))
-          : [];
+        const kids = kidItems().map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }));
         commit((plan) => {
           for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
             if (lane !== home) moveBox(plan, m.id, lane.id);
@@ -1513,6 +1615,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Flytting starter først etter noen punkter, så et vanlig klikk bare velger
     if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
+    snapOff = e.altKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
     else drag.move(p.y - drag.startY);
@@ -1672,6 +1775,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ids.forEach((id) => resetBoxInPlan(plan, id));
     plan.lanes.forEach((l) => resetLane(l));
     delete plan.plan.layout.tradeColors;
+    delete plan.plan.layout.laneTitleScale;
     host.redraw();
     buildPanel();
     syncTools();
@@ -1681,7 +1785,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
 
   /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene). */
-  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string } => {
+  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean } => {
     const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
     if (group.length > 1) {
       const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
@@ -1689,7 +1793,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
     if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
-    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for å omplassere bare dem.' };
+    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true };
   };
 
   function endArrange() {
@@ -1798,6 +1902,36 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     buildPanel();
     syncTools();
   };
+
+  // ---- Størst mulig tekst ----
+  const ptText = (v: number) => `${v.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt`;
+  const fitText = (reset: boolean) => {
+    const plan = host.getPlan();
+    if (!plan || !layoutNow) return;
+    endArrange();
+    const s = arrangeScope(plan);
+    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.whole };
+    const res = reset ? null : host.fitText(plan, scope);
+    const next = res ? res.plan : resetTextSizes(plan, scope);
+    if (JSON.stringify(next) === JSON.stringify(plan)) {
+      showArrangeBar(reset ? 'All tekst har allerede planens størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
+      return;
+    }
+    snapshot();
+    typingSession = false;
+    host.setPlan(next);
+    host.redraw();
+    if (res) {
+      const n = res.grown;
+      const boxes = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} fikk større tekst, opptil ${ptText(res.maxPt)}` : 'Ingen bokser hadde plass til større tekst';
+      const lanes = res.laneTitlePt && res.laneTitlePt > res.planPt + 1e-6 ? `. Lane-titlene er ${ptText(res.laneTitlePt)}` : '';
+      showArrangeBar(`${boxes}${lanes}. Resten av planen har ${ptText(res.planPt)}.`, true);
+    } else showArrangeBar('All tekst har planens størrelse igjen.', true);
+    buildPanel();
+    syncTools();
+  };
+  document.querySelector('#fit-text')?.addEventListener('click', () => fitText(false));
+  document.querySelector('#fit-text-reset')?.addEventListener('click', () => fitText(true));
 
   arrangeMenu?.addEventListener('toggle', (e) => {
     if ((e as ToggleEvent).newState !== 'open') return;

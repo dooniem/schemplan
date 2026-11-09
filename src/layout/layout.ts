@@ -209,8 +209,8 @@ export interface Layout {
 }
 
 const MARGIN = 8;
-const PAD_X = 0.7;
-const PAD_Y = 0.25; // Excel har lite luft over og under teksten
+export const PAD_X = 0.7;
+export const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
 
 export const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
@@ -289,6 +289,10 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
 }
 
 export const DEFAULT_MIN_TEXT_PT = 6;
+/** Tekst i en boks eller lane-titlene er aldri mer enn dobbelt så stor, eller under halvparten av planens tekst. */
+export const MAX_TEXT_SCALE = 2;
+export const MIN_TEXT_SCALE = 0.5;
+const clampScale = (s: number | undefined) => Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, s ?? 1));
 /** Lenger ned krymper vi aldri, heller ikke for å få plass. */
 export const ABS_MIN_TEXT_PT = 3;
 
@@ -381,10 +385,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
   const titlePad = 2 * PAD_X + 2;
+  // Lane-titlene har én felles størrelse, i forhold til teksten i boksene
+  const laneSize = base * clampScale(file.plan.layout.laneTitleScale);
+  const laneLh = laneSize * LINE_HEIGHT;
   // "|" i lane-navnet er linjeskift, som i boksteksten
   const laneRaw = lanes.map((l) => splitLines(l.name));
-  const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, base, true))));
-  const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, base, true)));
+  const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, laneSize, true))));
+  const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, laneSize, true)));
   const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
   // Luft i lanene følger tekststørrelsen
   const LANE_PAD = Math.max(0.5, base * 0.3);
@@ -414,7 +421,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
+  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, laneSize, measure, true));
   const contentH = lanes.map((lane, i) => {
     if (arrange?.lanes.has(lane.id)) {
       // Boksene inne i en overskriftsboks som flyttes, følger den og pakkes ikke for seg
@@ -447,7 +454,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       setY(p.item, placed[j].y);
     });
     const inner = pieces.reduce((m, p, j) => Math.max(m, placed[j].y + p.h), 0);
-    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * lh + 2 * LANE_PAD, lh * 1.5);
+    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
   });
   // Lane med høyde valgt i appen: aldri lavere enn innholdet krever
   const minH = contentH.slice();
@@ -572,9 +579,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       manual: !!lane.height,
       title: {
         x: laneTitleX + LANE_TITLE_W / 2,
-        y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
+        y: y0 + h / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
-        size: base,
+        size: laneSize,
         color: '#000000',
         anchor: 'middle',
         bold: true,
@@ -762,6 +769,10 @@ function buildPieces(
       continue;
     }
 
+    // Tekststørrelse valgt for boksen, i forhold til planens tekst. Høyder og plass i lanen
+    // regnes fortsatt i planens tekstlinjer (lh), så de ikke endres når teksten i boksen gjør det.
+    const bs = base * clampScale(box.textScale);
+    const blh = bs * LINE_HEIGHT;
     const c = colors.get(r.trade) ?? noneColor;
     // Farge valgt i appen går foran fagets farge
     const fill = box.fill ?? c.fill ?? '#FFFFFF';
@@ -795,8 +806,8 @@ function buildPieces(
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst: én linje per tekstlinje, boksen blir høy nok til teksten
       lines = rawLines;
-      item.h = widest(lines, base, measure) + 2 * PAD_Y + 1;
-      item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: base, color: textColor, anchor: 'middle', rotate: box.rotation };
+      item.h = widest(lines, bs, measure) + 2 * PAD_Y + 1;
+      item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
@@ -804,33 +815,33 @@ function buildPieces(
       const inner = Math.max(w - 2 * PAD_X, 0.5);
       // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
       // så like bokser med samme tekst behandles likt
-      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, base)));
+      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)));
       if (inner < longestWord && !neverCallout) useCallout = true;
       else {
-        lines = wrapLines(rawLines, inner, base, measure);
-        const h = lines.length * lh + 2 * PAD_Y;
+        lines = wrapLines(rawLines, inner, bs, measure);
+        const h = lines.length * blh + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
         const words = new Set(rawLines.join(' ').split(/\s+/));
         const brokeWord = lines.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
         if ((w / h < 0.25 || brokeWord) && !neverCallout) useCallout = true;
         else {
           item.h = h;
-          item.text = { x: bx0 + w / 2, y: PAD_Y + base * 0.85, lines, size: base, color: textColor, anchor: 'middle' };
+          item.text = { x: bx0 + w / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle' };
         }
       }
     }
 
     if (useCallout) {
-      item.h = lh + 2 * PAD_Y;
+      item.h = blh + 2 * PAD_Y;
       const make = (side: 'right' | 'left', maxW: number): Variant => {
-        const cl = wrapLines(rawLines, maxW, base, measure);
-        const cw = widest(cl, base, measure) + 2 * PAD_X;
-        const ch = cl.length * lh + 2 * PAD_Y;
+        const cl = wrapLines(rawLines, maxW, bs, measure);
+        const cw = widest(cl, bs, measure) + 2 * PAD_X;
+        const ch = cl.length * blh + 2 * PAD_Y;
         const cx = side === 'right' ? bx1 + 2 : bx0 - 2 - cw;
         const it: BoxItem & { trade: string } = { ...item, callout: null };
         it.callout = {
           box: { x: cx, y: 0, w: cw, h: ch },
-          text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
+          text: { x: cx + PAD_X, y: PAD_Y + bs * 0.85, lines: cl, size: bs, color: '#000000', anchor: 'start' },
           leader: ny
             ? side === 'right'
               ? [bx1, item.h / 2, cx, item.h / 2]
