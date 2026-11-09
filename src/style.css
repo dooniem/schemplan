@@ -252,22 +252,32 @@ dialog.help::backdrop { background: rgb(0 0 0 / 0.3); }
 .help-compare div:first-child { border-color: var(--accent); }
 .help-compare dt { font-weight: 600; font-size: 13px; }
 .help-compare dd { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
-.help .help-aside { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); }
 .help-tips h4 { margin-top: 14px; }
 .help-tips h3 + h4 { margin-top: 0; }
 .help-tips ul { margin: 2px 0 0; padding-left: 18px; color: var(--text); }
 .help-tips li { margin-bottom: 2px; }
 .help kbd { padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 12px; }
-.help-install { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); }
-.help-install[hidden] { display: none; }
-.help-install p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
-.help-install button { flex: none; }
+.help-body .help-return { grid-column: 1 / -1; padding: 20px 24px 24px; border-top: 1px solid var(--border); }
+.help-return h3 { margin-bottom: 4px; }
+.help .help-lede { margin-bottom: 14px; color: var(--muted); max-width: 70ch; text-wrap: pretty; }
+.help-ways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.help-ways > div { padding: 0 20px; border-left: 1px solid var(--border); }
+.help-ways > div:first-child { padding-left: 0; border-left: 0; }
+.help-ways > div:last-child { padding-right: 0; }
+.help-ways dt { margin-bottom: 4px; font-weight: 600; }
+.help-ways dd { margin: 0; font-size: 13px; }
+.help-ways dd[hidden] { display: none; }
+.help-url { display: block; margin-bottom: 6px; color: var(--accent); font-weight: 600; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.help-install { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.help-install span { color: var(--muted); }
 .help-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 24px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .help-foot span:first-child { color: var(--text); font-weight: 600; }
 @media (max-width: 640px) {
   .help-body { grid-template-columns: 1fr; }
   .help-tips { border-left: 0; border-top: 1px solid var(--border); }
   .help-compare { grid-template-columns: 1fr; }
+  .help-ways { grid-template-columns: 1fr; gap: 14px; }
+  .help-ways > div { padding: 0; border-left: 0; }
 }
 
 main { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; }

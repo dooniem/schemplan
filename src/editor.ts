@@ -4,7 +4,8 @@ import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
-import { defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { PT_TO_MM } from './layout/text';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -19,6 +20,8 @@ export interface EditorHost {
   arrange(p: PlanFile, laneIds: string[], how: ArrangeOptions): ArrangeResult;
   /** Størst mulig tekst i boksene (og lane-titlene) uten at planen endrer seg ellers. */
   fitText(p: PlanFile, scope: FitTextScope): FitTextResult;
+  /** Overskriftens størrelse i punkter (et valg i appen, som i Innstillinger). */
+  setTitleSize(pt: number): void;
 }
 
 export interface Editor {
@@ -302,7 +305,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
@@ -587,7 +590,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     scaleNow: number | undefined,
     planPt: number,
     set: (s: number | undefined) => void,
-    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string } = {},
+    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string; std?: string } = {},
   ) => {
     const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen' } = o;
     const cur = planPt * (scaleNow ?? def);
@@ -616,7 +619,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     wrap.append(g);
     const out: HTMLElement[] = [wrap];
     if (scaleNow) {
-      const std = def === 1 ? `planen har ${fmt(planPt)} pt` : `standard er ${fmt(planPt * def)} pt`;
+      const std = o.std ?? (def === 1 ? `planen har ${fmt(planPt)} pt` : `standard er ${fmt(planPt * def)} pt`);
       out.push(lockedRow(`${note}, ${std}`, resetLabel, resetTitle, () => set(undefined)));
     }
     return out;
@@ -660,6 +663,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const s1 = section('Overskrift');
     s1.append(textField('header-title', 'Overskrift', lay.title ?? plan.plan.title, '2', (v) => changeHeader((l) => (l.title = v), true)));
     s1.append(el('p', { class: 'hint' }, 'Midt øverst på arket.'));
+    if (layoutNow) {
+      // Overskriften har fast størrelse i punkter, som i Innstillinger
+      const titlePt = layoutNow.title.size / PT_TO_MM;
+      s1.append(
+        ...sizeStepper(Math.abs(titlePt - DEFAULT_TITLE_PT) < 1e-3 ? undefined : titlePt / DEFAULT_TITLE_PT, DEFAULT_TITLE_PT, (s) => {
+          host.setTitleSize(s === undefined ? DEFAULT_TITLE_PT : Math.round(DEFAULT_TITLE_PT * s * 2) / 2);
+          buildPanel();
+        }, { std: `standard er ${DEFAULT_TITLE_PT} pt`, resetLabel: 'Standard', resetTitle: `Standardstørrelsen, ${DEFAULT_TITLE_PT} pt` }),
+      );
+    }
     if (lay.title !== undefined && lay.title !== plan.plan.title)
       s1.append(btn('Bruk navnet fra Project', null, () => changeHeader((l) => delete l.title, false), undefined, 'linkish'));
     const s2 = section('Tekst til høyre');
@@ -672,6 +685,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
     );
     s2.append(el('p', { class: 'hint' }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Skriv | for linjeskift.'));
+    if (layoutNow && lay.headerRight?.trim()) {
+      s2.append(
+        ...sizeStepper(lay.headerRightScale, layoutNow.headerRightBasePt, (s) =>
+          changeHeader((l) => {
+            if (s === undefined) delete l.headerRightScale;
+            else l.headerRightScale = s;
+          }, false), { std: `standard er ${layoutNow.headerRightBasePt.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt, 0,6 × overskriften`, resetLabel: 'Standard', resetTitle: 'Standardstørrelsen, i forhold til overskriften' }),
+      );
+    }
   };
 
   const buildLanePanel = (plan: PlanFile, l: Lane) => {
@@ -934,6 +956,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       lab,
       el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'),
     );
+    // Forklaringen har én felles størrelse, som lane-navnene
+    if (layoutNow) {
+      const base = layoutNow.legendBasePt;
+      s.append(
+        ...sizeStepper(plan.plan.layout.legendScale, base, (v) =>
+          commit((pl) => {
+            if (v === undefined) delete pl.plan.layout.legendScale;
+            else pl.plan.layout.legendScale = v;
+          }), {
+          note: 'Egen størrelse for hele forklaringen',
+          std: `standard er ${base.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt`,
+          resetLabel: 'Standard',
+          resetTitle: 'Standardstørrelsen for forklaringen',
+        }),
+        el('p', { class: 'hint' }, 'Størrelsen gjelder hele forklaringen og datoen nederst, så alt er like stort. Blir den for bred, går den over flere rader.'),
+      );
+    }
   };
 
   const buildTradePanel = (plan: PlanFile, trade: string) => {
@@ -1957,6 +1996,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     delete plan.plan.layout.tradeColors;
     delete plan.plan.layout.laneTitleScale;
     delete plan.plan.layout.legendItems;
+    delete plan.plan.layout.headerRightScale;
+    delete plan.plan.layout.legendScale;
     host.redraw();
     buildPanel();
     syncTools();

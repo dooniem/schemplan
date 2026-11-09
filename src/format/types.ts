@@ -73,6 +73,10 @@ export interface PlanSettings {
     legendItems?: Record<string, { hidden?: boolean; text?: string }>;
     /** Lane-titlenes størrelse i forhold til teksten i boksene. Lik for alle lanes. */
     laneTitleScale?: number;
+    /** Teksten øverst til høyre i forhold til standard (0,6 × overskriften). */
+    headerRightScale?: number;
+    /** Forklaringen og datoen nederst i forhold til standardstørrelsen. Lik for alle oppføringer. */
+    legendScale?: number;
   };
   options: {
     legend: boolean;

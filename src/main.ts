@@ -31,6 +31,13 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: 
 
 $('#version').textContent = `v${__APP_VERSION__}`;
 $('#help-version').textContent = `Versjon ${__APP_VERSION__}`;
+// Adressen appen er åpnet fra, uten plan i adressen, så den kan lagres som bokmerke
+{
+  const home = `${location.origin}${location.pathname}`;
+  const a = $<HTMLAnchorElement>('#help-url');
+  a.href = home;
+  a.textContent = home.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
 {
   const help = $('#help') as HTMLDialogElement;
   $('#help-open').addEventListener('click', () => help.showModal());
@@ -71,6 +78,11 @@ const editor = createEditor(
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
     fitText: (p, scope) => fitTextToBoxes(p, viewOf(p).opts, measure, scope),
+    setTitleSize: (pt) => {
+      opts.titleSizePt = pt;
+      syncControls();
+      draw();
+    },
   },
   host,
   $<HTMLElement>('#panel'),
@@ -911,21 +923,29 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorke
 // Nettleseren sier fra når appen kan installeres; da vises knappen i Hjelp
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 let installPrompt: InstallPrompt | null = null;
+/** Hjelp viser én av tre tekster om skrivebordsikonet: installert, installer-knapp, eller hvordan du installerer. */
+function syncInstall(installed = false) {
+  const standalone = installed || window.matchMedia('(display-mode: standalone)').matches;
+  $<HTMLElement>('#help-desk-installed').hidden = !standalone;
+  $<HTMLElement>('#help-install').hidden = standalone || !installPrompt;
+  $<HTMLElement>('#help-desk-manual').hidden = standalone || !!installPrompt;
+}
+syncInstall();
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installPrompt = e as InstallPrompt;
-  $<HTMLElement>('#help-install').hidden = false;
+  syncInstall();
 });
 window.addEventListener('appinstalled', () => {
   installPrompt = null;
-  $<HTMLElement>('#help-install').hidden = true;
+  syncInstall(true);
 });
 $<HTMLButtonElement>('#install-app').addEventListener('click', async () => {
   if (!installPrompt) return;
   await installPrompt.prompt();
-  await installPrompt.userChoice;
+  const { outcome } = await installPrompt.userChoice;
   installPrompt = null;
-  $<HTMLElement>('#help-install').hidden = true;
+  syncInstall(outcome === 'accepted');
 });
 // Åpne med → Skjematisk plan: filen kommer inn her når appen er installert
 type LaunchQueue = { setConsumer: (fn: (p: { files: FileSystemFileHandle[] }) => void) => void };
