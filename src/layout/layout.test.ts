@@ -414,13 +414,14 @@ describe('overskrift, logo og ukeskravering', () => {
     const w1 = weeks.cells.find((c) => c.label === '1')!;
     expect(L.grid.find((g) => Math.abs(g.x - w1.x0) < 1e-6)?.strong).toBe(true);
   });
-  it('lang plan i uker: ukenumrene deles aldri, men vises for annenhver eller hver fjerde uke', () => {
+  it('lang plan i uker: ukenumrene deles aldri, står loddrett og vises for annenhver eller hver fjerde uke', () => {
     for (const style of ['excel', 'ny'] as const) {
       const p = example();
       p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2027-01-04', end: '2031-12-28' };
       const L = computeLayout(p, { ...o, style }, approxMeasure);
       const weeks = L.calendarTop[L.calendarTop.length - 1];
       const shown = weeks.cells.filter((c) => c.label);
+      expect(weeks.rotate, style).toBe(true);
       expect(shown.length, style).toBeGreaterThan(weeks.cells.length / 5);
       expect(shown.some((c) => c.label === '1'), style).toBe(true);
       for (const c of shown) expect(Number(c.label) >= 1 && Number(c.label) <= 53, `${style} ${c.label}`).toBe(true);
