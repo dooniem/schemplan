@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeLayout, type BoxItem, type LayoutOptions } from './layout';
+import { computeLayout, LANE_TITLE_DEFAULT, type BoxItem, type LayoutOptions } from './layout';
 import { fitTextToBoxes, resetTextSizes } from './fittext';
-import { approxMeasure } from './text';
+import { approxMeasure, PT_TO_MM } from './text';
 import { validatePlan } from '../format/validate';
 import { testplan } from '../test/testplaner';
 
@@ -70,5 +70,19 @@ describe('størst mulig tekst', () => {
     const it = box(L, '2_2');
     expect(it.text!.size).toBeCloseTo(L.textSizePt * 1.5 * (25.4 / 72), 5);
     expect(it.h).toBeGreaterThan(h0);
+  });
+});
+
+describe('lane-navnenes standardstørrelse', () => {
+  it('er litt større enn teksten i boksene, rundet til halve punkter, og kan settes lik', () => {
+    const p = testplan();
+    const L = computeLayout(p, opts, approxMeasure);
+    const pt = L.textSizePt;
+    const lanePt = (lay: typeof L) => lay.lanes[0].title.size / (lay.textSizePt * PT_TO_MM);
+    expect(L.lanes[0].title.size / PT_TO_MM).toBeCloseTo(Math.round(pt * LANE_TITLE_DEFAULT * 2) / 2, 5);
+    expect(lanePt(L)).toBeGreaterThan(1);
+    p.plan.layout.laneTitleScale = 1;
+    const same = computeLayout(p, opts, approxMeasure);
+    expect(same.lanes[0].title.size).toBeCloseTo(same.textSizePt * PT_TO_MM, 6);
   });
 });

@@ -3,7 +3,7 @@
 // høyere, og teksten i resten av planen krymper ikke.
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
-import { computeLayout, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
+import { computeLayout, defaultLaneTitleScale, laneTitleScaleOf, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 
 /** Tilpasset tekst blir aldri større enn dette, selv om planens tekst er stor. */
@@ -78,6 +78,8 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
     let found = false;
     for (const pt of candidates(planPt, MAX_LANE_TITLE_SCALE)) {
       lay.laneTitleScale = pt / planPt;
+      // Standardstørrelsen lagres ikke, så den følger med om standarden endres
+      if (Math.abs(lay.laneTitleScale - defaultLaneTitleScale(planPt)) < EPS) delete lay.laneTitleScale;
       if (sameFit(before, computeLayout(next, opts, measure))) {
         laneTitlePt = pt;
         found = true;
@@ -85,8 +87,10 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
       }
     }
     if (!found) {
-      delete lay.laneTitleScale;
-      laneTitlePt = planPt;
+      // Ingen større størrelse får plass: navnene beholder størrelsen de har
+      if (file.plan.layout.laneTitleScale === undefined) delete lay.laneTitleScale;
+      else lay.laneTitleScale = file.plan.layout.laneTitleScale;
+      laneTitlePt = planPt * laneTitleScaleOf(lay, planPt);
     }
   }
 
@@ -133,7 +137,7 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
   return { plan: next, grown, maxPt, laneTitlePt, planPt };
 }
 
-/** Planens tekststørrelse i alle boksene (og lane-titlene). Faste høyder som ble satt for å holde på plassen, blir stående. */
+/** Standard tekststørrelse: planens tekst i boksene, og standardstørrelsen på lane-titlene. Faste høyder som ble satt for å holde på plassen, blir stående. */
 export function resetTextSizes(file: PlanFile, scope: FitTextScope): PlanFile {
   const next: PlanFile = structuredClone(file);
   const laneIds = new Set(scope.laneIds ?? next.lanes.map((l) => l.id));

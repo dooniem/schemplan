@@ -4,7 +4,7 @@ import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
-import { FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -581,15 +581,22 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         else x.textScale = s;
       }),
     );
-  /** − / + i halve punkter. set får forholdet til planens tekst, eller undefined for planens størrelse. */
-  const sizeStepper = (scaleNow: number | undefined, planPt: number, set: (s: number | undefined) => void, note = 'Egen størrelse') => {
-    const cur = planPt * (scaleNow ?? 1);
+  /** − / + i halve punkter. set får forholdet til planens tekst, eller undefined for standardstørrelsen. */
+  /** def: standardstørrelsen i forhold til planens tekst. Velges den, lagres ingen egen størrelse. */
+  const sizeStepper = (
+    scaleNow: number | undefined,
+    planPt: number,
+    set: (s: number | undefined) => void,
+    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string } = {},
+  ) => {
+    const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen' } = o;
+    const cur = planPt * (scaleNow ?? def);
     const lo = planPt * MIN_TEXT_SCALE;
     const hi = planPt * MAX_TEXT_SCALE;
     const fmt = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
     const setPt = (pt: number) => {
       const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
-      set(Math.abs(s - 1) < 1e-3 ? undefined : Math.round(s * 10000) / 10000);
+      set(Math.abs(s - def) < 1e-3 ? undefined : Math.round(s * 10000) / 10000);
     };
     const wrap = el('div', { class: 'prop prop-inline' });
     wrap.append(el('span', { class: 'prop-label' }, 'Størrelse'));
@@ -600,12 +607,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Neste halve punkt opp eller ned, så størrelsene blir runde tall
     down.disabled = cur <= lo + 1e-3;
     up.disabled = cur >= hi - 1e-3;
-    down.addEventListener('click', () => setPt(Math.max(lo, Math.ceil(cur * 2 - 1e-3) / 2 - 0.5)));
-    up.addEventListener('click', () => setPt(Math.min(hi, Math.floor(cur * 2 + 1e-3) / 2 + 0.5)));
+    // Planens størrelse er også et stopp, så teksten kan gjøres like stor som i resten av planen
+    const downTo = Math.max(lo, Math.ceil(cur * 2 - 1e-3) / 2 - 0.5);
+    const upTo = Math.min(hi, Math.floor(cur * 2 + 1e-3) / 2 + 0.5);
+    down.addEventListener('click', () => setPt(planPt < cur - 1e-3 && planPt > downTo + 1e-3 ? planPt : downTo));
+    up.addEventListener('click', () => setPt(planPt > cur + 1e-3 && planPt < upTo - 1e-3 ? planPt : upTo));
     g.append(down, val, up);
     wrap.append(g);
     const out: HTMLElement[] = [wrap];
-    if (scaleNow) out.push(lockedRow(`${note}, planen har ${fmt(planPt)} pt`, 'Som planen', 'Samme tekststørrelse som resten av planen', () => set(undefined)));
+    if (scaleNow) {
+      const std = def === 1 ? `planen har ${fmt(planPt)} pt` : `standard er ${fmt(planPt * def)} pt`;
+      out.push(lockedRow(`${note}, ${std}`, resetLabel, resetTitle, () => set(undefined)));
+    }
     return out;
   };
   /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
@@ -681,8 +694,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           commit((pl) => {
             if (s === undefined) delete pl.plan.layout.laneTitleScale;
             else pl.plan.layout.laneTitleScale = s;
-          }), 'Egen størrelse for alle lanes'),
-        el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store.'),
+          }), {
+          note: 'Egen størrelse for alle lanes',
+          def: defaultLaneTitleScale(layoutNow.textSizePt),
+          resetLabel: 'Standard',
+          resetTitle: 'Litt større enn teksten i boksene',
+        }),
+        el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store. Som standard er de litt større enn teksten i boksene.'),
       );
     }
 
@@ -1947,16 +1965,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const arrangeMenu = document.querySelector<HTMLElement>('#menu-arrange');
   const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
 
-  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene). */
-  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean } => {
+  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene).
+      titles: tekstknappene gjelder også lane-navnene (hele planen, eller når et lane-navn er valgt). */
+  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean; titles?: boolean } => {
     const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
     if (group.length > 1) {
       const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
       return { laneIds: lanes.map((l) => l.id), boxIds: new Set(group), text: `Gjelder ${lanes.length === 1 ? 'lanen' : `de ${lanes.length} lanene`} med de ${group.length} valgte boksene. Bare de valgte løsnes.` };
     }
     const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
+    // Lane-navnene har én felles størrelse, så med et lane-navn valgt gjelder tekstknappene alle navnene
+    if (lane && selectedLane)
+      return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}». Tekstknappene gjelder også navnene på alle lanes.`, titles: true };
     if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
-    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true };
+    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true, titles: true };
   };
 
   function endArrange() {
@@ -2073,11 +2095,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !layoutNow) return;
     endArrange();
     const s = arrangeScope(plan);
-    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.whole };
+    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.titles };
     const res = reset ? null : host.fitText(plan, scope);
     const next = res ? res.plan : resetTextSizes(plan, scope);
     if (JSON.stringify(next) === JSON.stringify(plan)) {
-      showArrangeBar(reset ? 'All tekst har allerede planens størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
+      showArrangeBar(reset ? 'Teksten har allerede standard størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
       return;
     }
     snapshot();
@@ -2089,7 +2111,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const boxes = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} fikk større tekst, opptil ${ptText(res.maxPt)}` : 'Ingen bokser hadde plass til større tekst';
       const lanes = res.laneTitlePt && res.laneTitlePt > res.planPt + 1e-6 ? `. Lane-titlene er ${ptText(res.laneTitlePt)}` : '';
       showArrangeBar(`${boxes}${lanes}. Resten av planen har ${ptText(res.planPt)}.`, true);
-    } else showArrangeBar('All tekst har planens størrelse igjen.', true);
+    } else showArrangeBar('Teksten har standard størrelse igjen: boksene som planen, lane-navnene litt større.', true);
     buildPanel();
     syncTools();
   };
