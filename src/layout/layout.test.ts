@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
 import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, tightestOrder, type Item } from './layout';
-import { approxMeasure } from './text';
+import { approxMeasure, LINE_HEIGHT } from './text';
 
 const example = testplan;
 
@@ -265,6 +265,28 @@ describe('brukerens callout-valg', () => {
   it('callout på venstre side når brukeren velger det', () => {
     const it = withBox({ calloutSide: 'left' });
     expect(it.kind === 'box' && it.callout && it.callout.box.x < it.x0).toBe(true);
+  });
+  it('høyere boks: callouten midtstilles i boksen når den får plass, ellers flukter den med toppen', () => {
+    const text = 'Nivå 1|Åpne for vekseldrift';
+    const lower = withBox({ text, callout: 'on' });
+    if (lower.kind !== 'box' || !lower.callout) throw new Error('mangler callout');
+    const ch = lower.callout.box.h;
+    const unit = 9 * 0.3528 * LINE_HEIGHT;
+    // Like høy som callouten: bunnen av teksten flukter med bunnen av boksen
+    const same = withBox({ text, callout: 'on', height: ch / unit });
+    if (same.kind !== 'box' || !same.callout) throw new Error('mangler callout');
+    expect(same.callout.box.y - same.y).toBeCloseTo(Math.max(0, (same.h - same.callout.box.h) / 2));
+    expect(same.callout.box.y + same.callout.box.h).toBeLessThanOrEqual(same.y + same.h + 0.5);
+    // Høyere enn callouten: midt i boksen, og streken går ut fra midten
+    const tall = withBox({ text, callout: 'on', height: (ch * 2) / unit });
+    if (tall.kind !== 'box' || !tall.callout) throw new Error('mangler callout');
+    expect(tall.callout.box.y + tall.callout.box.h / 2).toBeCloseTo(tall.y + tall.h / 2);
+    const lead = tall.callout.leader;
+    expect(lead[lead.length - 1]).toBeCloseTo(tall.y + tall.h / 2);
+    // Litt høyere enn én linje, men lavere enn callouten: teksten starter i toppen av boksen
+    const mid = withBox({ text, callout: 'on', height: (lower.h + 1) / unit });
+    if (mid.kind !== 'box' || !mid.callout) throw new Error('mangler callout');
+    expect(mid.callout.box.y).toBeCloseTo(mid.y);
   });
   it('stjerne i teksten gir callout også på bred boks', () => {
     const it = withBox({ text: '*Bred', resolved: { start: '2026-03-02', finish: '2026-08-28', isMilestone: false, trade: '(none)' } });
