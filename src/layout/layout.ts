@@ -708,15 +708,20 @@ function setY(item: Item, y: number) {
   }
 }
 
-/** Gjør boksen høyere, med teksten (og callouten) midt i. */
+/** Gjør boksen høyere, med teksten midt i. Callouten midtstilles mot boksen når den får plass
+    innenfor boksens høyde, ellers flukter den med toppen, så den stikker minst mulig ut under. */
 function grow(it: BoxItem, target: number) {
   const d = it.header ? 0 : (target - it.h) / 2;
+  const scale = target / it.h;
   it.h = target;
   if (it.text) it.text.y += d;
   if (it.callout) {
-    it.callout.box.y += d;
-    it.callout.text.y += d;
-    for (let k = 1; k < it.callout.leader.length; k += 2) it.callout.leader[k] += d;
+    const c = it.callout;
+    const dc = Math.max(0, (target - c.box.h) / 2) - c.box.y;
+    c.box.y += dc;
+    c.text.y += dc;
+    // Streken går ut i samme forhold til boksens høyde som før
+    for (let k = 1; k < c.leader.length; k += 2) c.leader[k] *= scale;
   }
 }
 
