@@ -135,6 +135,12 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .sl-details[hidden] { display: none; }
 .sl-details .pop-hint { margin: 6px 0 10px calc(76px + 12px); min-height: 1lh; }
 .sl-details .set-switch { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.pf-details { margin: 2px 0 0 14px; padding-left: 12px; border-left: 1px solid var(--border); }
+.pf-details[hidden] { display: none; }
+.pf-details .set-row { grid-template-columns: 62px 1fr; margin-top: 6px; }
+.pf-details .pop-hint { margin: 6px 0 2px calc(62px + 12px); min-height: 0; }
+.pf-details .pop-hint:empty { display: none; }
+.settings .group button:disabled { opacity: 0.45; cursor: not-allowed; }
 .settings .num input[type='date'] { width: 100%; min-width: 0; padding: 4px 8px; border: 0; background: none; font: inherit; color: var(--text); font-variant-numeric: tabular-nums; outline: none; }
 #sl-colors { grid-template-columns: repeat(auto-fill, 24px); }
 #sl-colors .swatch { width: 24px; height: 24px; }

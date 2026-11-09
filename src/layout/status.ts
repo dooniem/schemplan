@@ -4,10 +4,11 @@
 // Statusdatoen fra Project regnes som utført ut dagen, så streken står ved slutten av den
 // dagen. Mandag denne uken og egendefinert dato er starten av dagen. I arbeidstid er slutten av fredag og starten av mandag samme punkt.
 
-import type { HexColor, IsoDate, PlanFile, StatusLine } from '../format/types';
+import type { HexColor, IsoDate, PlanFile, ProgressFront, StatusLine } from '../format/types';
 import { addDays, parseIso, toIso, weekday } from './dates';
 
 export const STATUS_DEFAULT: StatusLine = { on: false, source: 'monday', width: 0.5, color: '#E00000', label: true };
+export const FRONT_DEFAULT: ProgressFront = { on: false, against: 'plan', late: false, deviation: false };
 export const STATUS_WIDTHS: [number, string][] = [[0.3, 'Tynn'], [0.5, 'Middels'], [0.9, 'Tykk']];
 export const STATUS_COLORS: [HexColor, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
 
@@ -70,5 +71,11 @@ export function readStatusLine(v: unknown): StatusLine | null {
   if (!(typeof o.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(o.color))) return null;
   if (o.date !== undefined && !(typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && !Number.isNaN(parseIso(o.date)))) return null;
   if (o.source === 'custom' && o.date === undefined) return null;
-  return { on: o.on, source: o.source as StatusLine['source'], ...(o.date !== undefined ? { date: o.date as string } : {}), width: o.width, color: o.color as string, label: o.label };
+  let front: ProgressFront | undefined;
+  if (o.front !== undefined) {
+    const f = o.front as Record<string, unknown>;
+    if (typeof f !== 'object' || f === null || typeof f.on !== 'boolean' || typeof f.late !== 'boolean' || typeof f.deviation !== 'boolean' || !['plan', 'baseline'].includes(f.against as string)) return null;
+    front = { on: f.on, against: f.against as ProgressFront['against'], late: f.late, deviation: f.deviation };
+  }
+  return { on: o.on, source: o.source as StatusLine['source'], ...(o.date !== undefined ? { date: o.date as string } : {}), width: o.width, color: o.color as string, label: o.label, ...(front ? { front } : {}) };
 }

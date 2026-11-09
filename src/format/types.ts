@@ -107,6 +107,18 @@ export interface StatusLine {
   color: HexColor;
   /** Vis «Status 6.11» øverst ved streken. */
   label: boolean;
+  /** Fremdriftsfronten langs statuslinjen. Mangler den, er fronten av. */
+  front?: ProgressFront;
+}
+
+export interface ProgressFront {
+  on: boolean;
+  /** Hva fronten måles mot. baseline krever baseline i planen. */
+  against: 'plan' | 'baseline';
+  /** Ta også med bokser som skulle vært ferdige, men ikke er 100 %. */
+  late: boolean;
+  /** Vis avviket i arbeidsdager ved hvert knekkpunkt. */
+  deviation: boolean;
 }
 
 export interface TradeColor {
