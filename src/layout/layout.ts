@@ -405,8 +405,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Ny stil: vannrette månedsnavn når de får plass
   const rotateMonths = axis.mode === 'month' && !(ny && measure('Aug', calSize, true) + 1.5 <= colW);
   const monthRowH = rotateMonths ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
+  const weekFit = axis.mode === 'week' ? fitWeekLabels(colW, calSize, rowH, measure) : undefined;
   // Excel-lik ukesvisning har to rader: «Okt 28» og ukenummer
-  const calH = axis.mode === 'month' ? rowH + monthRowH : ny ? rowH * 3 : rowH * 2;
+  const calH = axis.mode === 'month' ? rowH + monthRowH : (ny ? rowH * 2 : rowH) + weekFit!.h;
   const bottomCal = opts.showBottomCalendar ?? file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
@@ -533,7 +534,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const ovH = !la ? 0 : la.overview ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : ovUpH ? 1 + ovUpH : 0;
 
   // ---- Høydebudsjett ----
-  const plotTop = MARGIN + headerH + calH;
+  // Statuslappen står i en egen stripe over kalenderen, så den ikke dekker måneder eller uker
+  const statusIn = (() => {
+    const st = opts.status;
+    if (!st?.style.label) return false;
+    const d = parseIso(st.moment.day);
+    return d >= axis.start && d < axis.end;
+  })();
+  const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
+  const plotTop = MARGIN + headerH + statusH + calH;
   const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
@@ -579,8 +588,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const plotBottom = y;
 
   // ---- Kalenderrader ----
-  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny);
-  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny) : [];
+  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny, weekFit);
+  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny, weekFit) : [];
   const ovTop = plotBottom + (bottomCal ? calH : 0) + 2;
   let overview: Overview | null = null;
   const upcoming: TextBlock | null = la?.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null;
@@ -677,7 +686,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,
-    status: statusMark(opts.status, axis, plotTop, plotBottom, base, measure),
+    status: statusMark(opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -1054,6 +1063,32 @@ function calloutLeader(bx0: number, bx1: number, h: number, tx: number, side: 'r
   return [inX, h * 0.62, bx0 - 0.8, h * 0.4, tx, h * 0.5];
 }
 
+/** Hvor mye et loddrett tall tar i bredden, i forhold til skriftstørrelsen (sifferhøyde og litt luft). */
+const DIGIT_H = 0.8;
+
+interface WeekFit {
+  size: number;
+  /** 1 = hver uke, 2 = annenhver, 4 = hver fjerde. 0 = ingen. */
+  step: number;
+  rotate: boolean;
+  h: number;
+}
+
+/** Ukenummer deles aldri. Får de ikke plass liggende, står de loddrett (og krymper litt om nødvendig).
+    Er kolonnene for smale også til det, står de liggende igjen, men bare for annenhver eller hver
+    fjerde uke (uke 1 er alltid med). */
+function fitWeekLabels(colW: number, size: number, rowH: number, measure: Measure): WeekFit {
+  const cw = colW - 0.4;
+  if (measure('53', size) <= cw) return { size, step: 1, rotate: false, h: rowH };
+  // Loddrett bare når det gir nummer på hver uke; ellers er liggende tall lettere å lese
+  const up = Math.min(size, cw / DIGIT_H);
+  if (up >= size * 0.7) return { size: up, step: 1, rotate: true, h: Math.max(rowH, measure('53', up) + 1.6) };
+  const wide = measure('53', size);
+  const sz = Math.max(size * 0.7, (size * cw) / wide);
+  const step = [1, 2, 4, 13].find((k) => measure('53', sz) <= cw * k - 0.4) ?? 0;
+  return { size: sz, step, rotate: false, h: rowH };
+}
+
 function calendarRows(
   axis: TimeAxis,
   top: number,
@@ -1064,6 +1099,7 @@ function calendarRows(
   bottom: boolean,
   rotateMonths = true,
   ny = false,
+  weekFit?: WeekFit,
 ): CalendarRow[] {
   // Ny stil: lysere veksling, men fortsatt annenhvert år, annenhver måned og annenhver uke
   const DARK = ny ? '#E4E4E4' : MONTH_DARK;
@@ -1088,6 +1124,21 @@ function calendarRows(
       if (measure(c.label.slice(0, 1), size) <= w) return { ...c, label: c.label.slice(0, 1) };
       return { ...c, label: '' };
     });
+  const weekRow = (cells: CalendarRow['cells']) => {
+    const { size: sz, step, rotate, h } = weekFit ?? { size, step: 1, rotate: false, h: rowH };
+    const across = (l: string) => (rotate ? sz * DIGIT_H : measure(l, sz));
+    return {
+      size: sz,
+      rotate,
+      h,
+      cells: cells.map((c, i) => {
+        const keep = step && (Number(c.label) - 1) % step === 0;
+        // Ytterst kan et nummer som er bredere enn kolonnen, ikke låne plass fra naboen
+        const edge = (i === 0 || i === cells.length - 1) && across(c.label) > c.x1 - c.x0 - 0.2;
+        return keep && !edge ? c : { ...c, label: '' };
+      }),
+    };
+  };
 
   const years = fitLabel(group((c) => String(c.year)).map((c, i) => ({ ...c, fill: i % 2 === 0 ? YEAR_A : YEAR_B })));
   const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
@@ -1106,22 +1157,25 @@ function calendarRows(
         ? [
             {
               // Som i Excel: «Okt 28» over ukene, annenhver måned grå
-              cells: group((c) => `${c.monthLabel}|${c.monthYear}`).map((c) => {
-                const [m, y] = c.label.split('|');
-                const w = c.x1 - c.x0 - 0.6;
-                const label = [`${m} ${y.slice(-2)}`, m, m.slice(0, 1)].find((l) => measure(l, size) <= w) ?? '';
-                return { ...c, label, fill: shade(m) };
-              }),
+              cells: (() => {
+                const cells = group((c) => `${c.monthLabel}|${c.monthYear}`);
+                const fits = (l: string, c: (typeof cells)[number]) => measure(l, size) <= c.x1 - c.x0 - 0.6;
+                const full = (c: (typeof cells)[number]) => c.label.replace('|', ' ').replace(/ \d\d(\d\d)$/, ' $1');
+                // Året står på alle månedene når det får plass, ellers bare på januar og den første
+                const allYears = cells.every((c) => fits(full(c), c));
+                return cells.map((c, i) => {
+                  const m = c.label.split('|')[0];
+                  const tries = allYears || i === 0 || m === 'Jan' ? [full(c), m, m.slice(0, 1)] : [m, m.slice(0, 1)];
+                  return { ...c, label: tries.find((l) => fits(l, c)) ?? '', fill: shade(m) };
+                });
+              })(),
               h: rowH,
               rotate: false,
               size,
             },
             {
               // Oddetallsukene grå
-              cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
-              h: rowH,
-              rotate: false,
-              size,
+              ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
               dotMonths: true,
             },
           ]
@@ -1135,10 +1189,7 @@ function calendarRows(
           },
           {
             // Ny stil: annenhver uke
-            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
-            h: rowH,
-            rotate: false,
-            size,
+            ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
           },
         ];
   const ordered = bottom ? [...rows].reverse() : rows;
@@ -1151,7 +1202,7 @@ function calendarRows(
 }
 
 /** dd.mm.åååå */
-function statusMark(st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
+function statusMark(st: LayoutOptions['status'], axis: TimeAxis, calTop: number, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
   if (!st) return null;
   const { moment: m, style } = st;
   const d = parseIso(m.day);
@@ -1165,9 +1216,10 @@ function statusMark(st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1:
     const h = size * 1.35;
     // Lappen står til høyre for streken, eller til venstre når den ellers går utenfor planen.
     const tx = x + w > axis.x1 ? x - w : x;
-    // I nederste kalenderrad, rett over planen, så lappen ikke dekker boksene
-    const ty = y0 - h;
+    // Som et flagg over kalenderen: streken går opp gjennom kalenderen til lappen
+    const ty = calTop - h - 0.3;
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
+    return { x, y0: ty, y1, width: style.width, color: style.color, tag };
   }
   return { x, y0, y1, width: style.width, color: style.color, tag };
 }
