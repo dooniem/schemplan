@@ -574,18 +574,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * Tekststørrelse for boksen, i halve punkter. Lagres i forhold til planens tekst, så boksen
    * følger med når planen krymper eller vokser. Aldri under halvparten eller over det dobbelte.
    */
-  const textSizeRow = (b: Box, planPt: number) => {
-    const scale = b.textScale ?? 1;
-    const cur = planPt * scale;
+  const textSizeRow = (b: Box, planPt: number) =>
+    sizeStepper(b.textScale, planPt, (s) =>
+      change((x) => {
+        if (s === undefined) delete x.textScale;
+        else x.textScale = s;
+      }),
+    );
+  /** − / + i halve punkter. set får forholdet til planens tekst, eller undefined for planens størrelse. */
+  const sizeStepper = (scaleNow: number | undefined, planPt: number, set: (s: number | undefined) => void, note = 'Egen størrelse') => {
+    const cur = planPt * (scaleNow ?? 1);
     const lo = planPt * MIN_TEXT_SCALE;
     const hi = planPt * MAX_TEXT_SCALE;
     const fmt = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
-    const setPt = (pt: number) =>
-      change((x) => {
-        const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
-        if (Math.abs(s - 1) < 1e-3) delete x.textScale;
-        else x.textScale = Math.round(s * 10000) / 10000;
-      });
+    const setPt = (pt: number) => {
+      const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
+      set(Math.abs(s - 1) < 1e-3 ? undefined : Math.round(s * 10000) / 10000);
+    };
     const wrap = el('div', { class: 'prop prop-inline' });
     wrap.append(el('span', { class: 'prop-label' }, 'Størrelse'));
     const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': 'Tekststørrelse' });
@@ -600,7 +605,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     g.append(down, val, up);
     wrap.append(g);
     const out: HTMLElement[] = [wrap];
-    if (b.textScale) out.push(lockedRow(`Egen størrelse, planen har ${fmt(planPt)} pt`, 'Som planen', 'Samme tekststørrelse som resten av planen', () => change((x) => delete x.textScale)));
+    if (scaleNow) out.push(lockedRow(`${note}, planen har ${fmt(planPt)} pt`, 'Som planen', 'Samme tekststørrelse som resten av planen', () => set(undefined)));
     return out;
   };
   /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
@@ -669,6 +674,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Skriv | for linjeskift.'),
     );
+    // Lane-titlene har én felles størrelse, så korte navn ikke blir større enn lange
+    if (layoutNow) {
+      sn.append(
+        ...sizeStepper(plan.plan.layout.laneTitleScale, layoutNow.textSizePt, (s) =>
+          commit((pl) => {
+            if (s === undefined) delete pl.plan.layout.laneTitleScale;
+            else pl.plan.layout.laneTitleScale = s;
+          }), 'Egen størrelse for alle lanes'),
+        el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store.'),
+      );
+    }
 
     const sc = section('Farge');
     const now = (l.fill ?? '#FFFFFF').toUpperCase();
