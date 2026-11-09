@@ -100,6 +100,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
+      if (lay.calendarMode !== undefined) needEnum(lay, 'calendarMode', 'plan.layout', ['month', 'week']);
       if (lay.logo !== undefined) {
         const lg = lay.logo as Obj;
         if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))

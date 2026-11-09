@@ -7,6 +7,10 @@ export interface Column {
   end: number; // første dag etter kolonnen
   label: string; // "Jan" eller "23"
   monthLabel: string; // måned kolonnen hører til (ukesvisning: måneden torsdagen ligger i)
+  monthYear: number; // året til måneden over
+  /** Excel-lik ukesvisning: uken hører til startmåneden når minst tre av dagene ligger der. */
+  excelMonth: string;
+  excelMonthYear: number;
   year: number;
   x0: number; // mm
   x1: number; // mm
@@ -35,7 +39,7 @@ export function buildTimeAxis(cal: PlanSettings['calendar'], x0: number, x1: num
     let m = month(startT);
     for (let t = monthStart(y, m); t < endT; ) {
       const next = monthStart(m === 11 ? y + 1 : y, (m + 1) % 12);
-      cols.push({ start: t, end: next, label: MONTHS_NB[m], monthLabel: MONTHS_NB[m], year: y });
+      cols.push({ start: t, end: next, label: MONTHS_NB[m], monthLabel: MONTHS_NB[m], monthYear: y, excelMonth: MONTHS_NB[m], excelMonthYear: y, year: y });
       t = next;
       m = (m + 1) % 12;
       if (m === 0) y++;
@@ -45,7 +49,18 @@ export function buildTimeAxis(cal: PlanSettings['calendar'], x0: number, x1: num
     for (let t = addDays(startT, -weekday(startT)); t < endT; t = addDays(t, 7)) {
       const thursday = addDays(t, 3);
       const w = isoWeek(t);
-      cols.push({ start: t, end: addDays(t, 7), label: String(w.week), monthLabel: MONTHS_NB[month(thursday)], year: w.year });
+      // Mandag til onsdag i startmåneden er tre dager: da hører uken til startmåneden
+      const excelDay = month(addDays(t, 2)) === month(t) ? t : addDays(t, 6);
+      cols.push({
+        start: t,
+        end: addDays(t, 7),
+        label: String(w.week),
+        monthLabel: MONTHS_NB[month(thursday)],
+        monthYear: year(thursday),
+        excelMonth: MONTHS_NB[month(excelDay)],
+        excelMonthYear: year(excelDay),
+        year: w.year,
+      });
     }
   }
 

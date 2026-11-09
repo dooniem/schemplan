@@ -102,9 +102,10 @@ describe('layout', () => {
 
   it('tegner ukesvisning', () => {
     const p = example();
+    // Uten stil: Excel-lik, med to kalenderrader
     p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2026-03-02', end: '2026-07-26' };
     const L = computeLayout(p, { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true }, approxMeasure);
-    expect(L.calendarTop).toHaveLength(3);
+    expect(L.calendarTop).toHaveLength(2);
     expect(L.items.length).toBeGreaterThan(0);
   });
 });
@@ -373,6 +374,30 @@ describe('overskrift, logo og ukeskravering', () => {
     const L = computeLayout(p, { ...o, style: 'ny' }, approxMeasure);
     const weekW = (L.plot.x1 - L.plot.x0) / L.calendarTop[2].cells.length;
     for (const b of L.bands) expect(b.x1 - b.x0).toBeLessThan(weekW * 1.5);
+  });
+  it('Excel-lik ukesvisning: to rader, «Okt 28» over ukene og grå oddetallsuker', () => {
+    const p = example();
+    p.plan.calendar = { ...p.plan.calendar, mode: 'month', start: '2028-10-02', end: '2029-02-10' };
+    const L = computeLayout(p, { ...o, style: 'excel', calendarMode: 'week' }, approxMeasure);
+    expect(L.calendarTop).toHaveLength(2);
+    const [months, weeks] = L.calendarTop;
+    expect(months.cells.map((c) => c.label)).toEqual(['Okt 28', 'Nov 28', 'Des 28', 'Jan 29', 'Feb 29']);
+    // Uke 5 2029 (29.1–4.2) har tre dager i januar og hører til januar, som i Excel
+    const jan = months.cells[3];
+    const w5 = weeks.cells.find((c) => c.label === '5')!;
+    expect(w5.x1).toBeCloseTo(jan.x1);
+    expect(weeks.dotMonths).toBe(true);
+    expect(weeks.cells.find((c) => c.label === '41')!.fill).not.toBe(weeks.cells.find((c) => c.label === '42')!.fill);
+    // Kraftig strek ved årsskiftet, mellom uke 52 og uke 1
+    const w1 = weeks.cells.find((c) => c.label === '1')!;
+    expect(L.grid.find((g) => Math.abs(g.x - w1.x0) < 1e-6)?.strong).toBe(true);
+  });
+  it('valget måned eller uke i appen går foran planen, men ikke foran utkikken', () => {
+    const p = example();
+    p.plan.calendar.mode = 'month';
+    expect(computeLayout(p, { ...o, calendarMode: 'week', style: 'ny' }, approxMeasure).calendarTop).toHaveLength(3);
+    p.plan.calendar.mode = 'week';
+    expect(computeLayout(p, { ...o, calendarMode: 'month', style: 'ny' }, approxMeasure).calendarTop).toHaveLength(2);
   });
 });
 
