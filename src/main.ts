@@ -407,11 +407,26 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
 
+/** Står «%PDF» i starten av filen? PDF-standarden tillater litt søppel foran, innenfor de første 1024 bytene. */
+function findPdfHeader(bytes: Uint8Array): boolean {
+  const n = Math.min(bytes.length - 4, 1024);
+  for (let i = 0; i <= n; i++) if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46) return true;
+  return false;
+}
+
 /** Leser en planfil (.json) eller arbeidsfil (.pdf). Viser feil i statuslinjen og gir null om den ikke kan brukes. */
 async function readPlan(bytes: Uint8Array, name: string): Promise<{ plan: PlanFile; warnings: string[]; isPdf: boolean } | null> {
   const info = $('#file-info');
-  // En arbeidsfil (PDF) har planen som vedlegg
-  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+  if (!bytes.length) {
+    info.replaceChildren(el('p', `Kunne ikke åpne ${name}. Filen er tom (0 byte). Den ble trolig ikke ferdig lagret, eller den ligger bare i skyen og er ikke lastet ned. Åpne den i Utforsker først, eller bruk en tidligere arbeidsfil.`, 'error'));
+    return null;
+  }
+  // En arbeidsfil (PDF) har planen som vedlegg. PDF-hodet kan ha noen byte foran seg.
+  const isPdf = findPdfHeader(bytes);
+  if (!isPdf && /\.pdf$/i.test(name)) {
+    info.replaceChildren(el('p', `Kunne ikke åpne ${name}. Filen heter .pdf, men innholdet er ikke en PDF (${bytes.length} byte). Den er trolig skadet eller ble ikke ferdig lagret. Bruk en tidligere arbeidsfil.`, 'error'));
+    return null;
+  }
   let text: string;
   if (isPdf) {
     const { readPlanFromPdf } = await import('./pdf/read');
@@ -769,9 +784,9 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
   saveStatus.textContent = 'Lager PDF …';
   saveStatus.className = 'muted small';
   try {
-    // Velg fil først, mens klikket fortsatt gjelder (nettleseren krever det for Lagre som-dialogen)
+    // PDF-en lages før Lagre som-dialogen. Dialogen tømmer filen du velger med en gang, så feiler
+    // noe etterpå, står du igjen med en tom arbeidsfil. Nå er PDF-en ferdig før filen røres.
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
-    const handle = picker ? await picker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }) : null;
     const { exportPdf } = await import('./pdf/export');
     // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
     let target = shown;
@@ -785,6 +800,23 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     }
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
+    const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
+    let handle: FileSystemFileHandle | null = null;
+    if (picker) {
+      try {
+        handle = await picker(pickOpts);
+      } catch (e) {
+        // Tok PDF-en så lang tid at klikket ikke gjelder lenger, må du klikke én gang til
+        if ((e as Error).name !== 'SecurityError' && (e as Error).name !== 'NotAllowedError') throw e;
+        handle = await new Promise<FileSystemFileHandle>((resolve, reject) => {
+          const again = el('button', 'Velg hvor PDF-en skal lagres', 'button small') as HTMLButtonElement;
+          again.type = 'button';
+          again.addEventListener('click', () => picker(pickOpts).then(resolve, reject), { once: true });
+          saveStatus.replaceChildren(document.createTextNode('PDF-en er klar. '), again);
+          saveStatus.className = 'muted small';
+        });
+      }
+    }
     if (handle) {
       const w = await handle.createWritable();
       await w.write(blob);
