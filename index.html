@@ -343,7 +343,6 @@
               <p>Trykk <span class="ui-name">Update Existing file</span> og velg arbeidsfilen din. Ny framdrift hentes fra Project, og alt du har endret beholdes.</p>
             </li>
           </ol>
-          <p class="help-aside">Du kan også åpne en arbeidsfil direkte med <span class="ui-name">Åpne</span> for å fortsette der du slapp.</p>
         </section>
         <section class="help-tips" aria-labelledby="help-tips-title">
           <h3 id="help-tips-title">Tips</h3>
@@ -369,13 +368,29 @@
             <li>Filene leses bare i nettleseren din og sendes ingen steder. Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
           </ul>
         </section>
-      </div>
-      <div class="help-install" id="help-install" hidden>
-        <div>
-          <strong>Installer appen</strong>
-          <p>Gir eget ikon på skrivebordet og i startmenyen, eget vindu, og virker uten nett. Arbeidsfiler kan åpnes med høyreklikk → Åpne med → Skjematisk plan. Planene lagres fortsatt bare i PDF-ene dine.</p>
-        </div>
-        <button type="button" class="button primary" id="install-app">Installer</button>
+        <section class="help-return" aria-labelledby="help-return-title">
+          <h3 id="help-return-title">Slik kommer du tilbake til appen</h3>
+          <p class="help-lede">Appen husker ingen planer selv, de ligger i arbeidsfilene dine. Du åpner appen på en av tre måter.</p>
+          <dl class="help-ways">
+            <div>
+              <dt>Fra Project</dt>
+              <dd><span class="ui-name">Generate New file</span> åpner appen med en ny plan. <span class="ui-name">Update Existing file</span> åpner den og ber om arbeidsfilen som skal oppdateres.</dd>
+            </div>
+            <div>
+              <dt>Fra nettadressen</dt>
+              <dd><a id="help-url" class="help-url" href="./">denne adressen</a> Lagre den som bokmerke. Velg så <span class="ui-name">Åpne</span> og arbeidsfilen for å fortsette der du slapp.</dd>
+            </div>
+            <div>
+              <dt>Fra skrivebordet</dt>
+              <dd id="help-desk-installed" hidden>Appen er installert. Start den fra ikonet på skrivebordet eller i startmenyen, eller høyreklikk en arbeidsfil → <span class="ui-name">Åpne med</span> → <span class="ui-name">Skjematisk plan</span>.</dd>
+              <dd id="help-desk-manual">Installer appen, så får du eget ikon på skrivebordet og i startmenyen. I Edge og Chrome velger du installer-ikonet til høyre i adressefeltet. Etterpå kan arbeidsfiler åpnes med høyreklikk → <span class="ui-name">Åpne med</span> → <span class="ui-name">Skjematisk plan</span>.</dd>
+              <dd class="help-install" id="help-install" hidden>
+                <span>Eget ikon og vindu, og virker uten nett. Planene lagres fortsatt bare i PDF-ene dine.</span>
+                <button type="button" class="button primary" id="install-app">Installer appen</button>
+              </dd>
+            </div>
+          </dl>
+        </section>
       </div>
       <footer class="help-foot">
         <span>Laget av Magnus Petersen</span>
