@@ -1947,16 +1947,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const arrangeMenu = document.querySelector<HTMLElement>('#menu-arrange');
   const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
 
-  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene). */
-  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean } => {
+  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene).
+      titles: tekstknappene gjelder også lane-navnene (hele planen, eller når et lane-navn er valgt). */
+  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean; titles?: boolean } => {
     const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
     if (group.length > 1) {
       const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
       return { laneIds: lanes.map((l) => l.id), boxIds: new Set(group), text: `Gjelder ${lanes.length === 1 ? 'lanen' : `de ${lanes.length} lanene`} med de ${group.length} valgte boksene. Bare de valgte løsnes.` };
     }
     const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
+    // Lane-navnene har én felles størrelse, så med et lane-navn valgt gjelder tekstknappene alle navnene
+    if (lane && selectedLane)
+      return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}». Tekstknappene gjelder også navnene på alle lanes.`, titles: true };
     if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
-    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true };
+    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true, titles: true };
   };
 
   function endArrange() {
@@ -2073,7 +2077,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !layoutNow) return;
     endArrange();
     const s = arrangeScope(plan);
-    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.whole };
+    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.titles };
     const res = reset ? null : host.fitText(plan, scope);
     const next = res ? res.plan : resetTextSizes(plan, scope);
     if (JSON.stringify(next) === JSON.stringify(plan)) {
