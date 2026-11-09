@@ -12,6 +12,8 @@ export interface ValidationResult {
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** Tekststørrelse i forhold til planens tekst: fra halvparten til det dobbelte. */
+const textScaleOk = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0.5 && v <= 2;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
@@ -97,9 +99,16 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.fitToSheet !== undefined) needBool(lay, 'fitToSheet', 'plan.layout');
       if (lay.minTextSize !== undefined) needNum(lay, 'minTextSize', 'plan.layout');
       if (lay.titleSize !== undefined) optPos(lay, 'titleSize', 'plan.layout');
+      if (lay.legendItems !== undefined) {
+        const li = lay.legendItems;
+        if (!isObj(li) || !Object.values(li).every((v) => isObj(v) && (v.hidden === undefined || typeof v.hidden === 'boolean') && (v.text === undefined || typeof v.text === 'string')))
+          err('plan.layout.legendItems', 'må ha hidden (true/false) og/eller text (tekst) for hver oppføring');
+      }
+      if (lay.laneTitleScale !== undefined && !textScaleOk(lay.laneTitleScale)) err('plan.layout.laneTitleScale', 'må være et tall fra 0,5 til 2');
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
+      if (lay.calendarMode !== undefined) needEnum(lay, 'calendarMode', 'plan.layout', ['month', 'week']);
       if (lay.logo !== undefined) {
         const lg = lay.logo as Obj;
         if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))
@@ -219,6 +228,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         optPos(b, 'height', bp);
+        if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
         for (const k of ['hidden', 'manual', 'header', 'critical'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
         if (b.milestoneStyle !== undefined) {

@@ -12,6 +12,9 @@
   --accent: #1f5fbf;
   --ok: #1e7a3c;
   --error: #b3261e;
+  --track: #ecece8;
+  --track-hover: #e2e2dd;
+  --seg-on: #ffffff;
   font-family: 'Segoe UI', system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -27,6 +30,9 @@
     --accent: #7aa7ec;
     --ok: #6cc58a;
     --error: #f2b8b5;
+    --track: #1b1b1a;
+    --track-hover: #2e2e2c;
+    --seg-on: #3a3a37;
   }
 }
 
@@ -94,16 +100,24 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .pop-hint { margin: 2px 2px 4px; font-size: 12px; color: var(--muted); }
 .ico { width: 16px; height: 16px; flex: none; }
 /* Innstillinger: seksjoner med overskrift, etiketter i én kolonne og kontrollene i en annen */
-.pop.settings { width: min(372px, calc(100vw - 16px)); padding: 0; font-size: 13px; }
-.set-sec { padding: 12px 16px 14px; }
+.pop.settings { width: min(380px, calc(100vw - 16px)); padding: 0; font-size: 13px; }
+.set-sec { padding: 16px 18px 18px; }
 .set-sec + .set-sec { border-top: 1px solid var(--border); }
-.set-sec h3 { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.set-sec h3 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .set-row { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 12px; }
-.set-row + .set-row { margin-top: 8px; }
+.set-row + .set-row { margin-top: 10px; }
 .set-label { color: var(--text); }
-.settings .group { display: flex; }
-.settings .group button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 4px 10px; }
+/* Segmentert kontroll som et spor: valgt del løftes frem i stedet for å fylles med farge,
+   så mange valg under hverandre ikke blir en vegg av blått */
+.settings .group { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--track); }
+.pop.settings .group button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; margin: 0; padding: 4px 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); transition: background-color 120ms ease-out, color 120ms ease-out; }
+.settings .group button:disabled { opacity: 0.45; cursor: default; }
+.settings .group button:hover:not([aria-pressed='true'], :disabled) { color: var(--text); background: var(--track-hover); }
+.settings .group button[aria-pressed='true'] { background: var(--seg-on); border-color: var(--border); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.settings .group button[aria-pressed='true'] .ico { color: var(--accent); }
 .settings .group .ico { width: 15px; height: 15px; }
+@media (prefers-reduced-motion: reduce) { .settings .group button { transition: none; } }
+.set-switches { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--border); }
 /* Av/på-bryter bygget på en vanlig avkrysningsboks, så tastatur og skjermleser virker som før */
 .set-switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; cursor: pointer; }
 .set-switch + .set-switch { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px; }
@@ -350,8 +364,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .prop { display: flex; flex-direction: column; gap: 4px; }
 .prop-label { font-size: 12px; color: var(--muted); }
 .prop-inline { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
-#panel textarea { display: block; width: 100%; font: inherit; font-size: 13px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
-#panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+#panel textarea, #panel input[type='text'] { display: block; width: 100%; font: inherit; font-size: 13px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
+#panel textarea:focus-visible, #panel input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 .hint { font-size: 11.5px; line-height: 1.4; color: var(--muted); margin: 0; }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 5px; }
 .swatch { width: 22px; height: 22px; border: 1px solid rgb(0 0 0 / 0.2); border-radius: 5px; cursor: pointer; padding: 0; }
@@ -369,6 +383,8 @@ details summary { cursor: pointer; font-size: 13px; }
 #panel .group { display: flex; width: 100%; }
 #panel .group button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 4px; font-size: 12px; white-space: nowrap; }
 #panel .group button .pico { width: 13px; height: 13px; }
+#panel .group.stepper button { flex: 0 0 32px; font-size: 15px; line-height: 1; }
+#panel .group.stepper .step-val { flex: 1; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .pswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
 .pswitch input { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 30px; height: 18px; margin: 0; border-radius: 9px; background: var(--border); cursor: pointer; transition: background-color 160ms ease-out; }
 .pswitch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 160ms ease-out; }

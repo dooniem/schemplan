@@ -57,6 +57,8 @@ export interface PlanSettings {
     showLegend?: boolean;
     /** Vis kalenderen også under planen. Mangler den, gjelder valget fra Project. */
     showBottomCalendar?: boolean;
+    /** Måneds- eller ukesvisning valgt i appen. Mangler den, gjelder valget fra Project. */
+    calendarMode?: 'month' | 'week';
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
@@ -67,6 +69,10 @@ export interface PlanSettings {
     lookahead?: Lookahead;
     /** Statuslinjen: loddrett strek på statusdatoen. */
     statusLine?: StatusLine;
+    /** Forklaringen: oppføringer som er skjult eller har egen tekst, etter fagnavn ("(ferie)" for ferie). */
+    legendItems?: Record<string, { hidden?: boolean; text?: string }>;
+    /** Lane-titlenes størrelse i forhold til teksten i boksene. Lik for alle lanes. */
+    laneTitleScale?: number;
   };
   options: {
     legend: boolean;
@@ -192,6 +198,8 @@ export interface Box {
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>>;
   /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
   critical?: boolean;
+  /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
+  textScale?: number;
 }
 
 export interface MilestoneStyle {

@@ -30,6 +30,8 @@ export interface LayoutOptions {
   showLegend?: boolean;
   /** Vis kalenderen også under planen. Standard: valget i planen. */
   showBottomCalendar?: boolean;
+  /** Måneds- eller ukesvisning. Standard: valget i planen. Utkikken viser alltid uker. */
+  calendarMode?: 'month' | 'week';
   /** Utkikk: hele planen i miniatyr under planen, og de neste milepælene. */
   lookahead?: LookaheadExtras;
   /** Statuslinjen, når den er slått på og har en dato. */
@@ -126,6 +128,8 @@ export interface CalendarRow {
   size: number;
   /** Månedsnavn skrives loddrett, slik Excel gjør. */
   rotate: boolean;
+  /** Excel-lik ukesrad: prikket grå strek ved månedsskifte. */
+  dotMonths?: boolean;
 }
 
 export interface LaneLayout {
@@ -162,7 +166,12 @@ export interface LegendEntry {
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
   symbol?: 'diamond' | 'flag' | 'holiday';
+  /** Nøkkelen i plan.layout.legendItems: fagnavnet, eller FERIE_KEY. */
+  key: string;
 }
+
+/** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
+export const FERIE_KEY = '(ferie)';
 
 export interface Layout {
   width: number;
@@ -208,8 +217,8 @@ export interface Layout {
 }
 
 const MARGIN = 8;
-const PAD_X = 0.7;
-const PAD_Y = 0.25; // Excel har lite luft over og under teksten
+export const PAD_X = 0.7;
+export const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
 
 export const MILESTONE_COLORS: Record<string, { fill: string; text: string }> = {
@@ -287,7 +296,38 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
   });
 }
 
+/**
+ * Linjene for rotert tekst. Linjene står side om side, så bredden på boksen bestemmer hvor mange
+ * det er plass til. Teksten brytes så kort som mulig innenfor det, så boksen blir lavest mulig.
+ * Er det ikke plass til flere linjer enn teksten har fra før, står hver tekstlinje hel, som før.
+ */
+export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure, room = 0): string[] {
+  const maxLines = Math.floor((innerW + 1e-6) / (size * LINE_HEIGHT));
+  if (maxLines <= raw.length) return raw;
+  // Linjene kan være så lange som høyden boksen har fått
+  if (room > 0) {
+    const fit = wrapLines(raw, room, size, measure);
+    const words = new Set(raw.join(' ').split(/\s+/));
+    if (fit.length <= maxLines && fit.every((l) => l.split(/\s+/).every((wd) => !wd || words.has(wd)))) return fit;
+  }
+  const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
+  let lo = Math.max(0, ...words.map((wd) => measure(wd, size)));
+  let hi = widest(raw, size, measure);
+  if (hi <= lo) return raw;
+  // Korteste linjelengde der teksten får plass i maxLines linjer
+  for (let k = 0; k < 20; k++) {
+    const mid = (lo + hi) / 2;
+    if (wrapLines(raw, mid, size, measure).length <= maxLines) hi = mid;
+    else lo = mid;
+  }
+  return wrapLines(raw, hi, size, measure);
+}
+
 export const DEFAULT_MIN_TEXT_PT = 6;
+/** Tekst i en boks eller lane-titlene er aldri mer enn dobbelt så stor, eller under halvparten av planens tekst. */
+export const MAX_TEXT_SCALE = 2;
+export const MIN_TEXT_SCALE = 0.5;
+const clampScale = (s: number | undefined) => Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, s ?? 1));
 /** Lenger ned krymper vi aldri, heller ikke for å få plass. */
 export const ABS_MIN_TEXT_PT = 3;
 
@@ -380,10 +420,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
   const titlePad = 2 * PAD_X + 2;
+  // Lane-titlene har én felles størrelse, i forhold til teksten i boksene
+  const laneSize = base * clampScale(file.plan.layout.laneTitleScale);
+  const laneLh = laneSize * LINE_HEIGHT;
   // "|" i lane-navnet er linjeskift, som i boksteksten
   const laneRaw = lanes.map((l) => splitLines(l.name));
-  const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, base, true))));
-  const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, base, true)));
+  const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, laneSize, true))));
+  const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, laneSize, true)));
   const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
   // Luft i lanene følger tekststørrelsen
   const LANE_PAD = Math.max(0.5, base * 0.3);
@@ -392,7 +435,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const laneTitleX = MARGIN;
   const x0 = MARGIN + LANE_TITLE_W;
   const x1 = W - MARGIN;
-  const axis = buildTimeAxis(file.plan.calendar, x0, x1);
+  const calMode = opts.lookahead ? file.plan.calendar.mode : (opts.calendarMode ?? file.plan.calendar.mode);
+  const builtAxis = buildTimeAxis({ ...file.plan.calendar, mode: calMode }, x0, x1);
+  // Excel-lik ukesvisning fordeler ukene på månedene slik Excel gjorde
+  const axis: TimeAxis =
+    !ny && builtAxis.mode === 'week' ? { ...builtAxis, columns: builtAxis.columns.map((c) => ({ ...c, monthLabel: c.excelMonth, monthYear: c.excelMonthYear })) } : builtAxis;
   const calSize = base * 0.9;
   const rowH = calSize * 1.8;
   // Månedsvisning: loddrette månedsnavn, raden må være høy nok til "Mai"/"Des"
@@ -400,14 +447,16 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Ny stil: vannrette månedsnavn når de får plass
   const rotateMonths = axis.mode === 'month' && !(ny && measure('Aug', calSize, true) + 1.5 <= colW);
   const monthRowH = rotateMonths ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
-  const calH = axis.mode === 'month' ? rowH + monthRowH : rowH * 3;
+  const weekFit = axis.mode === 'week' ? fitWeekLabels(colW, calSize, rowH, measure) : undefined;
+  // Excel-lik ukesvisning har to rader: «Okt 28» og ukenummer
+  const calH = axis.mode === 'month' ? rowH + monthRowH : (ny ? rowH * 2 : rowH) + weekFit!.h;
   const bottomCal = opts.showBottomCalendar ?? file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, base, measure, true));
+  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, laneSize, measure, true));
   const contentH = lanes.map((lane, i) => {
     if (arrange?.lanes.has(lane.id)) {
       // Boksene inne i en overskriftsboks som flyttes, følger den og pakkes ikke for seg
@@ -440,7 +489,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       setY(p.item, placed[j].y);
     });
     const inner = pieces.reduce((m, p, j) => Math.max(m, placed[j].y + p.h), 0);
-    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * lh + 2 * LANE_PAD, lh * 1.5);
+    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
   });
   // Lane med høyde valgt i appen: aldri lavere enn innholdet krever
   const minH = contentH.slice();
@@ -466,9 +515,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
           ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
         ]
       : [];
-    const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name));
-    const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined }))];
-    const names = entries.map(({ c }) => (ny && c.name === '(none)' ? 'Uten fag' : c.name));
+    // Oppføringer kan skjules eller få egen tekst i appen
+    const items = file.plan.layout.legendItems ?? {};
+    const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name) && !items[c.name]?.hidden);
+    const entries = [
+      ...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined, key: c.name })),
+      ...symbolEntries.filter(() => !items[FERIE_KEY]?.hidden).map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined, key: FERIE_KEY })),
+    ];
+    const names = entries.map(({ c, key }) => items[key]?.text?.trim() || (ny && c.name === '(none)' ? 'Uten fag' : c.name));
     // Forklaringen skal helst stå på én rad. Først tettes mellomrommet, så krympes den
     // ned mot minste tekststørrelse. Får den fortsatt ikke plass, brytes den til flere rader.
     const room = lxMax - MARGIN;
@@ -492,7 +546,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const dy = (legendSize - size) * 1.1 * 0.8;
     let lx = MARGIN;
     let row = 0;
-    for (const [i, { c, symbol, trade }] of entries.entries()) {
+    for (const [i, { c, symbol, trade, key }] of entries.entries()) {
       const name = names[i];
       const w = sw + 1.5 + measure(name, size) + gap;
       if (lx + w - gap > lxMax && lx > MARGIN) {
@@ -509,6 +563,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         textColor: c.text ?? '#000000',
         symbol,
         trade,
+        key,
         label: { x: lx + sw + 1.5, y: row * rowStep + dy + sh * 0.8, lines: [name], size, color: '#000000', anchor: 'start' },
       });
       lx += w;
@@ -527,7 +582,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const ovH = !la ? 0 : la.overview ? 2 + ovUpH + ovStripH + ovLabelSize * 1.5 : ovUpH ? 1 + ovUpH : 0;
 
   // ---- Høydebudsjett ----
-  const plotTop = MARGIN + headerH + calH;
+  // Statuslappen står i en egen stripe over kalenderen, så den ikke dekker måneder eller uker
+  const statusIn = (() => {
+    const st = opts.status;
+    if (!st?.style.label) return false;
+    const d = parseIso(st.moment.day);
+    return d >= axis.start && d < axis.end;
+  })();
+  const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
+  const plotTop = MARGIN + headerH + statusH + calH;
   const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
@@ -557,9 +620,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       manual: !!lane.height,
       title: {
         x: laneTitleX + LANE_TITLE_W / 2,
-        y: y0 + h / 2 - ((tl.length - 1) * lh) / 2 + base * 0.35,
+        y: y0 + h / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
-        size: base,
+        size: laneSize,
         color: '#000000',
         anchor: 'middle',
         bold: true,
@@ -573,8 +636,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const plotBottom = y;
 
   // ---- Kalenderrader ----
-  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny);
-  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny) : [];
+  const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny, weekFit);
+  const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny, weekFit) : [];
   const ovTop = plotBottom + (bottomCal ? calH : 0) + 2;
   let overview: Overview | null = null;
   const upcoming: TextBlock | null = la?.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null;
@@ -634,7 +697,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const grid = axis.columns.slice(1).map((c, i) => ({
     x: c.x0,
     // Kraftig strek ved årsskifte. I ukesvisning får månedsskiftene en tynn strek.
-    strong: c.year !== axis.columns[i].year,
+    strong: ny ? c.year !== axis.columns[i].year : c.monthYear !== axis.columns[i].monthYear,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
   const bands: Band[] = monthBands(axis, ny);
@@ -671,7 +734,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,
-    status: statusMark(file, items, opts.status, axis, plotTop, plotBottom, base, measure),
+    status: statusMark(file, items, opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -702,15 +765,20 @@ function setY(item: Item, y: number) {
   }
 }
 
-/** Gjør boksen høyere, med teksten (og callouten) midt i. */
+/** Gjør boksen høyere, med teksten midt i. Callouten midtstilles mot boksen når den får plass
+    innenfor boksens høyde, ellers flukter den med toppen, så den stikker minst mulig ut under. */
 function grow(it: BoxItem, target: number) {
   const d = it.header ? 0 : (target - it.h) / 2;
+  const scale = target / it.h;
   it.h = target;
   if (it.text) it.text.y += d;
   if (it.callout) {
-    it.callout.box.y += d;
-    it.callout.text.y += d;
-    for (let k = 1; k < it.callout.leader.length; k += 2) it.callout.leader[k] += d;
+    const c = it.callout;
+    const dc = Math.max(0, (target - c.box.h) / 2) - c.box.y;
+    c.box.y += dc;
+    c.text.y += dc;
+    // Streken går ut i samme forhold til boksens høyde som før
+    for (let k = 1; k < c.leader.length; k += 2) c.leader[k] *= scale;
   }
 }
 
@@ -742,6 +810,10 @@ function buildPieces(
       continue;
     }
 
+    // Tekststørrelse valgt for boksen, i forhold til planens tekst. Høyder og plass i lanen
+    // regnes fortsatt i planens tekstlinjer (lh), så de ikke endres når teksten i boksen gjør det.
+    const bs = base * clampScale(box.textScale);
+    const blh = bs * LINE_HEIGHT;
     const c = colors.get(r.trade) ?? noneColor;
     // Farge valgt i appen går foran fagets farge
     const fill = box.fill ?? c.fill ?? '#FFFFFF';
@@ -773,10 +845,11 @@ function buildPieces(
     const neverCallout = choice === 'off' || !!box.header;
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
-      // Rotert tekst: én linje per tekstlinje, boksen blir høy nok til teksten
-      lines = rawLines;
-      item.h = widest(lines, base, measure) + 2 * PAD_Y + 1;
-      item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: base, color: textColor, anchor: 'middle', rotate: box.rotation };
+      // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
+      // Høyde valgt i appen gir plass til lengre linjer: dra boksen høyere for færre linjer, til slutt én
+      lines = rotatedLines(rawLines, w - 2 * PAD_X, bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
+      item.h = widest(lines, bs, measure) + 2 * PAD_Y + 1;
+      item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
@@ -784,33 +857,33 @@ function buildPieces(
       const inner = Math.max(w - 2 * PAD_X, 0.5);
       // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
       // så like bokser med samme tekst behandles likt
-      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, base)));
+      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)));
       if (inner < longestWord && !neverCallout) useCallout = true;
       else {
-        lines = wrapLines(rawLines, inner, base, measure);
-        const h = lines.length * lh + 2 * PAD_Y;
+        lines = wrapLines(rawLines, inner, bs, measure);
+        const h = lines.length * blh + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
         const words = new Set(rawLines.join(' ').split(/\s+/));
         const brokeWord = lines.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
         if ((w / h < 0.25 || brokeWord) && !neverCallout) useCallout = true;
         else {
           item.h = h;
-          item.text = { x: bx0 + w / 2, y: PAD_Y + base * 0.85, lines, size: base, color: textColor, anchor: 'middle' };
+          item.text = { x: bx0 + w / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle' };
         }
       }
     }
 
     if (useCallout) {
-      item.h = lh + 2 * PAD_Y;
+      item.h = blh + 2 * PAD_Y;
       const make = (side: 'right' | 'left', maxW: number): Variant => {
-        const cl = wrapLines(rawLines, maxW, base, measure);
-        const cw = widest(cl, base, measure) + 2 * PAD_X;
-        const ch = cl.length * lh + 2 * PAD_Y;
+        const cl = wrapLines(rawLines, maxW, bs, measure);
+        const cw = widest(cl, bs, measure) + 2 * PAD_X;
+        const ch = cl.length * blh + 2 * PAD_Y;
         const cx = side === 'right' ? bx1 + 2 : bx0 - 2 - cw;
         const it: BoxItem & { trade: string } = { ...item, callout: null };
         it.callout = {
           box: { x: cx, y: 0, w: cw, h: ch },
-          text: { x: cx + PAD_X, y: PAD_Y + base * 0.85, lines: cl, size: base, color: '#000000', anchor: 'start' },
+          text: { x: cx + PAD_X, y: PAD_Y + bs * 0.85, lines: cl, size: bs, color: '#000000', anchor: 'start' },
           leader: ny
             ? side === 'right'
               ? [bx1, item.h / 2, cx, item.h / 2]
@@ -1043,6 +1116,32 @@ function calloutLeader(bx0: number, bx1: number, h: number, tx: number, side: 'r
   return [inX, h * 0.62, bx0 - 0.8, h * 0.4, tx, h * 0.5];
 }
 
+/** Hvor mye et loddrett tall tar i bredden, i forhold til skriftstørrelsen (sifferhøyde og litt luft). */
+const DIGIT_H = 0.8;
+
+interface WeekFit {
+  size: number;
+  /** 1 = hver uke, 2 = annenhver, 4 = hver fjerde. 0 = ingen. */
+  step: number;
+  rotate: boolean;
+  h: number;
+}
+
+/** Ukenummer deles aldri. Får de ikke plass liggende, står de loddrett (og krymper litt om nødvendig).
+    Er kolonnene for smale også til det, står de liggende igjen, men bare for annenhver eller hver
+    fjerde uke (uke 1 er alltid med). */
+function fitWeekLabels(colW: number, size: number, rowH: number, measure: Measure): WeekFit {
+  const cw = colW - 0.4;
+  if (measure('53', size) <= cw) return { size, step: 1, rotate: false, h: rowH };
+  // Loddrett bare når det gir nummer på hver uke; ellers er liggende tall lettere å lese
+  const up = Math.min(size, cw / DIGIT_H);
+  if (up >= size * 0.7) return { size: up, step: 1, rotate: true, h: Math.max(rowH, measure('53', up) + 1.6) };
+  const wide = measure('53', size);
+  const sz = Math.max(size * 0.7, (size * cw) / wide);
+  const step = [1, 2, 4, 13].find((k) => measure('53', sz) <= cw * k - 0.4) ?? 0;
+  return { size: sz, step, rotate: false, h: rowH };
+}
+
 function calendarRows(
   axis: TimeAxis,
   top: number,
@@ -1053,6 +1152,7 @@ function calendarRows(
   bottom: boolean,
   rotateMonths = true,
   ny = false,
+  weekFit?: WeekFit,
 ): CalendarRow[] {
   // Ny stil: lysere veksling, men fortsatt annenhvert år, annenhver måned og annenhver uke
   const DARK = ny ? '#E4E4E4' : MONTH_DARK;
@@ -1077,10 +1177,25 @@ function calendarRows(
       if (measure(c.label.slice(0, 1), size) <= w) return { ...c, label: c.label.slice(0, 1) };
       return { ...c, label: '' };
     });
+  const weekRow = (cells: CalendarRow['cells']) => {
+    const { size: sz, step, rotate, h } = weekFit ?? { size, step: 1, rotate: false, h: rowH };
+    const across = (l: string) => (rotate ? sz * DIGIT_H : measure(l, sz));
+    return {
+      size: sz,
+      rotate,
+      h,
+      cells: cells.map((c, i) => {
+        const keep = step && (Number(c.label) - 1) % step === 0;
+        // Ytterst kan et nummer som er bredere enn kolonnen, ikke låne plass fra naboen
+        const edge = (i === 0 || i === cells.length - 1) && across(c.label) > c.x1 - c.x0 - 0.2;
+        return keep && !edge ? c : { ...c, label: '' };
+      }),
+    };
+  };
 
   const years = fitLabel(group((c) => String(c.year)).map((c, i) => ({ ...c, fill: i % 2 === 0 ? YEAR_A : YEAR_B })));
   const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
-  const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number }[] =
+  const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number; dotMonths?: boolean }[] =
     axis.mode === 'month'
       ? [
           { cells: years, h: rowH, rotate: false, size: size * 1.15 },
@@ -1091,33 +1206,66 @@ function calendarRows(
             size,
           },
         ]
-      : [
+      : !ny
+        ? [
+            {
+              // Som i Excel: «Okt 28» over ukene, annenhver måned grå
+              cells: (() => {
+                const cells = group((c) => `${c.monthLabel}|${c.monthYear}`);
+                const fits = (l: string, c: (typeof cells)[number]) => measure(l, size) <= c.x1 - c.x0 - 0.6;
+                const full = (c: (typeof cells)[number]) => c.label.replace('|', ' ').replace(/ \d\d(\d\d)$/, ' $1');
+                // Året står på alle månedene når det får plass, ellers bare på januar og den første
+                const allYears = cells.every((c) => fits(full(c), c));
+                return cells.map((c, i) => {
+                  const m = c.label.split('|')[0];
+                  const tries = allYears || i === 0 || m === 'Jan' ? [full(c), m, m.slice(0, 1)] : [m, m.slice(0, 1)];
+                  return { ...c, label: tries.find((l) => fits(l, c)) ?? '', fill: shade(m) };
+                });
+              })(),
+              h: rowH,
+              rotate: false,
+              size,
+            },
+            {
+              // Oddetallsukene grå
+              ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
+              dotMonths: true,
+            },
+          ]
+        : [
           { cells: years, h: rowH, rotate: false, size: size * 1.15 },
           {
-            cells: fitLabel(group((c) => `${c.monthLabel}|${c.year}`).map((c) => ({ ...c, label: c.label.split('|')[0], fill: shade(c.label.split('|')[0]) }))),
+            cells: fitLabel(group((c) => `${c.monthLabel}|${c.monthYear}`).map((c) => ({ ...c, label: c.label.split('|')[0], fill: shade(c.label.split('|')[0]) }))),
             h: rowH,
             rotate: false,
             size,
           },
           {
-            // Ny stil: annenhver uke. Excel-lik: ukene får månedens farge.
-            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: ny ? (Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF') : shade(c.monthLabel) }))),
-            h: rowH,
-            rotate: false,
-            size,
+            // Ny stil: annenhver uke
+            ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
           },
         ];
   const ordered = bottom ? [...rows].reverse() : rows;
   let y = top;
   return ordered.map((r) => {
-    const row = { y, h: r.h, cells: r.cells, size: r.size, rotate: r.rotate };
+    const row: CalendarRow = { y, h: r.h, cells: r.cells, size: r.size, rotate: r.rotate, dotMonths: r.dotMonths };
     y += r.h;
     return row;
   });
 }
 
 /** dd.mm.åååå */
-function statusMark(file: PlanFile, items: Item[], st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
+function statusMark(
+  file: PlanFile,
+  items: Item[],
+  st: LayoutOptions['status'],
+  axis: TimeAxis,
+  calTop: number,
+  y0: number,
+  y1: number,
+  base: number,
+  measure: Measure,
+): StatusMark | null {
   if (!st) return null;
   const { moment: m, style } = st;
   const d = parseIso(m.day);
@@ -1131,8 +1279,8 @@ function statusMark(file: PlanFile, items: Item[], st: LayoutOptions['status'], 
     const h = size * 1.35;
     // Lappen står til høyre for streken, eller til venstre når den ellers går utenfor planen.
     const tx = x + w > axis.x1 ? x - w : x;
-    // I nederste kalenderrad, rett over planen, så lappen ikke dekker boksene
-    const ty = y0 - h;
+    // Som et flagg over kalenderen: streken går opp gjennom kalenderen til lappen
+    const ty = calTop - h - 0.3;
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
   }
   let front: StatusMark['front'] = null;
@@ -1155,7 +1303,7 @@ function statusMark(file: PlanFile, items: Item[], st: LayoutOptions['status'], 
       : [];
     front = { points: path.points, labels };
   }
-  return { x, y0, y1, width: style.width, color: style.color, tag, front };
+  return { x, y0: tag ? tag.y : y0, y1, width: style.width, color: style.color, tag, front };
 }
 
 function formatLong(iso: string): string {

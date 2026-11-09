@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
 import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, tightestOrder, type Item } from './layout';
-import { approxMeasure } from './text';
+import { approxMeasure, LINE_HEIGHT } from './text';
 
 const example = testplan;
 
@@ -102,9 +102,10 @@ describe('layout', () => {
 
   it('tegner ukesvisning', () => {
     const p = example();
+    // Uten stil: Excel-lik, med to kalenderrader
     p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2026-03-02', end: '2026-07-26' };
     const L = computeLayout(p, { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true }, approxMeasure);
-    expect(L.calendarTop).toHaveLength(3);
+    expect(L.calendarTop).toHaveLength(2);
     expect(L.items.length).toBeGreaterThan(0);
   });
 });
@@ -265,6 +266,28 @@ describe('brukerens callout-valg', () => {
     const it = withBox({ calloutSide: 'left' });
     expect(it.kind === 'box' && it.callout && it.callout.box.x < it.x0).toBe(true);
   });
+  it('høyere boks: callouten midtstilles i boksen når den får plass, ellers flukter den med toppen', () => {
+    const text = 'Nivå 1|Åpne for vekseldrift';
+    const lower = withBox({ text, callout: 'on' });
+    if (lower.kind !== 'box' || !lower.callout) throw new Error('mangler callout');
+    const ch = lower.callout.box.h;
+    const unit = 9 * 0.3528 * LINE_HEIGHT;
+    // Like høy som callouten: bunnen av teksten flukter med bunnen av boksen
+    const same = withBox({ text, callout: 'on', height: ch / unit });
+    if (same.kind !== 'box' || !same.callout) throw new Error('mangler callout');
+    expect(same.callout.box.y - same.y).toBeCloseTo(Math.max(0, (same.h - same.callout.box.h) / 2));
+    expect(same.callout.box.y + same.callout.box.h).toBeLessThanOrEqual(same.y + same.h + 0.5);
+    // Høyere enn callouten: midt i boksen, og streken går ut fra midten
+    const tall = withBox({ text, callout: 'on', height: (ch * 2) / unit });
+    if (tall.kind !== 'box' || !tall.callout) throw new Error('mangler callout');
+    expect(tall.callout.box.y + tall.callout.box.h / 2).toBeCloseTo(tall.y + tall.h / 2);
+    const lead = tall.callout.leader;
+    expect(lead[lead.length - 1]).toBeCloseTo(tall.y + tall.h / 2);
+    // Litt høyere enn én linje, men lavere enn callouten: teksten starter i toppen av boksen
+    const mid = withBox({ text, callout: 'on', height: (lower.h + 1) / unit });
+    if (mid.kind !== 'box' || !mid.callout) throw new Error('mangler callout');
+    expect(mid.callout.box.y).toBeCloseTo(mid.y);
+  });
   it('stjerne i teksten gir callout også på bred boks', () => {
     const it = withBox({ text: '*Bred', resolved: { start: '2026-03-02', finish: '2026-08-28', isMilestone: false, trade: '(none)' } });
     expect(it.kind === 'box' && it.callout).toBeTruthy();
@@ -373,6 +396,59 @@ describe('overskrift, logo og ukeskravering', () => {
     const L = computeLayout(p, { ...o, style: 'ny' }, approxMeasure);
     const weekW = (L.plot.x1 - L.plot.x0) / L.calendarTop[2].cells.length;
     for (const b of L.bands) expect(b.x1 - b.x0).toBeLessThan(weekW * 1.5);
+  });
+  it('Excel-lik ukesvisning: to rader, «Okt 28» over ukene og grå oddetallsuker', () => {
+    const p = example();
+    p.plan.calendar = { ...p.plan.calendar, mode: 'month', start: '2028-10-02', end: '2029-02-10' };
+    const L = computeLayout(p, { ...o, style: 'excel', calendarMode: 'week' }, approxMeasure);
+    expect(L.calendarTop).toHaveLength(2);
+    const [months, weeks] = L.calendarTop;
+    expect(months.cells.map((c) => c.label)).toEqual(['Okt 28', 'Nov 28', 'Des 28', 'Jan 29', 'Feb 29']);
+    // Uke 5 2029 (29.1–4.2) har tre dager i januar og hører til januar, som i Excel
+    const jan = months.cells[3];
+    const w5 = weeks.cells.find((c) => c.label === '5')!;
+    expect(w5.x1).toBeCloseTo(jan.x1);
+    expect(weeks.dotMonths).toBe(true);
+    expect(weeks.cells.find((c) => c.label === '41')!.fill).not.toBe(weeks.cells.find((c) => c.label === '42')!.fill);
+    // Kraftig strek ved årsskiftet, mellom uke 52 og uke 1
+    const w1 = weeks.cells.find((c) => c.label === '1')!;
+    expect(L.grid.find((g) => Math.abs(g.x - w1.x0) < 1e-6)?.strong).toBe(true);
+  });
+  it('lang plan i uker: ukenumrene deles aldri, men vises for annenhver eller hver fjerde uke', () => {
+    for (const style of ['excel', 'ny'] as const) {
+      const p = example();
+      p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2027-01-04', end: '2031-12-28' };
+      const L = computeLayout(p, { ...o, style }, approxMeasure);
+      const weeks = L.calendarTop[L.calendarTop.length - 1];
+      const shown = weeks.cells.filter((c) => c.label);
+      expect(shown.length, style).toBeGreaterThan(weeks.cells.length / 5);
+      expect(shown.some((c) => c.label === '1'), style).toBe(true);
+      for (const c of shown) expect(Number(c.label) >= 1 && Number(c.label) <= 53, `${style} ${c.label}`).toBe(true);
+      // Ingen avkuttede numre: hvert synlig nummer følger forrige uke med riktig avstand
+      const nums = weeks.cells.map((c) => c.label);
+      const idx = nums.map((l, i) => (l ? i : -1)).filter((i) => i >= 0);
+      for (let k = 1; k < idx.length; k++) expect(idx[k] - idx[k - 1], style).toBeLessThanOrEqual(4);
+    }
+  });
+  it('ukenumre som ikke får plass liggende, står loddrett når da hver uke får nummer', () => {
+    const p = example();
+    const weekRowAt = (end: string) => {
+      p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2027-01-04', end };
+      const L = computeLayout(p, { ...o, style: 'excel' }, approxMeasure);
+      return L.calendarTop[L.calendarTop.length - 1];
+    };
+    const short = weekRowAt('2027-12-26');
+    expect(short.rotate).toBe(false);
+    const found = ['2029-06-30', '2029-12-30', '2030-06-30', '2030-12-29'].map(weekRowAt).find((r) => r.rotate);
+    expect(found).toBeTruthy();
+    expect(found!.cells.filter((c) => !c.label).length).toBeLessThanOrEqual(2);
+  });
+  it('valget måned eller uke i appen går foran planen, men ikke foran utkikken', () => {
+    const p = example();
+    p.plan.calendar.mode = 'month';
+    expect(computeLayout(p, { ...o, calendarMode: 'week', style: 'ny' }, approxMeasure).calendarTop).toHaveLength(3);
+    p.plan.calendar.mode = 'week';
+    expect(computeLayout(p, { ...o, calendarMode: 'month', style: 'ny' }, approxMeasure).calendarTop).toHaveLength(2);
   });
 });
 
@@ -496,5 +572,49 @@ describe('omplassering', () => {
       const overlap = fa.x0 < fb.x1 - 1e-6 && fb.x0 < fa.x1 - 1e-6 && fa.y0 < fb.y1 - 1e-6 && fb.y0 < fa.y1 - 1e-6;
       expect(overlap, `${a.id} og ${b.id}`).toBe(false);
     }
+  });
+});
+
+describe('forklaringen', () => {
+  it('skjuler fag og bruker egen tekst', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, style: 'ny' } as const;
+    const before = computeLayout(p, opts, approxMeasure).legend;
+    expect(before.some((e) => e.trade === 'Betong')).toBe(true);
+    p.plan.layout.legendItems = { Betong: { hidden: true }, Elektro: { text: 'Strøm' }, '(ferie)': { text: 'Fellesferie' } };
+    const after = computeLayout(p, opts, approxMeasure).legend;
+    expect(after.some((e) => e.trade === 'Betong')).toBe(false);
+    expect(after.find((e) => e.trade === 'Elektro')!.label.lines[0]).toBe('Strøm');
+    expect(after.find((e) => e.symbol === 'holiday')!.label.lines[0]).toBe('Fellesferie');
+  });
+});
+
+describe('rotert tekst', () => {
+  it('brytes i flere linjer når boksen er bred nok, så boksen ikke blir unødig høy', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false } as const;
+    const b = p.lanes[1].boxes[0]; // lang, bred boks
+    b.rotation = 90;
+    b.text = 'Montering av utstyr i generatorrom og kontrollrom';
+    const it = computeLayout(p, opts, approxMeasure).items.find((i) => i.id === b.id) as Extract<Item, { kind: 'box' }>;
+    expect(it.text!.lines.length).toBeGreaterThan(1);
+    // Linjene får plass side om side i boksen
+    expect(it.text!.lines.length * it.text!.size * LINE_HEIGHT).toBeLessThanOrEqual(it.x1 - it.x0);
+  });
+});
+
+describe('rotert tekst og høyde', () => {
+  it('får færre linjer når boksen gjøres høyere', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false } as const;
+    const b = p.lanes[1].boxes[0];
+    b.rotation = 90;
+    b.text = 'Montering av utstyr i generatorrom og kontrollrom';
+    const get = () => computeLayout(p, opts, approxMeasure).items.find((i) => i.id === b.id) as Extract<Item, { kind: 'box' }>;
+    const n0 = get().text!.lines.length;
+    b.height = 30;
+    expect(get().text!.lines.length).toBeLessThan(n0);
+    b.height = 60;
+    expect(get().text!.lines).toEqual([b.text]);
   });
 });

@@ -3,6 +3,8 @@
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
+import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
+import { FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -15,6 +17,8 @@ export interface EditorHost {
   redraw(): void;
   /** Finner tettest rekkefølge i lanene (null for en lane der tidligst først er like tett). */
   arrange(p: PlanFile, laneIds: string[], how: ArrangeOptions): ArrangeResult;
+  /** Størst mulig tekst i boksene (og lane-titlene) uten at planen endrer seg ellers. */
+  fitText(p: PlanFile, scope: FitTextScope): FitTextResult;
 }
 
 export interface Editor {
@@ -52,7 +56,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle || b.textScale);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -71,6 +75,7 @@ export function resetBox(b: Box): void {
   delete b.hidden;
   delete b.header;
   delete b.milestoneStyle;
+  delete b.textScale;
 }
 
 /** Lanen boksen ligger i nå. */
@@ -123,6 +128,33 @@ export function copyBox(plan: PlanFile, id: string): Box | null {
   delete b.critical;
   lane.boxes.splice(lane.boxes.indexOf(src) + 1, 0, b);
   return b;
+}
+
+/**
+ * Limer inn kopierte bokser (Ctrl+V) i lanen. Uten lane, eller om lanen ikke finnes, havner hver
+ * boks i lanen den ble kopiert fra, ellers i første viste lane. Kopiene er laget i appen og følger
+ * ikke Project, som med Ctrl+D. Gir de nye boksene.
+ */
+export function pasteBoxes(plan: PlanFile, items: { box: Box; lane: string }[], laneId: string | null): Box[] {
+  const fallback = plan.lanes.find((l) => l.shown && !l.hidden) ?? plan.lanes[0];
+  const out: Box[] = [];
+  for (const it of items) {
+    const lane = plan.lanes.find((l) => l.id === laneId) ?? plan.lanes.find((l) => l.id === it.lane) ?? fallback;
+    if (!lane) break;
+    const b: Box = structuredClone(it.box);
+    b.id = newId(plan);
+    b.taskIds = [];
+    b.manual = true;
+    delete b.top;
+    delete b.original;
+    delete b.fromLane;
+    delete b.hidden;
+    delete b.critical;
+    b.shown = true;
+    lane.boxes.push(b);
+    out.push(b);
+  }
+  return out;
 }
 
 /** Ny boks i lanen, laget i appen. */
@@ -270,7 +302,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
@@ -378,6 +410,35 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       moveLane(pl, id, j);
     });
 
+  /** Bokser kopiert med Ctrl+C. Ligger bare i minnet så lenge siden er åpen. */
+  let clipboard: { box: Box; lane: string }[] = [];
+  const copyToClipboard = () => {
+    const plan = host.getPlan();
+    if (!plan) return false;
+    const ids = group.length ? group : selected ? [selected] : [];
+    clipboard = ids.flatMap((id) => {
+      const b = findBox(plan, id);
+      const l = laneOf(plan, id);
+      return b && l ? [{ box: structuredClone(b), lane: l.id }] : [];
+    });
+    return clipboard.length > 0;
+  };
+  const pasteFromClipboard = () => {
+    const plan = host.getPlan();
+    if (!plan || !clipboard.length) return;
+    // Valgt lane, eller lanen til valgt boks. Ellers lanen boksene ble kopiert fra.
+    const target = selectedLane ?? (selected ? laneOf(plan, selected)?.id ?? null : null);
+    let made: Box[] = [];
+    commit((pl) => (made = pasteBoxes(pl, clipboard, target)));
+    if (made.length === 1) select(made[0].id);
+    else if (made.length > 1) {
+      selected = null;
+      selectedLane = null;
+      group = made.map((b) => b.id);
+      buildPanel();
+      overlay();
+    }
+  };
   const copySelected = () => {
     if (!selected) return;
     let made: Box | null = null;
@@ -509,6 +570,44 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     r.append(el('span', {}, text), btn(button, null, onClick, title, 'button small'));
     return r;
   };
+  /**
+   * Tekststørrelse for boksen, i halve punkter. Lagres i forhold til planens tekst, så boksen
+   * følger med når planen krymper eller vokser. Aldri under halvparten eller over det dobbelte.
+   */
+  const textSizeRow = (b: Box, planPt: number) =>
+    sizeStepper(b.textScale, planPt, (s) =>
+      change((x) => {
+        if (s === undefined) delete x.textScale;
+        else x.textScale = s;
+      }),
+    );
+  /** − / + i halve punkter. set får forholdet til planens tekst, eller undefined for planens størrelse. */
+  const sizeStepper = (scaleNow: number | undefined, planPt: number, set: (s: number | undefined) => void, note = 'Egen størrelse') => {
+    const cur = planPt * (scaleNow ?? 1);
+    const lo = planPt * MIN_TEXT_SCALE;
+    const hi = planPt * MAX_TEXT_SCALE;
+    const fmt = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
+    const setPt = (pt: number) => {
+      const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
+      set(Math.abs(s - 1) < 1e-3 ? undefined : Math.round(s * 10000) / 10000);
+    };
+    const wrap = el('div', { class: 'prop prop-inline' });
+    wrap.append(el('span', { class: 'prop-label' }, 'Størrelse'));
+    const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': 'Tekststørrelse' });
+    const down = el('button', { type: 'button', 'aria-label': 'Mindre tekst', title: 'Mindre tekst' }, '−') as HTMLButtonElement;
+    const up = el('button', { type: 'button', 'aria-label': 'Større tekst', title: 'Større tekst' }, '+') as HTMLButtonElement;
+    const val = el('output', { class: 'step-val', 'aria-live': 'polite' }, `${fmt(cur)} pt`);
+    // Neste halve punkt opp eller ned, så størrelsene blir runde tall
+    down.disabled = cur <= lo + 1e-3;
+    up.disabled = cur >= hi - 1e-3;
+    down.addEventListener('click', () => setPt(Math.max(lo, Math.ceil(cur * 2 - 1e-3) / 2 - 0.5)));
+    up.addEventListener('click', () => setPt(Math.min(hi, Math.floor(cur * 2 + 1e-3) / 2 + 0.5)));
+    g.append(down, val, up);
+    wrap.append(g);
+    const out: HTMLElement[] = [wrap];
+    if (scaleNow) out.push(lockedRow(`${note}, planen har ${fmt(planPt)} pt`, 'Som planen', 'Samme tekststørrelse som resten av planen', () => set(undefined)));
+    return out;
+  };
   /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
   const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
@@ -575,6 +674,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Skriv | for linjeskift.'),
     );
+    // Lane-titlene har én felles størrelse, så korte navn ikke blir større enn lange
+    if (layoutNow) {
+      sn.append(
+        ...sizeStepper(plan.plan.layout.laneTitleScale, layoutNow.textSizePt, (s) =>
+          commit((pl) => {
+            if (s === undefined) delete pl.plan.layout.laneTitleScale;
+            else pl.plan.layout.laneTitleScale = s;
+          }), 'Egen størrelse for alle lanes'),
+        el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store.'),
+      );
+    }
 
     const sc = section('Farge');
     const now = (l.fill ?? '#FFFFFF').toUpperCase();
@@ -744,6 +854,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sp = section('Plassering');
     const inLine = boxes.every((x) => x.critical);
     sp.append(switchRow('Med i kritisk linje', inLine, (v) => setCritical(boxes.map((x) => x.id), v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    if (plain.some((x) => x.textScale)) sp.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
     if (boxes.some((x) => x.top !== undefined)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all((x) => delete x.top, false)));
 
@@ -763,6 +874,49 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (Object.keys(all).length) pl.plan.layout.tradeColors = all;
       else delete pl.plan.layout.tradeColors;
     });
+
+  /** Oppføring i forklaringen: skjult eller egen tekst. Tomt valg fjernes, så filen holdes ren. */
+  const setLegendItem = (key: string, patch: { hidden?: boolean; text?: string }, typing = false) => {
+    const plan = host.getPlan();
+    if (!plan) return;
+    if (!typing || !typingSession) snapshot();
+    if (typing) typingSession = true;
+    const all = { ...plan.plan.layout.legendItems };
+    const v = { ...all[key], ...patch };
+    if (!v.hidden) delete v.hidden;
+    if (!v.text?.trim()) delete v.text;
+    if (Object.keys(v).length) all[key] = v;
+    else delete all[key];
+    if (Object.keys(all).length) plan.plan.layout.legendItems = all;
+    else delete plan.plan.layout.legendItems;
+    window.clearTimeout(redrawTimer);
+    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else {
+      host.redraw();
+      buildPanel();
+    }
+    syncTools();
+  };
+  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
+  /** Vis eller skjul i forklaringen, og teksten som står der. */
+  const legendSection = (plan: PlanFile, key: string) => {
+    const item = plan.plan.layout.legendItems?.[key] ?? {};
+    const s = section('I forklaringen');
+    const inp = el('input', { type: 'text', id: 'legend-text', 'aria-label': 'Tekst i forklaringen', placeholder: legendName(key), value: item.text ?? '' }) as HTMLInputElement;
+    inp.addEventListener('focus', () => (typingSession = false));
+    inp.addEventListener('input', () => setLegendItem(key, { text: inp.value }, true));
+    inp.addEventListener('blur', () => {
+      typingSession = false;
+      syncTools();
+    });
+    const lab = el('label', { class: 'prop', for: 'legend-text' });
+    lab.append(el('span', { class: 'prop-label' }, 'Tekst'), inp);
+    s.append(
+      switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })),
+      lab,
+      el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'),
+    );
+  };
 
   const buildTradePanel = (plan: PlanFile, trade: string) => {
     const pc = plan.colors.find((c) => c.name === trade)!;
@@ -786,6 +940,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
     );
+    legendSection(plan, trade);
   };
 
   const buildPanel = () => {
@@ -800,6 +955,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!b && selectedHeader) return buildHeaderPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
+    if (!b && selectedTrade === FERIE_KEY) {
+      panelHead('Ferie', 'Forklaringen nederst');
+      return legendSection(plan, FERIE_KEY);
+    }
     if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
@@ -808,7 +967,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ['Bokser', [
           'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
           'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit.',
-          'Dra i den blå streken under valgt boks for å endre høyden.',
+          'Dra i den blå streken under valgt boks for å endre høyden. Bunnen snapper til kanten av andre bokser, så de kan stilles på linje (hold Alt for å dra fritt).',
           'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
           'Omplasser i verktøylinjen pakker lanene på nytt, f.eks. etter at du har endret høyder. Angre om du ikke liker forslaget.',
         ]],
@@ -818,7 +977,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
         ]],
         ['Arket', [
-          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
+          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for å skjule det i forklaringen.',
           'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
         ]],
       ];
@@ -828,9 +987,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         tips.forEach((t) => ul.append(el('li', {}, t)));
         s.append(ul);
       }
+      // Skjulte oppføringer står ikke i forklaringen, så de vises igjen herfra
+      const hiddenLeg = Object.entries(plan.plan.layout.legendItems ?? {}).filter(([, v]) => v.hidden);
+      if (hiddenLeg.length) {
+        const sh = section('Skjult i forklaringen');
+        for (const [key, v] of hiddenLeg) sh.append(lockedRow(v.text?.trim() || legendName(key), 'Vis', 'Vis oppføringen i forklaringen igjen', () => setLegendItem(key, { hidden: false })));
+      }
       const keys = section('Hurtigtaster');
       const dl = el('dl', { class: 'keys' });
-      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Kopier boks'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
+      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Dupliser boks'], ['Ctrl+C', 'Kopier boks'], ['Ctrl+V', 'Lim inn'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
         const kbd = el('kbd', {}, k);
         const dt = el('dt', {});
         dt.append(kbd);
@@ -886,6 +1051,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'),
     );
+    if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
@@ -973,13 +1139,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (b.top !== undefined) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change((x) => delete x.top)));
-    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden.'));
+    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
     reset.disabled = !isEdited(b);
     foot.append(
-      btn('Kopier', 'copy', () => copySelected(), 'Lag en kopi rett under (Ctrl+D)'),
+      btn('Dupliser', 'copy', () => copySelected(), 'Lag en kopi rett under (Ctrl+D). Ctrl+C og Ctrl+V kopierer til en annen lane.'),
       btn(b.manual ? 'Slett' : 'Skjul', b.manual ? 'trash' : 'hide', () => removeSelected(), b.manual ? 'Slett boksen (Delete)' : 'Skjul boksen. Høyreklikk lanen for å vise den igjen. (Delete)'),
       reset,
     );
@@ -1109,6 +1275,52 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const set = (e: Element, attrs: Record<string, string | number>) => Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
 
+  /** Alt holdt nede under dra: ingen snapping. */
+  let snapOff = false;
+  /**
+   * Snapping mot kanten av andre bokser når høyde eller plass dras, så bunner og topper kan
+   * stilles på linje uten øyemål. En stiplet hjelpelinje viser kanten, og boksen den hører til
+   * rammes inn. Gjelder bokser i hele planen, også i andre lanes.
+   */
+  const snapper = (g: SVGGElement, skip: Set<string>) => {
+    const L = layoutNow!;
+    const edges = L.items.filter((o): o is BoxItem => o.kind === 'box' && !skip.has(o.id)).flatMap((o) => [
+      { y: o.y, o },
+      { y: o.y + o.h, o },
+    ]);
+    const guide = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 1.5, 'stroke-dasharray': '5 3', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    const mark = shape(g, 'rect', { fill: 'none', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    // Omtrent seks skjermpunkter, uansett zoom
+    const tol = () => {
+      const a = toMm(0, 0);
+      const b = toMm(0, 6);
+      return Math.abs(b.y - a.y) || 1;
+    };
+    const hide = () => {
+      set(guide, { visibility: 'hidden' });
+      set(mark, { visibility: 'hidden' });
+    };
+    return {
+      /** Finner kanten nærmest en av de dragne kantene (ys). Gir hvor langt den må flyttes, eller null. */
+      find(ys: number[]): { d: number; y: number; o: BoxItem } | null {
+        if (snapOff) return null;
+        const t = tol();
+        let best: { d: number; y: number; o: BoxItem } | null = null;
+        for (const y of ys)
+          for (const e of edges) {
+            const d = e.y - y;
+            if (Math.abs(d) <= t && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, y: e.y, o: e.o };
+          }
+        return best;
+      },
+      show(hit: { y: number; o: BoxItem } | null) {
+        if (!hit) return hide();
+        set(guide, { y1: hit.y, y2: hit.y, visibility: 'visible' });
+        set(mark, { x: hit.o.x0, y: hit.o.y, width: hit.o.x1 - hit.o.x0, height: hit.o.h, visibility: 'visible' });
+      },
+    };
+  };
+
   const startBoxResize = (it: BoxItem): Drag | null => {
     const lane = laneAt(it.y);
     if (!lane || !layoutNow) return null;
@@ -1118,14 +1330,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const maxH = Math.max(minH, lane.y1 - pad - it.y);
     const g = ghostLayer();
     const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+    const snap = snapper(g, new Set([it.id]));
     let h = it.h;
     return {
       startY: it.y + it.h,
       startClient: 0,
       moved: false,
       move(dy) {
-        // Trinn på en kvart tekstlinje
-        h = clamp(Math.round((it.h + dy) / (unit / 4)) * (unit / 4), minH, maxH);
+        // Bunnen snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
+        const hit = snap.find([it.y + it.h + dy]);
+        const want = hit ? it.y + it.h + dy + hit.d - it.y : Math.round((it.h + dy) / (unit / 4)) * (unit / 4);
+        h = clamp(want, minH, maxH);
+        snap.show(hit && Math.abs(h - want) < 1e-6 ? hit : null);
         set(r, { height: h });
       },
       end() {
@@ -1155,6 +1371,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     let rect: SVGRectElement | null = null;
     let target: SVGRectElement | null = null;
     let y = r.y0;
+    let snap: ReturnType<typeof snapper> | null = null;
+    const kidItems = () =>
+      it.kind === 'box' && it.header
+        ? L.items.filter((o) => {
+            if (o === it) return false;
+            const q = bounds(o);
+            return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
+          })
+        : [];
+    const kidsOf = () => kidItems().map((o) => o.id);
+    // Kanten som snapper: selve boksen, ikke callouten
+    const bh = it.kind === 'box' ? it.h : fh;
     return {
       startY: r.y0,
       startClient: 0,
@@ -1172,7 +1400,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         lane = laneAt(clamp(r.y0 + dy + fh / 2, first.y0, last.y1 - 1e-3)) ?? home;
         const pad = lane.top - lane.y0;
         const maxY = Math.max(lane.top, lane.y1 - pad - fh);
-        y = clamp(lane.top + Math.round((r.y0 + dy - lane.top) / (unit / 4)) * (unit / 4), lane.top, maxY);
+        // Topp eller bunn snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
+        if (!snap) snap = snapper(g!, new Set([it.id, ...kidsOf()]));
+        const top = r.y0 + dy;
+        const hit = it.kind === 'box' ? snap.find([top, top + bh]) : null;
+        const want = hit ? top + hit.d : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
+        y = clamp(want, lane.top, maxY);
+        snap.show(hit && Math.abs(y - want) < 1e-6 ? hit : null);
         set(rect!, { y });
         set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
       },
@@ -1181,13 +1415,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         if (Math.abs(y - r.y0) < 1e-6 && lane === home) return;
         selected = it.id;
         // En overskriftsboks tar med seg boksene som ligger inne i den
-        const kids = it.kind === 'box' && it.header
-          ? L.items.filter((o) => {
-              if (o === it) return false;
-              const q = bounds(o);
-              return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
-            }).map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }))
-          : [];
+        const kids = kidItems().map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }));
         commit((plan) => {
           for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
             if (lane !== home) moveBox(plan, m.id, lane.id);
@@ -1444,6 +1672,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
+    const legG = (e.target as Element | null)?.closest?.('g[data-legend]');
+    if (legG) return selectTrade(legG.getAttribute('data-legend')!);
     if (!g && inHeader(e)) return selectHeader();
     const id = g ? boxAt(e) : null;
     if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(id);
@@ -1513,6 +1743,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Flytting starter først etter noen punkter, så et vanlig klikk bare velger
     if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
+    snapOff = e.altKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
     else drag.move(p.y - drag.startY);
@@ -1540,6 +1771,22 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const p = toMm(e.clientX, e.clientY);
     const L = layoutNow;
+    // Høyreklikk i forklaringen: skjul oppføringen eller endre den
+    const legHit = (e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]');
+    if (plan && legHit) {
+      e.preventDefault();
+      const key = legHit.getAttribute('data-trade') ?? legHit.getAttribute('data-legend')!;
+      const isTrade = key !== FERIE_KEY;
+      ctx.open(e.clientX, e.clientY, legendName(key), [
+        {
+          items: [
+            { label: 'Skjul i forklaringen', icon: 'hide', hint: 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
+            { label: isTrade ? 'Endre tekst og farge' : 'Endre tekst', icon: 'pencil', kbd: 'Klikk', hint: 'Åpner oppføringen i panelet til høyre.', onSelect: () => selectTrade(key) },
+          ],
+        },
+      ], 'Forklaring');
+      return;
+    }
     if (plan && inHeader(e)) {
       e.preventDefault();
       ctx.open(e.clientX, e.clientY, 'Topptekst', [
@@ -1595,7 +1842,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         },
         {
           items: [
-            { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
+            { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
+            { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+C', hint: 'Lim inn i en annen lane med Ctrl+V eller høyreklikk der.', onSelect: () => { if (!group.includes(id)) { group = []; selected = id; } copyToClipboard(); } },
             ...(ms ? [] : [{ label: 'Standard høyde', icon: 'height' as const, hint: box.height ? 'Så høy som teksten krever.' : 'Boksen har allerede standard høyde.', disabled: !box.height, onSelect: () => commit((pl) => delete findBox(pl, id)!.height) }]),
             { label: 'Løsne', icon: 'pin', hint: box.top === undefined ? 'Boksen er ikke festet. Den festes når du drar den opp eller ned.' : 'Appen velger plassen i lanen igjen.', disabled: box.top === undefined, onSelect: () => commit((pl) => delete findBox(pl, id)!.top) },
           ],
@@ -1632,6 +1880,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
                 if (made) select((made as Box).id);
               },
             },
+            ...(clipboard.length
+              ? [{
+                  label: clipboard.length === 1 ? 'Lim inn her' : `Lim inn ${clipboard.length} bokser her`,
+                  icon: 'copy' as const,
+                  kbd: 'Ctrl+V',
+                  hint: 'Kopien har samme datoer og tekst, og følger ikke Project.',
+                  onSelect: () => {
+                    let made: Box[] = [];
+                    commit((pl) => {
+                      made = pasteBoxes(pl, clipboard, ln.id);
+                      // Én boks havner der du høyreklikket
+                      if (made.length === 1) made[0].top = lines(Math.max(0, p.y - ln.top), L.unit);
+                    });
+                    if (made.length === 1) select(made[0].id);
+                  },
+                }]
+              : []),
           ],
         },
         {
@@ -1672,6 +1937,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ids.forEach((id) => resetBoxInPlan(plan, id));
     plan.lanes.forEach((l) => resetLane(l));
     delete plan.plan.layout.tradeColors;
+    delete plan.plan.layout.laneTitleScale;
+    delete plan.plan.layout.legendItems;
     host.redraw();
     buildPanel();
     syncTools();
@@ -1681,7 +1948,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
 
   /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene). */
-  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string } => {
+  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean } => {
     const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
     if (group.length > 1) {
       const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
@@ -1689,7 +1956,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
     if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
-    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for å omplassere bare dem.' };
+    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true };
   };
 
   function endArrange() {
@@ -1799,6 +2066,36 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     syncTools();
   };
 
+  // ---- Størst mulig tekst ----
+  const ptText = (v: number) => `${v.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt`;
+  const fitText = (reset: boolean) => {
+    const plan = host.getPlan();
+    if (!plan || !layoutNow) return;
+    endArrange();
+    const s = arrangeScope(plan);
+    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.whole };
+    const res = reset ? null : host.fitText(plan, scope);
+    const next = res ? res.plan : resetTextSizes(plan, scope);
+    if (JSON.stringify(next) === JSON.stringify(plan)) {
+      showArrangeBar(reset ? 'All tekst har allerede planens størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
+      return;
+    }
+    snapshot();
+    typingSession = false;
+    host.setPlan(next);
+    host.redraw();
+    if (res) {
+      const n = res.grown;
+      const boxes = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} fikk større tekst, opptil ${ptText(res.maxPt)}` : 'Ingen bokser hadde plass til større tekst';
+      const lanes = res.laneTitlePt && res.laneTitlePt > res.planPt + 1e-6 ? `. Lane-titlene er ${ptText(res.laneTitlePt)}` : '';
+      showArrangeBar(`${boxes}${lanes}. Resten av planen har ${ptText(res.planPt)}.`, true);
+    } else showArrangeBar('All tekst har planens størrelse igjen.', true);
+    buildPanel();
+    syncTools();
+  };
+  document.querySelector('#fit-text')?.addEventListener('click', () => fitText(false));
+  document.querySelector('#fit-text-reset')?.addEventListener('click', () => fitText(true));
+
   arrangeMenu?.addEventListener('toggle', (e) => {
     if ((e as ToggleEvent).newState !== 'open') return;
     const plan = host.getPlan();
@@ -1835,6 +2132,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       copySelected();
       return;
     }
+    // Kopier og lim inn, også mellom lanes og mellom planer som åpnes etter hverandre
+    if (k === 'c' && (selected || group.length) && !window.getSelection()?.toString()) {
+      if (copyToClipboard()) e.preventDefault();
+      return;
+    }
+    if (k === 'v' && clipboard.length) {
+      e.preventDefault();
+      pasteFromClipboard();
+      return;
+    }
     if (k === 'z' && !e.shiftKey) {
       e.preventDefault();
       undo();
@@ -1869,7 +2176,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
+    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
     get active() {
       return active;
     },

@@ -4,6 +4,7 @@ import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile, ProgressFront, StatusLine } from './format/types';
 import { setPrintPage } from './print';
+import { fitTextToBoxes } from './layout/fittext';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
@@ -69,6 +70,7 @@ const editor = createEditor(
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
+    fitText: (p, scope) => fitTextToBoxes(p, viewOf(p).opts, measure, scope),
   },
   host,
   $<HTMLElement>('#panel'),
@@ -193,6 +195,11 @@ function syncLookahead() {
   btn.classList.toggle('on', !!lookWindow);
   $<HTMLElement>('#lookahead-step').hidden = !lookWindow;
   $('#lookahead-label').textContent = lookWindow ? `Utkikk ${lookWindow.tag.replace('u', 'uke ').replace('-', '–')}` : 'Utkikk';
+  // Utkikken viser alltid uker, så måned eller uke gjelder bare hele planen
+  document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((b) => {
+    b.disabled = !plan || !!lookWindow;
+    b.title = lookWindow ? 'Utkikken viser alltid uker' : b.dataset.cal === 'week' ? 'Én kolonne per uke' : 'Én kolonne per måned';
+  });
   const edit = $<HTMLButtonElement>('#edit');
   if (plan) {
     edit.disabled = !!lookWindow;
@@ -339,7 +346,7 @@ function draw() {
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
   const tight = layout.overflow || layout.belowMin;
   status.textContent = layout.belowMin && !layout.overflow
-    ? `På ${here} blir teksten ${pt(layout.textSizePt)} pt, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men kan bli vanskelig å lese.`
+    ? `På ${here} blir teksten ${pt(layout.textSizePt)} pt, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men kan bli vanskelig å lese.${editor.active ? ' Når boksene er justert, gir Omplasser → Størst mulig tekst større tekst der det er plass.' : ''}`
     : layout.overflow
     ? opts.fitToSheet
       ? `Planen får ikke plass på ${here}, selv med ${pt(layout.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
@@ -400,11 +407,26 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
 
+/** Står «%PDF» i starten av filen? PDF-standarden tillater litt søppel foran, innenfor de første 1024 bytene. */
+function findPdfHeader(bytes: Uint8Array): boolean {
+  const n = Math.min(bytes.length - 4, 1024);
+  for (let i = 0; i <= n; i++) if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46) return true;
+  return false;
+}
+
 /** Leser en planfil (.json) eller arbeidsfil (.pdf). Viser feil i statuslinjen og gir null om den ikke kan brukes. */
 async function readPlan(bytes: Uint8Array, name: string): Promise<{ plan: PlanFile; warnings: string[]; isPdf: boolean } | null> {
   const info = $('#file-info');
-  // En arbeidsfil (PDF) har planen som vedlegg
-  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+  if (!bytes.length) {
+    info.replaceChildren(el('p', `Kunne ikke åpne ${name}. Filen er tom (0 byte). Den ble trolig ikke ferdig lagret, eller den ligger bare i skyen og er ikke lastet ned. Åpne den i Utforsker først, eller bruk en tidligere arbeidsfil.`, 'error'));
+    return null;
+  }
+  // En arbeidsfil (PDF) har planen som vedlegg. PDF-hodet kan ha noen byte foran seg.
+  const isPdf = findPdfHeader(bytes);
+  if (!isPdf && /\.pdf$/i.test(name)) {
+    info.replaceChildren(el('p', `Kunne ikke åpne ${name}. Filen heter .pdf, men innholdet er ikke en PDF (${bytes.length} byte). Den er trolig skadet eller ble ikke ferdig lagret. Bruk en tidligere arbeidsfil.`, 'error'));
+    return null;
+  }
   let text: string;
   if (isPdf) {
     const { readPlanFromPdf } = await import('./pdf/read');
@@ -443,6 +465,7 @@ function applyLayout(p: PlanFile) {
   opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
   opts.showLegend = lay.showLegend ?? p.plan.options.legend;
   opts.showBottomCalendar = lay.showBottomCalendar ?? p.plan.calendar.bottomCalendar;
+  opts.calendarMode = lay.calendarMode ?? p.plan.calendar.mode;
   syncControls();
 }
 
@@ -612,6 +635,8 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
+  const calMode = opts.calendarMode ?? plan?.plan.calendar.mode ?? 'month';
+  document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cal === calMode)));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
   document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.fit === 'sheet') === opts.fitToSheet)));
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
@@ -643,6 +668,13 @@ document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn)
 document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((btn) =>
   btn.addEventListener('click', () => {
     opts.heightMode = btn.dataset.height as LayoutOptions['heightMode'];
+    syncControls();
+    draw();
+  }),
+);
+document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    opts.calendarMode = btn.dataset.cal as 'month' | 'week';
     syncControls();
     draw();
   }),
@@ -759,14 +791,15 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     titleSize: opts.titleSizePt ?? DEFAULT_TITLE_PT,
     showLegend: opts.showLegend ?? plan.plan.options.legend,
     showBottomCalendar: opts.showBottomCalendar ?? plan.plan.calendar.bottomCalendar,
+    calendarMode: opts.calendarMode ?? plan.plan.calendar.mode,
   });
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';
   saveStatus.className = 'muted small';
   try {
-    // Velg fil først, mens klikket fortsatt gjelder (nettleseren krever det for Lagre som-dialogen)
+    // PDF-en lages før Lagre som-dialogen. Dialogen tømmer filen du velger med en gang, så feiler
+    // noe etterpå, står du igjen med en tom arbeidsfil. Nå er PDF-en ferdig før filen røres.
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
-    const handle = picker ? await picker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }) : null;
     const { exportPdf } = await import('./pdf/export');
     // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
     let target = shown;
@@ -780,6 +813,23 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     }
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
+    const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
+    let handle: FileSystemFileHandle | null = null;
+    if (picker) {
+      try {
+        handle = await picker(pickOpts);
+      } catch (e) {
+        // Tok PDF-en så lang tid at klikket ikke gjelder lenger, må du klikke én gang til
+        if ((e as Error).name !== 'SecurityError' && (e as Error).name !== 'NotAllowedError') throw e;
+        handle = await new Promise<FileSystemFileHandle>((resolve, reject) => {
+          const again = el('button', 'Velg hvor PDF-en skal lagres', 'button small') as HTMLButtonElement;
+          again.type = 'button';
+          again.addEventListener('click', () => picker(pickOpts).then(resolve, reject), { once: true });
+          saveStatus.replaceChildren(document.createTextNode('PDF-en er klar. '), again);
+          saveStatus.className = 'muted small';
+        });
+      }
+    }
     if (handle) {
       const w = await handle.createWritable();
       await w.write(blob);
