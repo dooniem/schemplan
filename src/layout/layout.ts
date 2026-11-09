@@ -163,7 +163,12 @@ export interface LegendEntry {
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
   symbol?: 'diamond' | 'flag' | 'holiday';
+  /** Nøkkelen i plan.layout.legendItems: fagnavnet, eller FERIE_KEY. */
+  key: string;
 }
+
+/** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
+export const FERIE_KEY = '(ferie)';
 
 export interface Layout {
   width: number;
@@ -480,9 +485,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
           ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
         ]
       : [];
-    const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name));
-    const entries = [...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined })), ...symbolEntries.map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined }))];
-    const names = entries.map(({ c }) => (ny && c.name === '(none)' ? 'Uten fag' : c.name));
+    // Oppføringer kan skjules eller få egen tekst i appen
+    const items = file.plan.layout.legendItems ?? {};
+    const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name) && !items[c.name]?.hidden);
+    const entries = [
+      ...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined, key: c.name })),
+      ...symbolEntries.filter(() => !items[FERIE_KEY]?.hidden).map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined, key: FERIE_KEY })),
+    ];
+    const names = entries.map(({ c, key }) => items[key]?.text?.trim() || (ny && c.name === '(none)' ? 'Uten fag' : c.name));
     // Forklaringen skal helst stå på én rad. Først tettes mellomrommet, så krympes den
     // ned mot minste tekststørrelse. Får den fortsatt ikke plass, brytes den til flere rader.
     const room = lxMax - MARGIN;
@@ -506,7 +516,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const dy = (legendSize - size) * 1.1 * 0.8;
     let lx = MARGIN;
     let row = 0;
-    for (const [i, { c, symbol, trade }] of entries.entries()) {
+    for (const [i, { c, symbol, trade, key }] of entries.entries()) {
       const name = names[i];
       const w = sw + 1.5 + measure(name, size) + gap;
       if (lx + w - gap > lxMax && lx > MARGIN) {
@@ -523,6 +533,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         textColor: c.text ?? '#000000',
         symbol,
         trade,
+        key,
         label: { x: lx + sw + 1.5, y: row * rowStep + dy + sh * 0.8, lines: [name], size, color: '#000000', anchor: 'start' },
       });
       lx += w;

@@ -240,7 +240,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {
     // Hvert fag i sin egen gruppe, så det kan velges ved redigering
-    const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : legG;
+    const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : node('g', { 'data-legend': e.key }, legG);
     const cx = e.x + e.w / 2;
     const cy = e.y + e.h / 2;
     const s = e.h / 2;

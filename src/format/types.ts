@@ -69,6 +69,8 @@ export interface PlanSettings {
     lookahead?: Lookahead;
     /** Statuslinjen: loddrett strek på statusdatoen. */
     statusLine?: StatusLine;
+    /** Forklaringen: oppføringer som er skjult eller har egen tekst, etter fagnavn ("(ferie)" for ferie). */
+    legendItems?: Record<string, { hidden?: boolean; text?: string }>;
     /** Lane-titlenes størrelse i forhold til teksten i boksene. Lik for alle lanes. */
     laneTitleScale?: number;
   };
