@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
+import { copyBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
 import { validatePlan } from './format/validate';
 import { computeLayout } from './layout/layout';
 import { approxMeasure } from './layout/text';
@@ -134,5 +134,22 @@ describe('fagfarger i appen', () => {
     if (fills.length > 1) expect(fills[1]).toBe('#8DCDF8');
     expect(L.legend.find((e) => e.trade === 'Betong')?.fill).toBe('#8DCDF8');
     expect(mergePlans(p, testplan()).plan.plan.layout.tradeColors).toEqual({ Betong: { fill: '#8DCDF8' } });
+  });
+});
+
+describe('kopier og lim inn', () => {
+  it('limer inn en kopi i valgt lane, laget i appen', () => {
+    const p = testplan();
+    const src = p.lanes[0].boxes[0];
+    const made = pasteBoxes(p, [{ box: structuredClone(src), lane: '1' }], '3');
+    expect(made).toHaveLength(1);
+    expect(laneOf(p, made[0].id)!.id).toBe('3');
+    expect(made[0].manual).toBe(true);
+    expect(made[0].taskIds).toEqual([]);
+    expect(made[0].text).toBe(src.text);
+    // Uten lane: tilbake i lanen den kom fra
+    const back = pasteBoxes(p, [{ box: structuredClone(src), lane: '1' }], null);
+    expect(laneOf(p, back[0].id)!.id).toBe('1');
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
   });
 });

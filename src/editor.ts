@@ -130,6 +130,33 @@ export function copyBox(plan: PlanFile, id: string): Box | null {
   return b;
 }
 
+/**
+ * Limer inn kopierte bokser (Ctrl+V) i lanen. Uten lane, eller om lanen ikke finnes, havner hver
+ * boks i lanen den ble kopiert fra, ellers i første viste lane. Kopiene er laget i appen og følger
+ * ikke Project, som med Ctrl+D. Gir de nye boksene.
+ */
+export function pasteBoxes(plan: PlanFile, items: { box: Box; lane: string }[], laneId: string | null): Box[] {
+  const fallback = plan.lanes.find((l) => l.shown && !l.hidden) ?? plan.lanes[0];
+  const out: Box[] = [];
+  for (const it of items) {
+    const lane = plan.lanes.find((l) => l.id === laneId) ?? plan.lanes.find((l) => l.id === it.lane) ?? fallback;
+    if (!lane) break;
+    const b: Box = structuredClone(it.box);
+    b.id = newId(plan);
+    b.taskIds = [];
+    b.manual = true;
+    delete b.top;
+    delete b.original;
+    delete b.fromLane;
+    delete b.hidden;
+    delete b.critical;
+    b.shown = true;
+    lane.boxes.push(b);
+    out.push(b);
+  }
+  return out;
+}
+
 /** Ny boks i lanen, laget i appen. */
 export function newBox(plan: PlanFile, laneId: string, start: string, finish: string): Box | null {
   const lane = plan.lanes.find((l) => l.id === laneId);
@@ -383,6 +410,35 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       moveLane(pl, id, j);
     });
 
+  /** Bokser kopiert med Ctrl+C. Ligger bare i minnet så lenge siden er åpen. */
+  let clipboard: { box: Box; lane: string }[] = [];
+  const copyToClipboard = () => {
+    const plan = host.getPlan();
+    if (!plan) return false;
+    const ids = group.length ? group : selected ? [selected] : [];
+    clipboard = ids.flatMap((id) => {
+      const b = findBox(plan, id);
+      const l = laneOf(plan, id);
+      return b && l ? [{ box: structuredClone(b), lane: l.id }] : [];
+    });
+    return clipboard.length > 0;
+  };
+  const pasteFromClipboard = () => {
+    const plan = host.getPlan();
+    if (!plan || !clipboard.length) return;
+    // Valgt lane, eller lanen til valgt boks. Ellers lanen boksene ble kopiert fra.
+    const target = selectedLane ?? (selected ? laneOf(plan, selected)?.id ?? null : null);
+    let made: Box[] = [];
+    commit((pl) => (made = pasteBoxes(pl, clipboard, target)));
+    if (made.length === 1) select(made[0].id);
+    else if (made.length > 1) {
+      selected = null;
+      selectedLane = null;
+      group = made.map((b) => b.id);
+      buildPanel();
+      overlay();
+    }
+  };
   const copySelected = () => {
     if (!selected) return;
     let made: Box | null = null;
@@ -923,7 +979,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }
       const keys = section('Hurtigtaster');
       const dl = el('dl', { class: 'keys' });
-      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Kopier boks'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
+      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Dupliser boks'], ['Ctrl+C', 'Kopier boks'], ['Ctrl+V', 'Lim inn'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
         const kbd = el('kbd', {}, k);
         const dt = el('dt', {});
         dt.append(kbd);
@@ -1073,7 +1129,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
     reset.disabled = !isEdited(b);
     foot.append(
-      btn('Kopier', 'copy', () => copySelected(), 'Lag en kopi rett under (Ctrl+D)'),
+      btn('Dupliser', 'copy', () => copySelected(), 'Lag en kopi rett under (Ctrl+D). Ctrl+C og Ctrl+V kopierer til en annen lane.'),
       btn(b.manual ? 'Slett' : 'Skjul', b.manual ? 'trash' : 'hide', () => removeSelected(), b.manual ? 'Slett boksen (Delete)' : 'Skjul boksen. Høyreklikk lanen for å vise den igjen. (Delete)'),
       reset,
     );
@@ -1770,7 +1826,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         },
         {
           items: [
-            { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
+            { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
+            { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+C', hint: 'Lim inn i en annen lane med Ctrl+V eller høyreklikk der.', onSelect: () => { if (!group.includes(id)) { group = []; selected = id; } copyToClipboard(); } },
             ...(ms ? [] : [{ label: 'Standard høyde', icon: 'height' as const, hint: box.height ? 'Så høy som teksten krever.' : 'Boksen har allerede standard høyde.', disabled: !box.height, onSelect: () => commit((pl) => delete findBox(pl, id)!.height) }]),
             { label: 'Løsne', icon: 'pin', hint: box.top === undefined ? 'Boksen er ikke festet. Den festes når du drar den opp eller ned.' : 'Appen velger plassen i lanen igjen.', disabled: box.top === undefined, onSelect: () => commit((pl) => delete findBox(pl, id)!.top) },
           ],
@@ -1807,6 +1864,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
                 if (made) select((made as Box).id);
               },
             },
+            ...(clipboard.length
+              ? [{
+                  label: clipboard.length === 1 ? 'Lim inn her' : `Lim inn ${clipboard.length} bokser her`,
+                  icon: 'copy' as const,
+                  kbd: 'Ctrl+V',
+                  hint: 'Kopien har samme datoer og tekst, og følger ikke Project.',
+                  onSelect: () => {
+                    let made: Box[] = [];
+                    commit((pl) => {
+                      made = pasteBoxes(pl, clipboard, ln.id);
+                      // Én boks havner der du høyreklikket
+                      if (made.length === 1) made[0].top = lines(Math.max(0, p.y - ln.top), L.unit);
+                    });
+                    if (made.length === 1) select(made[0].id);
+                  },
+                }]
+              : []),
           ],
         },
         {
@@ -2040,6 +2114,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (k === 'd' && selected) {
       e.preventDefault();
       copySelected();
+      return;
+    }
+    // Kopier og lim inn, også mellom lanes og mellom planer som åpnes etter hverandre
+    if (k === 'c' && (selected || group.length) && !window.getSelection()?.toString()) {
+      if (copyToClipboard()) e.preventDefault();
+      return;
+    }
+    if (k === 'v' && clipboard.length) {
+      e.preventDefault();
+      pasteFromClipboard();
       return;
     }
     if (k === 'z' && !e.shiftKey) {
