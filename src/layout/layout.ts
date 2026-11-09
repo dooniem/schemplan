@@ -298,9 +298,15 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
  * det er plass til. Teksten brytes så kort som mulig innenfor det, så boksen blir lavest mulig.
  * Er det ikke plass til flere linjer enn teksten har fra før, står hver tekstlinje hel, som før.
  */
-export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure): string[] {
+export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure, room = 0): string[] {
   const maxLines = Math.floor((innerW + 1e-6) / (size * LINE_HEIGHT));
   if (maxLines <= raw.length) return raw;
+  // Linjene kan være så lange som høyden boksen har fått
+  if (room > 0) {
+    const fit = wrapLines(raw, room, size, measure);
+    const words = new Set(raw.join(' ').split(/\s+/));
+    if (fit.length <= maxLines && fit.every((l) => l.split(/\s+/).every((wd) => !wd || words.has(wd)))) return fit;
+  }
   const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
   let lo = Math.max(0, ...words.map((wd) => measure(wd, size)));
   let hi = widest(raw, size, measure);
@@ -837,7 +843,8 @@ function buildPieces(
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
-      lines = rotatedLines(rawLines, w - 2 * PAD_X, bs, measure);
+      // Høyde valgt i appen gir plass til lengre linjer: dra boksen høyere for færre linjer, til slutt én
+      lines = rotatedLines(rawLines, w - 2 * PAD_X, bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
       item.h = widest(lines, bs, measure) + 2 * PAD_Y + 1;
       item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
