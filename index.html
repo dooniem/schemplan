@@ -105,6 +105,45 @@
         </label>
       </section>
 
+      <section class="set-sec" aria-labelledby="set-status">
+        <h3 id="set-status">Statuslinje</h3>
+        <label class="set-switch">
+          <span><strong>Vis statuslinje</strong><small>Loddrett strek på statusdatoen, også på PDF</small></span>
+          <input type="checkbox" id="sl-on" role="switch" />
+        </label>
+        <div class="sl-details" id="sl-details" hidden>
+          <div class="set-row">
+            <span class="set-label" id="lbl-sl-date">Dato</span>
+            <div class="group" role="group" aria-labelledby="lbl-sl-date">
+              <button type="button" data-sl-source="project" aria-pressed="false" title="Statusdatoen som er satt i Project">Project</button>
+              <button type="button" data-sl-source="monday" aria-pressed="true" title="Mandag denne uken. Følger med når uka skifter.">Mandag</button>
+              <button type="button" data-sl-source="custom" aria-pressed="false">Velg dato</button>
+            </div>
+          </div>
+          <div class="set-row" id="sl-date-row" hidden>
+            <span class="set-label"><label for="sl-date">Dag</label></span>
+            <span class="num"><input id="sl-date" type="date" /></span>
+          </div>
+          <p class="pop-hint" id="sl-help" role="status"></p>
+          <div class="set-row">
+            <span class="set-label" id="lbl-sl-width">Strek</span>
+            <div class="group" role="group" aria-labelledby="lbl-sl-width">
+              <button type="button" data-sl-width="0.3" aria-pressed="false">Tynn</button>
+              <button type="button" data-sl-width="0.5" aria-pressed="true">Middels</button>
+              <button type="button" data-sl-width="0.9" aria-pressed="false">Tykk</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-label" id="lbl-sl-color">Farge</span>
+            <div class="swatches" role="group" aria-labelledby="lbl-sl-color" id="sl-colors"></div>
+          </div>
+          <label class="set-switch">
+            <span><strong>Dato på streken</strong><small>«Status 6.11» øverst i planen</small></span>
+            <input type="checkbox" id="sl-label" role="switch" />
+          </label>
+        </div>
+      </section>
+
       <section class="set-sec" aria-labelledby="set-tekst">
         <h3 id="set-tekst">Tekst</h3>
         <div class="set-row">
@@ -169,6 +208,7 @@
           <span class="set-label" id="la-lbl-from">Fra</span>
           <div class="group" role="group" aria-labelledby="la-lbl-from">
             <button type="button" data-la-from="now" aria-pressed="true" title="Mandag denne uken. Følger med når uka skifter.">Denne uken</button>
+            <button type="button" data-la-from="status" aria-pressed="false">Statuslinjen</button>
             <button type="button" data-la-from="week" aria-pressed="false">Velg uke</button>
           </div>
         </div>

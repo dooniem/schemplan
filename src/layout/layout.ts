@@ -1,4 +1,4 @@
-import type { Box, Lane, PlanFile, TradeColor } from '../format/types';
+import type { Box, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
@@ -7,6 +7,7 @@ import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
+import { statusLabel, type StatusMoment } from './status';
 import type { LookaheadExtras } from './lookahead';
 
 export interface LayoutOptions {
@@ -30,6 +31,19 @@ export interface LayoutOptions {
   showBottomCalendar?: boolean;
   /** Utkikk: hele planen i miniatyr under planen, og de neste milepælene. */
   lookahead?: LookaheadExtras;
+  /** Statuslinjen, når den er slått på og har en dato. */
+  status?: { moment: StatusMoment; style: StatusLine };
+}
+
+/** Statuslinjen i mm. */
+export interface StatusMark {
+  x: number;
+  y0: number;
+  y1: number;
+  width: number;
+  color: string;
+  /** «Status 6.11» i en lapp øverst ved streken. */
+  tag: { x: number; y: number; w: number; h: number; text: TextBlock } | null;
 }
 
 /** Hele planen i miniatyr med perioden i utkikken markert. */
@@ -186,6 +200,8 @@ export interface Layout {
   overview: Overview | null;
   /** Utkikk uten miniatyr: linjen med de neste milepælene står alene. */
   upcoming: TextBlock | null;
+  /** Statuslinjen, eller null når den er av eller datoen er utenfor kalenderen. */
+  status: StatusMark | null;
 }
 
 const MARGIN = 8;
@@ -652,6 +668,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,
+    status: statusMark(opts.status, axis, plotTop, plotBottom, base, measure),
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -1097,6 +1114,27 @@ function calendarRows(
 }
 
 /** dd.mm.åååå */
+function statusMark(st: LayoutOptions['status'], axis: TimeAxis, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
+  if (!st) return null;
+  const { moment: m, style } = st;
+  const d = parseIso(m.day);
+  if (d < axis.start || d >= axis.end) return null;
+  const x = m.endOfDay ? axis.xEnd(d) : axis.xStart(d);
+  let tag: StatusMark['tag'] = null;
+  if (style.label) {
+    const size = base * 0.85;
+    const label = statusLabel(m);
+    const w = measure(label, size, true) + 1.2;
+    const h = size * 1.35;
+    // Lappen står til høyre for streken, eller til venstre når den ellers går utenfor planen.
+    const tx = x + w > axis.x1 ? x - w : x;
+    // I nederste kalenderrad, rett over planen, så lappen ikke dekker boksene
+    const ty = y0 - h;
+    tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
+  }
+  return { x, y0, y1, width: style.width, color: style.color, tag };
+}
+
 function formatLong(iso: string): string {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;

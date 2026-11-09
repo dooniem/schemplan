@@ -22,6 +22,8 @@ export interface PlanFile {
 
 export interface PlanSettings {
   title: string;
+  /** Statusdato fra Project. Mangler den, er det ingen statusdato. */
+  statusDate?: IsoDate | null;
   /** Hvilken av de fire skjematiske planene i .mpp-filen (1–4). */
   schemNumber: number;
   calendar: {
@@ -63,6 +65,8 @@ export interface PlanSettings {
     criticalLine?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
     /** Utkikk: planen tegnes bare for noen uker. Lagres som regel, så perioden ruller videre. */
     lookahead?: Lookahead;
+    /** Statuslinjen: loddrett strek på statusdatoen. */
+    statusLine?: StatusLine;
   };
   options: {
     legend: boolean;
@@ -80,8 +84,8 @@ export interface IsoWeek {
 export interface Lookahead {
   /** Slått på: planen tegnes bare for perioden. */
   on: boolean;
-  /** Startuke. null = denne uken, som ruller med dagens dato. */
-  from: IsoWeek | null;
+  /** Startuke. null = denne uken, som ruller med dagens dato. 'status' = uken statuslinjen står i. */
+  from: IsoWeek | null | 'status';
   /** Ta med uken før startuken. */
   prevWeek: boolean;
   /** Antall uker fra og med startuken, eller til og med en ISO-uke. */
@@ -90,6 +94,19 @@ export interface Lookahead {
   hideEmptyLanes: boolean;
   /** Vis hele planen i miniatyr under planen, også på PDF og utskrift. Mangler den, vises den. */
   showOverview?: boolean;
+}
+
+export interface StatusLine {
+  on: boolean;
+  /** project: statusdatoen fra Project (slutten av dagen). monday: mandag denne uken. custom: `date`. */
+  source: 'project' | 'monday' | 'custom';
+  /** Egendefinert dato. Beholdes når et annet valg er aktivt. */
+  date?: IsoDate;
+  /** Tykkelse i mm. */
+  width: number;
+  color: HexColor;
+  /** Vis «Status 6.11» øverst ved streken. */
+  label: boolean;
 }
 
 export interface TradeColor {

@@ -185,6 +185,17 @@ export function renderPlan(L: Layout): SVGSVGElement {
     node('path', { class: 'critical-line', d, fill: 'none', stroke: L.critical.color, 'stroke-width': L.critical.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...(dash ? { 'stroke-dasharray': dash.map(r).join(' ') } : {}), 'pointer-events': 'none' }, svg);
   }
 
+  // Statuslinjen oppå boksene, med datoen i en lapp øverst
+  if (L.status) {
+    const st = L.status;
+    const g = node('g', { class: 'status-line', 'pointer-events': 'none' }, svg);
+    node('line', { x1: st.x, x2: st.x, y1: st.y0, y2: st.y1, stroke: st.color, 'stroke-width': st.width }, g);
+    if (st.tag) {
+      node('rect', { x: st.tag.x, y: st.tag.y, width: st.tag.w, height: st.tag.h, fill: st.color }, g);
+      text(st.tag.text, g);
+    }
+  }
+
   // Ramme rundt planen og lane-kolonnen
   const yTop = L.calendarTop.length ? L.calendarTop[0].y : y0;
   node('rect', { x: left, y: yTop, width: x1 - left, height: y1 - yTop, fill: 'none', stroke: '#000000', 'stroke-width': 0.35 }, svg);
