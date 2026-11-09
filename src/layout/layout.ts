@@ -151,6 +151,9 @@ export interface Band {
   x0: number;
   x1: number;
   fill: string;
+  /** Bare innenfor en lane. Mangler de: hele planområdet. */
+  y0?: number;
+  y1?: number;
 }
 
 export interface LegendEntry {
@@ -700,7 +703,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     strong: ny ? c.year !== axis.columns[i].year : c.monthYear !== axis.columns[i].monthYear,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
-  const bands: Band[] = monthBands(axis, ny);
+  const bands: Band[] = monthBands(axis, ny, laneLayouts);
   const holidays = file.holidays
     .map((h) => ({ s: parseIso(h.start), e: parseIso(h.end) }))
     .filter((h) => h.e >= axis.start && h.s < axis.end)
@@ -1088,19 +1091,29 @@ const MONTH_DARK = '#B4B4B4';
 const MONTH_LIGHT = '#F7F7F7';
 const BAND_DARK = '#EBEBEB';
 const BAND_LIGHT = '#F7F7F7';
+/** Mørkt felt i annenhver lane, som i Excel. */
+const BAND_DARK_ALT = '#F2F2F2';
 const monthIndex = (label: string) => Math.max(0, MONTHS_NB.indexOf(label));
 
-/** Annenhver måned mørk (jan, mar, mai …) i planområdet. */
-function monthBands(axis: TimeAxis, ny = false): Band[] {
+/** Annenhver måned mørk (jan, mar, mai …) i planområdet, i ukesvisning annenhver uke (oddetallsukene).
+    Som i Excel er de mørke feltene lysere i annenhver lane, så lanene skiller seg fra hverandre. */
+function monthBands(axis: TimeAxis, ny: boolean, lanes: { y0: number; y1: number }[]): Band[] {
+  const dark = ny ? '#F3F3F3' : BAND_DARK;
+  const light = ny ? '#FFFFFF' : BAND_LIGHT;
+  const darkAlt = ny ? '#F9F9F9' : BAND_DARK_ALT;
   const bands: Band[] = [];
+  const darkCols: Band[] = [];
   for (const c of axis.columns) {
-    // Ny stil i ukesvisning: annenhver uke, etter ukenummeret
-    const shadeOn = ny && axis.mode === 'week' ? Number(c.label) % 2 === 1 : monthIndex(c.monthLabel) % 2 === 0;
-    const fill = ny ? (shadeOn ? '#F3F3F3' : '#FFFFFF') : monthIndex(c.monthLabel) % 2 === 0 ? BAND_DARK : BAND_LIGHT;
+    const shadeOn = axis.mode === 'week' ? Number(c.label) % 2 === 1 : monthIndex(c.monthLabel) % 2 === 0;
+    const fill = shadeOn ? dark : light;
     const last = bands[bands.length - 1];
     if (last && last.fill === fill && Math.abs(last.x1 - c.x0) < 1e-6) last.x1 = c.x1;
     else bands.push({ x0: c.x0, x1: c.x1, fill });
   }
+  for (const b of bands) if (b.fill === dark) darkCols.push(b);
+  lanes.forEach((ln, i) => {
+    if (i % 2 === 1) for (const b of darkCols) bands.push({ x0: b.x0, x1: b.x1, fill: darkAlt, y0: ln.y0, y1: ln.y1 });
+  });
   return bands;
 }
 
