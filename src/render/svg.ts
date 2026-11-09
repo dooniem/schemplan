@@ -6,6 +6,7 @@ import { dashArray } from '../layout/critical';
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
 const NS = 'http://www.w3.org/2000/svg';
 const GRID = '#C8C8C8';
+const MONTH_DOT = '#ADADAF';
 const LEADER = '#1F2D3D';
 const r = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -90,7 +91,9 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const grid = node('g', { class: 'grid' }, svg);
   L.grid.forEach((g) => {
     if (g.strong) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: '#000000', 'stroke-width': 0.45 }, grid);
-    else if (g.month) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: GRID, 'stroke-width': 0.15 }, grid);
+    else if (g.month && ny) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: GRID, 'stroke-width': 0.15 }, grid);
+    // Excel-lik: prikket grå strek ved månedsskifte, som rammen Excel la rundt hver måned
+    else if (g.month) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: MONTH_DOT, 'stroke-width': 0.25, 'stroke-dasharray': '0.35 0.35' }, grid);
   });
 
   // Kalender
@@ -102,6 +105,15 @@ export function renderPlan(L: Layout): SVGSVGElement {
       const bold = row.cells.length < 60 && c.strong;
       if (row.rotate) text({ x: (c.x0 + c.x1) / 2, y: row.y + row.h / 2, lines: [c.label], size: row.size, color: '#000000', anchor: 'middle', bold, rotate: 90 }, cal);
       else text({ x: (c.x0 + c.x1) / 2, y: row.y + row.h / 2 + row.size * 0.35, lines: [c.label], size: row.size, color: '#000000', anchor: 'middle', bold }, cal);
+    });
+  });
+  // Ukesraden i Excel-lik stil: månedsskiftet prikkes over den svarte cellekanten
+  [...L.calendarTop, ...L.calendarBottom].forEach((row) => {
+    if (!row.dotMonths) return;
+    L.grid.forEach((g) => {
+      if (!g.month || g.strong) return;
+      node('line', { x1: g.x, x2: g.x, y1: row.y, y2: row.y + row.h, stroke: '#FFFFFF', 'stroke-width': 0.3 }, cal);
+      node('line', { x1: g.x, x2: g.x, y1: row.y, y2: row.y + row.h, stroke: MONTH_DOT, 'stroke-width': 0.3, 'stroke-dasharray': '0.35 0.35' }, cal);
     });
   });
   // Kraftig ramme rundt kalenderradene og strek ved årsskifte

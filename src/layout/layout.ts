@@ -29,6 +29,8 @@ export interface LayoutOptions {
   showLegend?: boolean;
   /** Vis kalenderen også under planen. Standard: valget i planen. */
   showBottomCalendar?: boolean;
+  /** Måneds- eller ukesvisning. Standard: valget i planen. Utkikken viser alltid uker. */
+  calendarMode?: 'month' | 'week';
   /** Utkikk: hele planen i miniatyr under planen, og de neste milepælene. */
   lookahead?: LookaheadExtras;
   /** Statuslinjen, når den er slått på og har en dato. */
@@ -123,6 +125,8 @@ export interface CalendarRow {
   size: number;
   /** Månedsnavn skrives loddrett, slik Excel gjør. */
   rotate: boolean;
+  /** Excel-lik ukesrad: prikket grå strek ved månedsskifte. */
+  dotMonths?: boolean;
 }
 
 export interface LaneLayout {
@@ -389,7 +393,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const laneTitleX = MARGIN;
   const x0 = MARGIN + LANE_TITLE_W;
   const x1 = W - MARGIN;
-  const axis = buildTimeAxis(file.plan.calendar, x0, x1);
+  const calMode = opts.lookahead ? file.plan.calendar.mode : (opts.calendarMode ?? file.plan.calendar.mode);
+  const builtAxis = buildTimeAxis({ ...file.plan.calendar, mode: calMode }, x0, x1);
+  // Excel-lik ukesvisning fordeler ukene på månedene slik Excel gjorde
+  const axis: TimeAxis =
+    !ny && builtAxis.mode === 'week' ? { ...builtAxis, columns: builtAxis.columns.map((c) => ({ ...c, monthLabel: c.excelMonth, monthYear: c.excelMonthYear })) } : builtAxis;
   const calSize = base * 0.9;
   const rowH = calSize * 1.8;
   // Månedsvisning: loddrette månedsnavn, raden må være høy nok til "Mai"/"Des"
@@ -397,7 +405,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Ny stil: vannrette månedsnavn når de får plass
   const rotateMonths = axis.mode === 'month' && !(ny && measure('Aug', calSize, true) + 1.5 <= colW);
   const monthRowH = rotateMonths ? Math.max(rowH, measure('Aug', calSize, true) + 2.5) : rowH;
-  const calH = axis.mode === 'month' ? rowH + monthRowH : rowH * 3;
+  // Excel-lik ukesvisning har to rader: «Okt 28» og ukenummer
+  const calH = axis.mode === 'month' ? rowH + monthRowH : ny ? rowH * 3 : rowH * 2;
   const bottomCal = opts.showBottomCalendar ?? file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
@@ -631,7 +640,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const grid = axis.columns.slice(1).map((c, i) => ({
     x: c.x0,
     // Kraftig strek ved årsskifte. I ukesvisning får månedsskiftene en tynn strek.
-    strong: c.year !== axis.columns[i].year,
+    strong: ny ? c.year !== axis.columns[i].year : c.monthYear !== axis.columns[i].monthYear,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
   const bands: Band[] = monthBands(axis, ny);
@@ -1077,7 +1086,7 @@ function calendarRows(
 
   const years = fitLabel(group((c) => String(c.year)).map((c, i) => ({ ...c, fill: i % 2 === 0 ? YEAR_A : YEAR_B })));
   const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
-  const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number }[] =
+  const rows: { cells: CalendarRow['cells']; h: number; rotate: boolean; size: number; dotMonths?: boolean }[] =
     axis.mode === 'month'
       ? [
           { cells: years, h: rowH, rotate: false, size: size * 1.15 },
@@ -1088,17 +1097,40 @@ function calendarRows(
             size,
           },
         ]
-      : [
+      : !ny
+        ? [
+            {
+              // Som i Excel: «Okt 28» over ukene, annenhver måned grå
+              cells: group((c) => `${c.monthLabel}|${c.monthYear}`).map((c) => {
+                const [m, y] = c.label.split('|');
+                const w = c.x1 - c.x0 - 0.6;
+                const label = [`${m} ${y.slice(-2)}`, m, m.slice(0, 1)].find((l) => measure(l, size) <= w) ?? '';
+                return { ...c, label, fill: shade(m) };
+              }),
+              h: rowH,
+              rotate: false,
+              size,
+            },
+            {
+              // Oddetallsukene grå
+              cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
+              h: rowH,
+              rotate: false,
+              size,
+              dotMonths: true,
+            },
+          ]
+        : [
           { cells: years, h: rowH, rotate: false, size: size * 1.15 },
           {
-            cells: fitLabel(group((c) => `${c.monthLabel}|${c.year}`).map((c) => ({ ...c, label: c.label.split('|')[0], fill: shade(c.label.split('|')[0]) }))),
+            cells: fitLabel(group((c) => `${c.monthLabel}|${c.monthYear}`).map((c) => ({ ...c, label: c.label.split('|')[0], fill: shade(c.label.split('|')[0]) }))),
             h: rowH,
             rotate: false,
             size,
           },
           {
-            // Ny stil: annenhver uke. Excel-lik: ukene får månedens farge.
-            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: ny ? (Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF') : shade(c.monthLabel) }))),
+            // Ny stil: annenhver uke
+            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
             h: rowH,
             rotate: false,
             size,
@@ -1107,7 +1139,7 @@ function calendarRows(
   const ordered = bottom ? [...rows].reverse() : rows;
   let y = top;
   return ordered.map((r) => {
-    const row = { y, h: r.h, cells: r.cells, size: r.size, rotate: r.rotate };
+    const row: CalendarRow = { y, h: r.h, cells: r.cells, size: r.size, rotate: r.rotate, dotMonths: r.dotMonths };
     y += r.h;
     return row;
   });

@@ -84,6 +84,17 @@
             <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
           </div>
         </div>
+      </section>
+
+      <section class="set-sec" aria-labelledby="set-vis">
+        <h3 id="set-vis">Visning</h3>
+        <div class="set-row">
+          <span class="set-label" id="lbl-cal">Kalender</span>
+          <div class="group" role="group" aria-labelledby="lbl-cal">
+            <button type="button" data-cal="month" aria-pressed="true" title="Én kolonne per måned">Måned</button>
+            <button type="button" data-cal="week" aria-pressed="false" title="Én kolonne per uke">Uke</button>
+          </div>
+        </div>
         <div class="set-row">
           <span class="set-label" id="lbl-style">Stil</span>
           <div class="group" role="group" aria-labelledby="lbl-style">
@@ -91,18 +102,16 @@
             <button type="button" data-style="excel" aria-pressed="false" title="Slik Excel-løsningen tegner">Excel-lik</button>
           </div>
         </div>
-      </section>
-
-      <section class="set-sec" aria-labelledby="set-vis">
-        <h3 id="set-vis">Vis på arket</h3>
-        <label class="set-switch">
-          <span><strong>Forklaring</strong><small>Fagene og fargene nederst</small></span>
-          <input type="checkbox" id="show-legend" role="switch" />
-        </label>
-        <label class="set-switch">
-          <span><strong>Kalender nederst</strong><small>Måneder og uker også under planen</small></span>
-          <input type="checkbox" id="show-bottom-cal" role="switch" />
-        </label>
+        <div class="set-switches">
+          <label class="set-switch">
+            <span><strong>Forklaring</strong><small>Fagene og fargene nederst</small></span>
+            <input type="checkbox" id="show-legend" role="switch" />
+          </label>
+          <label class="set-switch">
+            <span><strong>Kalender nederst</strong><small>Måneder og uker også under planen</small></span>
+            <input type="checkbox" id="show-bottom-cal" role="switch" />
+          </label>
+        </div>
       </section>
 
       <section class="set-sec" aria-labelledby="set-status">

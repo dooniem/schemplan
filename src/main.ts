@@ -193,6 +193,11 @@ function syncLookahead() {
   btn.classList.toggle('on', !!lookWindow);
   $<HTMLElement>('#lookahead-step').hidden = !lookWindow;
   $('#lookahead-label').textContent = lookWindow ? `Utkikk ${lookWindow.tag.replace('u', 'uke ').replace('-', '–')}` : 'Utkikk';
+  // Utkikken viser alltid uker, så måned eller uke gjelder bare hele planen
+  document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((b) => {
+    b.disabled = !plan || !!lookWindow;
+    b.title = lookWindow ? 'Utkikken viser alltid uker' : b.dataset.cal === 'week' ? 'Én kolonne per uke' : 'Én kolonne per måned';
+  });
   const edit = $<HTMLButtonElement>('#edit');
   if (plan) {
     edit.disabled = !!lookWindow;
@@ -443,6 +448,7 @@ function applyLayout(p: PlanFile) {
   opts.titleSizePt = lay.titleSize ?? DEFAULT_TITLE_PT;
   opts.showLegend = lay.showLegend ?? p.plan.options.legend;
   opts.showBottomCalendar = lay.showBottomCalendar ?? p.plan.calendar.bottomCalendar;
+  opts.calendarMode = lay.calendarMode ?? p.plan.calendar.mode;
   syncControls();
 }
 
@@ -599,6 +605,8 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
+  const calMode = opts.calendarMode ?? plan?.plan.calendar.mode ?? 'month';
+  document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cal === calMode)));
   $<HTMLInputElement>('#text-size').value = String(opts.textSizePt);
   document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.fit === 'sheet') === opts.fitToSheet)));
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
@@ -630,6 +638,13 @@ document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((btn)
 document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((btn) =>
   btn.addEventListener('click', () => {
     opts.heightMode = btn.dataset.height as LayoutOptions['heightMode'];
+    syncControls();
+    draw();
+  }),
+);
+document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    opts.calendarMode = btn.dataset.cal as 'month' | 'week';
     syncControls();
     draw();
   }),
@@ -746,6 +761,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     titleSize: opts.titleSizePt ?? DEFAULT_TITLE_PT,
     showLegend: opts.showLegend ?? plan.plan.options.legend,
     showBottomCalendar: opts.showBottomCalendar ?? plan.plan.calendar.bottomCalendar,
+    calendarMode: opts.calendarMode ?? plan.plan.calendar.mode,
   });
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';

@@ -57,6 +57,8 @@ export interface PlanSettings {
     showLegend?: boolean;
     /** Vis kalenderen også under planen. Mangler den, gjelder valget fra Project. */
     showBottomCalendar?: boolean;
+    /** Måneds- eller ukesvisning valgt i appen. Mangler den, gjelder valget fra Project. */
+    calendarMode?: 'month' | 'week';
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
