@@ -2,7 +2,7 @@ import './style.css';
 import { checkOutboundBlocked } from './csp';
 import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
-import type { PlanFile, StatusLine } from './format/types';
+import type { PlanFile, ProgressFront, StatusLine } from './format/types';
 import { setPrintPage } from './print';
 import { fitTextToBoxes } from './layout/fittext';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
@@ -17,7 +17,7 @@ import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
-import { resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
+import { FRONT_DEFAULT, resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
@@ -597,7 +597,20 @@ function syncStatus() {
   document.querySelectorAll<HTMLButtonElement>('[data-sl-width]').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.slWidth) - r.width) < 0.01)));
   slColors.querySelectorAll<HTMLButtonElement>('.swatch').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.slColor?.toUpperCase() === r.color.toUpperCase())));
   $<HTMLInputElement>('#sl-label').checked = r.label;
+  const f = r.front ?? FRONT_DEFAULT;
+  $<HTMLInputElement>('#pf-on').checked = f.on;
+  $<HTMLElement>('#pf-details').hidden = !f.on;
+  document.querySelectorAll<HTMLButtonElement>('[data-pf-against]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pfAgainst === f.against)));
+  $<HTMLInputElement>('#pf-late').checked = f.late;
+  $<HTMLInputElement>('#pf-dev').checked = f.deviation;
+  const anyProgress = !!plan?.tasks.some((t) => (Number(t.percentComplete) || 0) > 0);
+  $('#pf-help').textContent = plan && !anyProgress ? 'Ingen aktiviteter har % ferdig ennå, så alt som pågår vises som etter.' : '';
 }
+const setFront = (change: Partial<ProgressFront>) => setStatus({ front: { ...(statusRule().front ?? FRONT_DEFAULT), ...change } });
+$<HTMLInputElement>('#pf-on').addEventListener('change', (e) => setFront({ on: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#pf-late').addEventListener('change', (e) => setFront({ late: (e.target as HTMLInputElement).checked }));
+$<HTMLInputElement>('#pf-dev').addEventListener('change', (e) => setFront({ deviation: (e.target as HTMLInputElement).checked }));
+document.querySelectorAll<HTMLButtonElement>('[data-pf-against]').forEach((b) => b.addEventListener('click', () => setFront({ against: b.dataset.pfAgainst as ProgressFront['against'] })));
 $<HTMLInputElement>('#sl-on').addEventListener('change', (e) => setStatus({ on: (e.target as HTMLInputElement).checked }));
 $<HTMLInputElement>('#sl-label').addEventListener('change', (e) => setStatus({ label: (e.target as HTMLInputElement).checked }));
 document.querySelectorAll<HTMLButtonElement>('[data-sl-source]').forEach((b) =>

@@ -150,6 +150,28 @@
             <span><strong>Dato på streken</strong><small>«Status 6.11» øverst i planen</small></span>
             <input type="checkbox" id="sl-label" role="switch" />
           </label>
+          <label class="set-switch">
+            <span><strong>Fremdriftsfront</strong><small>Streken går ut til der arbeidet er kommet i boksene som pågår</small></span>
+            <input type="checkbox" id="pf-on" role="switch" />
+          </label>
+          <div class="pf-details" id="pf-details" hidden>
+            <div class="set-row">
+              <span class="set-label" id="lbl-pf-against">Mål mot</span>
+              <div class="group" role="group" aria-labelledby="lbl-pf-against">
+                <button type="button" data-pf-against="plan" aria-pressed="true" title="Datoene i planen slik den er nå">Planen nå</button>
+                <button type="button" data-pf-against="baseline" aria-pressed="false" disabled title="Kommer når planen har en baseline fra Project">Baseline</button>
+              </div>
+            </div>
+            <p class="pop-hint" id="pf-help" role="status"></p>
+            <label class="set-switch">
+              <span><strong>Ta med det som henger etter</strong><small>Også bokser som skulle vært ferdige, men ikke er det</small></span>
+              <input type="checkbox" id="pf-late" role="switch" />
+            </label>
+            <label class="set-switch">
+              <span><strong>Vis avvik</strong><small>«−3 d» ved hvert knekkpunkt, i arbeidsdager</small></span>
+              <input type="checkbox" id="pf-dev" role="switch" />
+            </label>
+          </div>
         </div>
       </section>
 

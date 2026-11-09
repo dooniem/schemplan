@@ -201,7 +201,16 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.status) {
     const st = L.status;
     const g = node('g', { class: 'status-line', 'pointer-events': 'none' }, svg);
-    node('line', { x1: st.x, x2: st.x, y1: st.y0, y2: st.y1, stroke: st.color, 'stroke-width': st.width }, g);
+    if (st.front && st.front.points.length > 4) {
+      // Fronten erstatter den rette streken, men i samme farge og tykkelse
+      const p = st.front.points;
+      const d = p.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
+      node('path', { d, fill: 'none', stroke: st.color, 'stroke-width': st.width, 'stroke-linejoin': 'round' }, g);
+      st.front.labels.forEach((l) => {
+        node('rect', { x: l.x, y: l.y, width: l.w, height: l.h, fill: st.color }, g);
+        text(l.text, g);
+      });
+    } else node('line', { x1: st.x, x2: st.x, y1: st.y0, y2: st.y1, stroke: st.color, 'stroke-width': st.width }, g);
     if (st.tag) {
       node('rect', { x: st.tag.x, y: st.tag.y, width: st.tag.w, height: st.tag.h, fill: st.color }, g);
       text(st.tag.text, g);

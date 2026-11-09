@@ -8,6 +8,7 @@ import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
 import { statusLabel, type StatusMoment } from './status';
+import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
 
 export interface LayoutOptions {
@@ -46,6 +47,8 @@ export interface StatusMark {
   color: string;
   /** «Status 6.11» i en lapp øverst ved streken. */
   tag: { x: number; y: number; w: number; h: number; text: TextBlock } | null;
+  /** Fremdriftsfronten: punkter x0,y0,x1,y1,… og avviket ved knekkpunktene. */
+  front: { points: number[]; labels: { x: number; y: number; w: number; h: number; text: TextBlock }[] } | null;
 }
 
 /** Hele planen i miniatyr med perioden i utkikken markert. */
@@ -731,7 +734,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,
-    status: statusMark(opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
+    status: statusMark(file, items, opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -1252,7 +1255,17 @@ function calendarRows(
 }
 
 /** dd.mm.åååå */
-function statusMark(st: LayoutOptions['status'], axis: TimeAxis, calTop: number, y0: number, y1: number, base: number, measure: Measure): StatusMark | null {
+function statusMark(
+  file: PlanFile,
+  items: Item[],
+  st: LayoutOptions['status'],
+  axis: TimeAxis,
+  calTop: number,
+  y0: number,
+  y1: number,
+  base: number,
+  measure: Measure,
+): StatusMark | null {
   if (!st) return null;
   const { moment: m, style } = st;
   const d = parseIso(m.day);
@@ -1269,9 +1282,28 @@ function statusMark(st: LayoutOptions['status'], axis: TimeAxis, calTop: number,
     // Som et flagg over kalenderen: streken går opp gjennom kalenderen til lappen
     const ty = calTop - h - 0.3;
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
-    return { x, y0: ty, y1, width: style.width, color: style.color, tag };
   }
-  return { x, y0, y1, width: style.width, color: style.color, tag };
+  let front: StatusMark['front'] = null;
+  // Fronten måles foreløpig bare mot planen slik den er nå
+  if (style.front?.on && style.front.against === 'plan') {
+    const pts = frontPoints(file, m, { late: style.front.late });
+    const path = frontPath(pts, items, axis, x, y0, y1);
+    const size = base * 0.8;
+    // Avviket i en lapp i linjens farge ytterst ved punktet, innenfor planen
+    const labels: NonNullable<StatusMark['front']>['labels'] = style.front.deviation
+      ? path.labels.map((l) => {
+          const t = deltaText(l.delta);
+          const w = measure(t, size, true) + 1;
+          const h = size * 1.3;
+          const left = l.side === 'left' ? l.x - 0.6 - w >= axis.x0 : l.x + 0.6 + w > axis.x1;
+          const x = left ? l.x - 0.6 - w : l.x + 0.6;
+          const y = l.y - h / 2;
+          return { x, y, w, h, text: { x: x + w / 2, y: y + h * 0.74, lines: [t], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
+        })
+      : [];
+    front = { points: path.points, labels };
+  }
+  return { x, y0: tag ? tag.y : y0, y1, width: style.width, color: style.color, tag, front };
 }
 
 function formatLong(iso: string): string {
