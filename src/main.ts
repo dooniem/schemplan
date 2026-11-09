@@ -4,6 +4,7 @@ import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile, StatusLine } from './format/types';
 import { setPrintPage } from './print';
+import { fitTextToBoxes } from './layout/fittext';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
@@ -69,6 +70,7 @@ const editor = createEditor(
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
+    fitText: (p, scope) => fitTextToBoxes(p, viewOf(p).opts, measure, scope),
   },
   host,
   $<HTMLElement>('#panel'),
@@ -344,7 +346,7 @@ function draw() {
   const here = sheetName(opts.paper ?? 'A3', opts.orientation);
   const tight = layout.overflow || layout.belowMin;
   status.textContent = layout.belowMin && !layout.overflow
-    ? `På ${here} blir teksten ${pt(layout.textSizePt)} pt, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men kan bli vanskelig å lese.`
+    ? `På ${here} blir teksten ${pt(layout.textSizePt)} pt, under minimum på ${pt(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT)} pt. Alt er med, men kan bli vanskelig å lese.${editor.active ? ' Når boksene er justert, gir Omplasser → Størst mulig tekst større tekst der det er plass.' : ''}`
     : layout.overflow
     ? opts.fitToSheet
       ? `Planen får ikke plass på ${here}, selv med ${pt(layout.textSizePt)} pt tekst. Den er tegnet for høy og blir kuttet ved utskrift.`
