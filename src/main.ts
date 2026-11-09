@@ -71,6 +71,11 @@ const editor = createEditor(
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
     fitText: (p, scope) => fitTextToBoxes(p, viewOf(p).opts, measure, scope),
+    setTitleSize: (pt) => {
+      opts.titleSizePt = pt;
+      syncControls();
+      draw();
+    },
   },
   host,
   $<HTMLElement>('#panel'),

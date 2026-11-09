@@ -104,7 +104,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(li) || !Object.values(li).every((v) => isObj(v) && (v.hidden === undefined || typeof v.hidden === 'boolean') && (v.text === undefined || typeof v.text === 'string')))
           err('plan.layout.legendItems', 'må ha hidden (true/false) og/eller text (tekst) for hver oppføring');
       }
-      if (lay.laneTitleScale !== undefined && !textScaleOk(lay.laneTitleScale)) err('plan.layout.laneTitleScale', 'må være et tall fra 0,5 til 2');
+      for (const k of ['laneTitleScale', 'headerRightScale', 'legendScale'] as const)
+        if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');

@@ -185,6 +185,9 @@ export interface Layout {
   title: TextBlock;
   /** Tekst øverst til høyre, hvis noen. */
   headerRight?: TextBlock;
+  /** Standardstørrelsene i punkter, før egne valg: teksten til høyre og forklaringen. */
+  headerRightBasePt: number;
+  legendBasePt: number;
   /** Nedre kant av toppfeltet med overskrift, logo og tekst til høyre, i mm. */
   headerBottom: number;
   subtitle: TextBlock;
@@ -421,7 +424,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Toppteksten til høyre: litt mindre enn overskriften, midtstilt i høyden i toppfeltet
   const rightLines = (file.plan.layout.headerRight ?? '').split('|').map((s) => s.trim());
   while (rightLines.length && !rightLines[rightLines.length - 1]) rightLines.pop();
-  const rightSize = titleSize * 0.6;
+  const rightBase = titleSize * 0.6;
+  const rightSize = rightBase * clampScale(file.plan.layout.headerRightScale);
   const rightH = rightLines.length * rightSize * LINE_HEIGHT;
   const headerH = Math.max(titleSize * 1.4, logoH + 1.5, rightH + 1.5);
   const title: TextBlock = { x: W / 2, y: MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.layout.title ?? file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
@@ -516,7 +520,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Som overskriften krymper ikke bunnteksten (legend og dato) når planen skaleres ned
   // for å få plass, ellers blir den uleselig på store planer
   // men har et tak, så forklaringen ikke tar mer plass enn den trenger når planen forstørres
-  const legendSize = Math.min(opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85), LEGEND_MAX_PT * PT_TO_MM);
+  // Egen størrelse (legendScale) gjelder hele forklaringen og datoen, også taket
+  const legendBase = Math.min(opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85), LEGEND_MAX_PT * PT_TO_MM);
+  const legendSize = legendBase * clampScale(file.plan.layout.legendScale);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (opts.showLegend ?? file.plan.options.legend) {
@@ -546,7 +552,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     if (widthAt(size, gap) > room) gap = 3;
     if (widthAt(size, gap) > room) {
       // Aldri mindre enn teksten i selve planen eller minste tekststørrelse
-      const floor = Math.min(legendSize, Math.max(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT, opts.textSizePt * scale) * PT_TO_MM);
+      // Egen størrelse krymper ikke: da går forklaringen heller over flere rader
+      const floor = file.plan.layout.legendScale !== undefined ? legendSize : Math.min(legendSize, Math.max(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT, opts.textSizePt * scale) * PT_TO_MM);
       // Bredden er proporsjonal med størrelsen, bortsett fra de faste mellomrommene
       const fixed = widthAt(0, gap);
       const perSize = (widthAt(legendSize, gap) - fixed) / legendSize;
@@ -727,6 +734,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     textSizePt: opts.textSizePt * scale,
     title,
     headerRight,
+    headerRightBasePt: rightBase / PT_TO_MM,
+    legendBasePt: legendBase / PT_TO_MM,
     headerBottom: MARGIN + headerH,
     subtitle,
     plot: { x0, x1, y0: plotTop, y1: plotBottom },

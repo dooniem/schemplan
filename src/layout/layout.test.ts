@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
 import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, tightestOrder, type Item } from './layout';
-import { approxMeasure, LINE_HEIGHT } from './text';
+import { approxMeasure, LINE_HEIGHT, PT_TO_MM } from './text';
+import { validatePlan } from '../format/validate';
 
 const example = testplan;
 
@@ -602,6 +603,26 @@ describe('omplassering', () => {
       const overlap = fa.x0 < fb.x1 - 1e-6 && fb.x0 < fa.x1 - 1e-6 && fa.y0 < fb.y1 - 1e-6 && fb.y0 < fa.y1 - 1e-6;
       expect(overlap, `${a.id} og ${b.id}`).toBe(false);
     }
+  });
+});
+
+describe('egne størrelser på topptekst og forklaring', () => {
+  it('teksten til høyre og forklaringen følger forholdet, forklaringen og datoen likt', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, style: 'ny' } as const;
+    p.plan.layout.headerRight = 'Rev. A';
+    const A = computeLayout(p, opts, approxMeasure);
+    expect(A.headerRight!.size / PT_TO_MM).toBeCloseTo(A.headerRightBasePt, 6);
+    expect(A.subtitle.size / PT_TO_MM).toBeCloseTo(A.legendBasePt, 6);
+    p.plan.layout.headerRightScale = 1.5;
+    p.plan.layout.legendScale = 0.8;
+    expect(validatePlan(p).errors).toEqual([]);
+    const B = computeLayout(p, opts, approxMeasure);
+    expect(B.headerRight!.size).toBeCloseTo(A.headerRight!.size * 1.5, 6);
+    expect(B.subtitle.size).toBeCloseTo(A.subtitle.size * 0.8, 6);
+    expect(B.legend[0].label.size).toBeLessThanOrEqual(B.subtitle.size + 1e-9);
+    p.plan.layout.legendScale = 3;
+    expect(validatePlan(p).errors.length).toBeGreaterThan(0);
   });
 });
 
