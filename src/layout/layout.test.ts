@@ -574,3 +574,17 @@ describe('omplassering', () => {
     }
   });
 });
+
+describe('forklaringen', () => {
+  it('skjuler fag og bruker egen tekst', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, style: 'ny' } as const;
+    const before = computeLayout(p, opts, approxMeasure).legend;
+    expect(before.some((e) => e.trade === 'Betong')).toBe(true);
+    p.plan.layout.legendItems = { Betong: { hidden: true }, Elektro: { text: 'Strøm' }, '(ferie)': { text: 'Fellesferie' } };
+    const after = computeLayout(p, opts, approxMeasure).legend;
+    expect(after.some((e) => e.trade === 'Betong')).toBe(false);
+    expect(after.find((e) => e.trade === 'Elektro')!.label.lines[0]).toBe('Strøm');
+    expect(after.find((e) => e.symbol === 'holiday')!.label.lines[0]).toBe('Fellesferie');
+  });
+});

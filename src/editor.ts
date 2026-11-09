@@ -4,7 +4,7 @@ import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
-import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -275,7 +275,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
@@ -803,6 +803,49 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       else delete pl.plan.layout.tradeColors;
     });
 
+  /** Oppføring i forklaringen: skjult eller egen tekst. Tomt valg fjernes, så filen holdes ren. */
+  const setLegendItem = (key: string, patch: { hidden?: boolean; text?: string }, typing = false) => {
+    const plan = host.getPlan();
+    if (!plan) return;
+    if (!typing || !typingSession) snapshot();
+    if (typing) typingSession = true;
+    const all = { ...plan.plan.layout.legendItems };
+    const v = { ...all[key], ...patch };
+    if (!v.hidden) delete v.hidden;
+    if (!v.text?.trim()) delete v.text;
+    if (Object.keys(v).length) all[key] = v;
+    else delete all[key];
+    if (Object.keys(all).length) plan.plan.layout.legendItems = all;
+    else delete plan.plan.layout.legendItems;
+    window.clearTimeout(redrawTimer);
+    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else {
+      host.redraw();
+      buildPanel();
+    }
+    syncTools();
+  };
+  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
+  /** Vis eller skjul i forklaringen, og teksten som står der. */
+  const legendSection = (plan: PlanFile, key: string) => {
+    const item = plan.plan.layout.legendItems?.[key] ?? {};
+    const s = section('I forklaringen');
+    const inp = el('input', { type: 'text', id: 'legend-text', 'aria-label': 'Tekst i forklaringen', placeholder: legendName(key), value: item.text ?? '' }) as HTMLInputElement;
+    inp.addEventListener('focus', () => (typingSession = false));
+    inp.addEventListener('input', () => setLegendItem(key, { text: inp.value }, true));
+    inp.addEventListener('blur', () => {
+      typingSession = false;
+      syncTools();
+    });
+    const lab = el('label', { class: 'prop', for: 'legend-text' });
+    lab.append(el('span', { class: 'prop-label' }, 'Tekst'), inp);
+    s.append(
+      switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })),
+      lab,
+      el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'),
+    );
+  };
+
   const buildTradePanel = (plan: PlanFile, trade: string) => {
     const pc = plan.colors.find((c) => c.name === trade)!;
     const own = plan.plan.layout.tradeColors?.[trade];
@@ -825,6 +868,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ),
       el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
     );
+    legendSection(plan, trade);
   };
 
   const buildPanel = () => {
@@ -839,6 +883,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!b && selectedHeader) return buildHeaderPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
+    if (!b && selectedTrade === FERIE_KEY) {
+      panelHead('Ferie', 'Forklaringen nederst');
+      return legendSection(plan, FERIE_KEY);
+    }
     if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
@@ -857,7 +905,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
         ]],
         ['Arket', [
-          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget.',
+          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for å skjule det i forklaringen.',
           'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
         ]],
       ];
@@ -866,6 +914,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         const ul = el('ul', { class: 'tips' });
         tips.forEach((t) => ul.append(el('li', {}, t)));
         s.append(ul);
+      }
+      // Skjulte oppføringer står ikke i forklaringen, så de vises igjen herfra
+      const hiddenLeg = Object.entries(plan.plan.layout.legendItems ?? {}).filter(([, v]) => v.hidden);
+      if (hiddenLeg.length) {
+        const sh = section('Skjult i forklaringen');
+        for (const [key, v] of hiddenLeg) sh.append(lockedRow(v.text?.trim() || legendName(key), 'Vis', 'Vis oppføringen i forklaringen igjen', () => setLegendItem(key, { hidden: false })));
       }
       const keys = section('Hurtigtaster');
       const dl = el('dl', { class: 'keys' });
@@ -1546,6 +1600,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG) return selectTrade(tradeG.getAttribute('data-trade')!);
+    const legG = (e.target as Element | null)?.closest?.('g[data-legend]');
+    if (legG) return selectTrade(legG.getAttribute('data-legend')!);
     if (!g && inHeader(e)) return selectHeader();
     const id = g ? boxAt(e) : null;
     if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(id);
@@ -1643,6 +1699,22 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const p = toMm(e.clientX, e.clientY);
     const L = layoutNow;
+    // Høyreklikk i forklaringen: skjul oppføringen eller endre den
+    const legHit = (e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]');
+    if (plan && legHit) {
+      e.preventDefault();
+      const key = legHit.getAttribute('data-trade') ?? legHit.getAttribute('data-legend')!;
+      const isTrade = key !== FERIE_KEY;
+      ctx.open(e.clientX, e.clientY, legendName(key), [
+        {
+          items: [
+            { label: 'Skjul i forklaringen', icon: 'hide', hint: 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
+            { label: isTrade ? 'Endre tekst og farge' : 'Endre tekst', icon: 'pencil', kbd: 'Klikk', hint: 'Åpner oppføringen i panelet til høyre.', onSelect: () => selectTrade(key) },
+          ],
+        },
+      ], 'Forklaring');
+      return;
+    }
     if (plan && inHeader(e)) {
       e.preventDefault();
       ctx.open(e.clientX, e.clientY, 'Topptekst', [
@@ -1776,6 +1848,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     plan.lanes.forEach((l) => resetLane(l));
     delete plan.plan.layout.tradeColors;
     delete plan.plan.layout.laneTitleScale;
+    delete plan.plan.layout.legendItems;
     host.redraw();
     buildPanel();
     syncTools();
@@ -2003,7 +2076,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
+    owns: (e) => !!itemOf(e) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
     get active() {
       return active;
     },
