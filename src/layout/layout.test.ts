@@ -588,3 +588,33 @@ describe('forklaringen', () => {
     expect(after.find((e) => e.symbol === 'holiday')!.label.lines[0]).toBe('Fellesferie');
   });
 });
+
+describe('rotert tekst', () => {
+  it('brytes i flere linjer når boksen er bred nok, så boksen ikke blir unødig høy', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false } as const;
+    const b = p.lanes[1].boxes[0]; // lang, bred boks
+    b.rotation = 90;
+    b.text = 'Montering av utstyr i generatorrom og kontrollrom';
+    const it = computeLayout(p, opts, approxMeasure).items.find((i) => i.id === b.id) as Extract<Item, { kind: 'box' }>;
+    expect(it.text!.lines.length).toBeGreaterThan(1);
+    // Linjene får plass side om side i boksen
+    expect(it.text!.lines.length * it.text!.size * LINE_HEIGHT).toBeLessThanOrEqual(it.x1 - it.x0);
+  });
+});
+
+describe('rotert tekst og høyde', () => {
+  it('får færre linjer når boksen gjøres høyere', () => {
+    const p = testplan();
+    const opts = { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false } as const;
+    const b = p.lanes[1].boxes[0];
+    b.rotation = 90;
+    b.text = 'Montering av utstyr i generatorrom og kontrollrom';
+    const get = () => computeLayout(p, opts, approxMeasure).items.find((i) => i.id === b.id) as Extract<Item, { kind: 'box' }>;
+    const n0 = get().text!.lines.length;
+    b.height = 30;
+    expect(get().text!.lines.length).toBeLessThan(n0);
+    b.height = 60;
+    expect(get().text!.lines).toEqual([b.text]);
+  });
+});

@@ -3,7 +3,7 @@
 // høyere, og teksten i resten av planen krymper ikke.
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
-import { computeLayout, MAX_TEXT_SCALE, PAD_X, PAD_Y, type BoxItem, type Layout, type LayoutOptions } from './layout';
+import { computeLayout, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 
 /** Tilpasset tekst blir aldri større enn dette, selv om planens tekst er stor. */
@@ -50,8 +50,9 @@ export function textHeightInBox(box: Pick<Box, 'text' | 'rotation' | 'callout'>,
   const raw = parseBoxText(box.text).lines;
   const lh = sizeMm * LINE_HEIGHT;
   if (box.rotation !== 0) {
-    if (raw.length * lh > w - 2 * PAD_X + EPS) return null;
-    return widest(raw, sizeMm, measure) + 2 * PAD_Y + 1;
+    const lines = rotatedLines(raw, w - 2 * PAD_X, sizeMm, measure);
+    if (lines.length * lh > w - 2 * PAD_X + EPS) return null;
+    return widest(lines, sizeMm, measure) + 2 * PAD_Y + 1;
   }
   const inner = Math.max(w - 2 * PAD_X, 0.5);
   const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
