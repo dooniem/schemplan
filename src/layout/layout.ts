@@ -1088,6 +1088,23 @@ function calendarRows(
       if (measure(c.label.slice(0, 1), size) <= w) return { ...c, label: c.label.slice(0, 1) };
       return { ...c, label: '' };
     });
+  // Ukenummer deles aldri. Får de ikke plass, krymper teksten litt, og er kolonnene fortsatt
+  // for smale, skrives bare annenhver eller hver fjerde uke (uke 1 er alltid med).
+  const weekRow = (cells: CalendarRow['cells']) => {
+    const cw = cells.length ? Math.min(...cells.map((c) => c.x1 - c.x0)) - 0.4 : 0;
+    const wide = measure('53', size);
+    const sz = wide <= cw ? size : Math.max(size * 0.7, (size * cw) / wide);
+    const step = [1, 2, 4, 13].find((k) => measure('53', sz) <= cw * k - 0.4) ?? 0;
+    return {
+      size: sz,
+      cells: cells.map((c, i) => {
+        const keep = step && (Number(c.label) - 1) % step === 0;
+        // Ytterst kan et nummer som er bredere enn kolonnen, ikke låne plass fra naboen
+        const edge = (i === 0 || i === cells.length - 1) && measure(c.label, sz) > c.x1 - c.x0 - 0.2;
+        return keep && !edge ? c : { ...c, label: '' };
+      }),
+    };
+  };
 
   const years = fitLabel(group((c) => String(c.year)).map((c, i) => ({ ...c, fill: i % 2 === 0 ? YEAR_A : YEAR_B })));
   const shade = (label: string) => (monthIndex(label) % 2 === 0 ? DARK : LIGHT);
@@ -1106,22 +1123,27 @@ function calendarRows(
         ? [
             {
               // Som i Excel: «Okt 28» over ukene, annenhver måned grå
-              cells: group((c) => `${c.monthLabel}|${c.monthYear}`).map((c) => {
-                const [m, y] = c.label.split('|');
-                const w = c.x1 - c.x0 - 0.6;
-                const label = [`${m} ${y.slice(-2)}`, m, m.slice(0, 1)].find((l) => measure(l, size) <= w) ?? '';
-                return { ...c, label, fill: shade(m) };
-              }),
+              cells: (() => {
+                const cells = group((c) => `${c.monthLabel}|${c.monthYear}`);
+                const fits = (l: string, c: (typeof cells)[number]) => measure(l, size) <= c.x1 - c.x0 - 0.6;
+                const full = (c: (typeof cells)[number]) => c.label.replace('|', ' ').replace(/ \d\d(\d\d)$/, ' $1');
+                // Året står på alle månedene når det får plass, ellers bare på januar og den første
+                const allYears = cells.every((c) => fits(full(c), c));
+                return cells.map((c, i) => {
+                  const m = c.label.split('|')[0];
+                  const tries = allYears || i === 0 || m === 'Jan' ? [full(c), m, m.slice(0, 1)] : [m, m.slice(0, 1)];
+                  return { ...c, label: tries.find((l) => fits(l, c)) ?? '', fill: shade(m) };
+                });
+              })(),
               h: rowH,
               rotate: false,
               size,
             },
             {
               // Oddetallsukene grå
-              cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
+              ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: true, fill: Number(c.label) % 2 === 1 ? MONTH_DARK : MONTH_LIGHT }))),
               h: rowH,
               rotate: false,
-              size,
               dotMonths: true,
             },
           ]
@@ -1135,10 +1157,9 @@ function calendarRows(
           },
           {
             // Ny stil: annenhver uke
-            cells: fitLabel(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
+            ...weekRow(axis.columns.map((c) => ({ x0: c.x0, x1: c.x1, label: c.label, strong: false, fill: Number(c.label) % 2 === 1 ? '#F0F0F0' : '#FFFFFF' }))),
             h: rowH,
             rotate: false,
-            size,
           },
         ];
   const ordered = bottom ? [...rows].reverse() : rows;

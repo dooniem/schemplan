@@ -414,6 +414,22 @@ describe('overskrift, logo og ukeskravering', () => {
     const w1 = weeks.cells.find((c) => c.label === '1')!;
     expect(L.grid.find((g) => Math.abs(g.x - w1.x0) < 1e-6)?.strong).toBe(true);
   });
+  it('lang plan i uker: ukenumrene deles aldri, men vises for annenhver eller hver fjerde uke', () => {
+    for (const style of ['excel', 'ny'] as const) {
+      const p = example();
+      p.plan.calendar = { ...p.plan.calendar, mode: 'week', start: '2027-01-04', end: '2031-12-28' };
+      const L = computeLayout(p, { ...o, style }, approxMeasure);
+      const weeks = L.calendarTop[L.calendarTop.length - 1];
+      const shown = weeks.cells.filter((c) => c.label);
+      expect(shown.length, style).toBeGreaterThan(weeks.cells.length / 5);
+      expect(shown.some((c) => c.label === '1'), style).toBe(true);
+      for (const c of shown) expect(Number(c.label) >= 1 && Number(c.label) <= 53, `${style} ${c.label}`).toBe(true);
+      // Ingen avkuttede numre: hvert synlig nummer følger forrige uke med riktig avstand
+      const nums = weeks.cells.map((c) => c.label);
+      const idx = nums.map((l, i) => (l ? i : -1)).filter((i) => i >= 0);
+      for (let k = 1; k < idx.length; k++) expect(idx[k] - idx[k - 1], style).toBeLessThanOrEqual(4);
+    }
+  });
   it('valget måned eller uke i appen går foran planen, men ikke foran utkikken', () => {
     const p = example();
     p.plan.calendar.mode = 'month';
