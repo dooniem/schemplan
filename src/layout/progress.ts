@@ -83,7 +83,7 @@ function doneThrough(task: Task, clock: WorkClock): { w: number; started: boolea
  */
 export function frontPoints(file: PlanFile, status: StatusMoment, opts: FrontOptions): FrontPoint[] {
   const tasks = new Map(file.tasks.map((t) => [t.uid, t]));
-  const boxes = file.lanes.filter((l) => l.shown && !l.hidden).flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && !b.header && b.taskIds.length && b.resolved && !b.resolved.isMilestone));
+  const boxes = file.lanes.filter((l) => l.shown && !l.hidden).flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && !b.header && b.spanTo === undefined && b.taskIds.length && b.resolved && !b.resolved.isMilestone));
   if (!boxes.length) return [];
   const all = boxes.map((b) => b.resolved!);
   const lo = Math.min(status.t, ...all.map((r) => parseIso(r.start)));

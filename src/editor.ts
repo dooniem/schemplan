@@ -60,7 +60,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.milestoneStyle || b.textScale);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.milestoneStyle || b.textScale);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -78,6 +78,7 @@ export function resetBox(b: Box): void {
   delete b.top;
   delete b.hidden;
   delete b.header;
+  delete b.spanTo;
   delete b.milestoneStyle;
   delete b.textScale;
 }
@@ -380,10 +381,34 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         return;
       }
       b.header = true;
+      delete b.spanTo;
       if (L && it?.kind === 'box' && ln) {
         if (b.top === undefined) b.top = lines(it.y - ln.top, L.unit);
         b.height = Math.max(b.height ?? 0, lines(it.h, L.unit) + 2);
       }
+    });
+  };
+
+  /** Synlige lanes fra boksens egen og nedover. */
+  const lanesFrom = (pl: PlanFile, id: string) => {
+    const vis = pl.lanes.filter((l) => l.shown && !l.hidden);
+    const at = vis.findIndex((l) => l.boxes.some((x) => x.id === id));
+    return at < 0 ? [] : vis.slice(at);
+  };
+  /** Gjør boksen til Multi Lane-boks: den går ned til bunnen av lanen under (eller sin egen, når den er nederst). */
+  const setSpan = (id: string, on: boolean | string) => {
+    commit((pl) => {
+      const b = findBox(pl, id);
+      if (!b) return;
+      if (on === false) {
+        delete b.spanTo;
+        return;
+      }
+      const below = lanesFrom(pl, id);
+      b.spanTo = typeof on === 'string' ? on : (below[1] ?? below[0])?.id;
+      if (b.spanTo === undefined) delete b.spanTo;
+      delete b.header;
+      delete b.height;
     });
   };
 
@@ -1194,9 +1219,28 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
       const sf = section('Form');
       sf.append(
-        segmented('Type', b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskrift']], (v) => setHeader(b.id, v === 'header')),
+        segmented('Type', b.spanTo !== undefined ? 'span' : b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskrift'], ['span', 'Multi Lane']], (v) => {
+          if (v === 'span') return setSpan(b.id, true);
+          if (b.spanTo !== undefined) setSpan(b.id, false);
+          if (v === 'header' || b.header) setHeader(b.id, v === 'header');
+        }),
       );
+      // Tre valg trenger hele bredden, så navnet står over knappene
+      sf.lastElementChild!.classList.replace('prop-inline', 'prop');
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
+      if (b.spanTo !== undefined && plan) {
+        const wrap = el('label', { class: 'prop prop-inline' });
+        wrap.append(el('span', { class: 'prop-label' }, 'Ned til'));
+        const sel = el('select', { id: 'span-to', 'aria-label': 'Boksen går ned til bunnen av denne lanen' }) as HTMLSelectElement;
+        for (const l of lanesFrom(plan, b.id)) {
+          const o = el('option', { value: l.id }, plain(l.name) || 'Uten navn') as HTMLOptionElement;
+          o.selected = l.id === b.spanTo;
+          sel.append(o);
+        }
+        sel.addEventListener('change', () => setSpan(b.id, sel.value));
+        wrap.append(sel);
+        sf.append(wrap, el('p', { class: 'hint' }, 'Boksen går ned til bunnen av lanen du velger, uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å velge lane.'));
+      }
       sf.append(
         segmented<Rotation>('Rotasjon', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
           change((x) => {
@@ -1393,7 +1437,35 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
 
+  /** Multi Lane-boks: bunnen dras til en lane, og boksen går ned til bunnen av den. */
+  const startSpanResize = (it: BoxItem): Drag | null => {
+    const L = layoutNow;
+    const home = laneAt(it.y);
+    if (!L || !home) return null;
+    const pad = home.top - home.y0;
+    const below = L.lanes.slice(L.lanes.indexOf(home));
+    const g = ghostLayer();
+    const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+    let to = below.find((l) => it.y + it.h <= l.y1 + 1e-6) ?? home;
+    const start = to;
+    return {
+      startY: it.y + it.h,
+      startClient: 0,
+      moved: false,
+      move(dy) {
+        const y = it.y + it.h + dy;
+        to = below.find((l) => y < l.y1) ?? below[below.length - 1];
+        set(r, { height: to.y1 - pad - it.y });
+      },
+      end() {
+        g.remove();
+        if (to !== start) setSpan(it.id, to.id);
+      },
+    };
+  };
+
   const startBoxResize = (it: BoxItem): Drag | null => {
+    if (it.span) return startSpanResize(it);
     const lane = laneAt(it.y);
     if (!lane || !layoutNow) return null;
     const unit = layoutNow.unit;
@@ -1445,7 +1517,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     let y = r.y0;
     let snap: ReturnType<typeof snapper> | null = null;
     const kidItems = () =>
-      it.kind === 'box' && it.header
+      it.kind === 'box' && it.header && !it.span
         ? L.items.filter((o) => {
             if (o === it) return false;
             const q = bounds(o);
@@ -1910,7 +1982,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         {
           items: ms
             ? []
-            : [{ label: 'Overskriftsboks', icon: 'header', checked: !!box.header, hint: 'Teksten øverst, og andre bokser kan ligge inne i boksen.', onSelect: () => setHeader(id, !box.header) }],
+            : [
+                { label: 'Overskriftsboks', icon: 'header', checked: !!box.header, hint: 'Teksten øverst, og andre bokser kan ligge inne i boksen.', onSelect: () => setHeader(id, !box.header) },
+                { label: 'Multi Lane-boks', icon: 'span', checked: box.spanTo !== undefined, hint: 'Går ned over lanen under uten å gjøre lanene høyere. Velg hvor langt i panelet, eller dra i streken nederst.', onSelect: () => setSpan(id, box.spanTo === undefined) },
+              ],
         },
         {
           items: [

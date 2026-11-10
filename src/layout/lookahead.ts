@@ -112,7 +112,7 @@ export function applyLookahead(file: PlanFile, rule: Lookahead, today: string, s
   const visible = (b: PlanFile['lanes'][number]['boxes'][number]) => b.shown && !b.hidden && overlaps(b.resolved, s, e);
   const anyVisible = file.lanes.some((l) => l.shown && !l.hidden && l.boxes.some(visible));
   const lanes = file.lanes.map((lane) => {
-    const keepPins = lane.boxes.some((b) => b.header && visible(b));
+    const keepPins = lane.boxes.some((b) => (b.header || b.spanTo !== undefined) && visible(b));
     const boxes = keepPins ? lane.boxes : lane.boxes.map((b) => (b.top === undefined ? b : (({ top: _t, ...rest }) => rest)(b)));
     const empty = !lane.boxes.some(visible);
     const { height: _h, ...rest } = lane;

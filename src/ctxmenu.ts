@@ -7,6 +7,7 @@ const NS = 'http://www.w3.org/2000/svg';
 /** Ikoner tegnet på et 24×24-rutenett med samme strek. */
 const ICONS = {
   header: 'M4 5h16v14H4z M4 9.5h16',
+  span: 'M4 4h16 M4 12h16 M4 20h16 M8 7v10 M8 7h5v10H8',
   copy: 'M9 9h10v10H9z M5 15V5h10',
   hide: 'M3 3l18 18 M10.6 6.1Q11.3 6 12 6c5 0 9 6 9 6a16 16 0 0 1-2.6 3.2 M6.5 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.7 8.7 0 0 0 4.4-1.2',
   show: 'M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
