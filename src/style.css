@@ -78,6 +78,7 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .tb:has(input:disabled):hover { background: none; border-color: transparent; }
 .tb:focus-visible, .tb:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tb.icon { width: 28px; padding: 0; justify-content: center; font-size: 16px; }
+.tb[hidden] { display: none; }
 .tb.primary { color: var(--accent); font-weight: 600; border-color: var(--accent); }
 .tb.menu::after { content: ''; width: 0; height: 0; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; margin-left: 2px; }
 .tb[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
