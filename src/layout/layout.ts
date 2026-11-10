@@ -222,8 +222,8 @@ export interface Layout {
   status: StatusMark | null;
 }
 
-const MARGIN = 8;
-/** Toppen er smalere enn sidene og bunnen, så logo og overskrift står nærmere arkets kant. Skrivere klarer 5 mm. */
+const MARGIN = 6;
+/** Toppen er litt smalere enn sidene og bunnen, så logo og overskrift står nærmere arkets kant. Skrivere klarer 5 mm. */
 const TOP_MARGIN = 5;
 export const PAD_X = 0.7;
 export const PAD_Y = 0.25; // Excel har lite luft over og under teksten

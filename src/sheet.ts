@@ -29,7 +29,7 @@ export interface Margins {
   left: number;
 }
 
-export const DEFAULT_MARGINS: Margins = { top: 8, right: 8, bottom: 8, left: 8 };
+export const DEFAULT_MARGINS: Margins = { top: 5, right: 6, bottom: 6, left: 6 };
 
 /** Området planen kan tegnes i, innenfor margene. */
 export function printableArea(size: SheetSize, m: Margins = DEFAULT_MARGINS): SheetSize {
