@@ -1476,7 +1476,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const maxBottom = below[below.length - 1].y1 - pad;
     const g = ghostLayer();
     const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
-    const line = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 1.5, 'stroke-dasharray': '5 3', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    // Snapping til lanebunnen vises annerledes enn snapping til bokser: lanen tones, og en heltrukken
+    // strek legger seg på skillelinjen mellom lanene
+    const tint = shape(g, 'rect', { x: L.laneTitleX, y: 0, width: L.plot.x1 - L.laneTitleX, height: 0, fill: ACCENT, 'fill-opacity': 0.08, visibility: 'hidden' });
+    const line = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 3, 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
     const snap = snapper(g, new Set([it.id]));
     // Lanebunnene trekker litt sterkere enn kantene på andre bokser: omtrent ti skjermpunkter
     const laneTol = () => Math.abs(toMm(0, 10).y - toMm(0, 0).y) || 1.5;
@@ -1496,11 +1499,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           filled = near;
           bottom = near.y1 - pad;
         } else {
-          const hit = snap.find([want]);
+          // Kanter like ved en lanebunn (som toppen av boksene i lanen under) snapper ikke, så de ikke forveksles
+          const found = snap.find([want]);
+          const hit = found && below.some((l) => Math.abs(found.y - (l.y1 - pad)) < 2 * t) ? null : found;
           bottom = hit ? clamp(want + hit.d, minBottom, maxBottom) : clamp(it.y + Math.round((want - it.y) / (unit / 4)) * (unit / 4), minBottom, maxBottom);
           if (hit && Math.abs(bottom - hit.y) < 1e-6) snap.show(hit);
         }
-        set(line, { y1: bottom, y2: bottom, visibility: filled ? 'visible' : 'hidden' });
+        set(line, { y1: filled?.y1 ?? 0, y2: filled?.y1 ?? 0, visibility: filled ? 'visible' : 'hidden' });
+        set(tint, filled ? { y: filled.y0, height: filled.y1 - filled.y0, visibility: 'visible' } : { visibility: 'hidden' });
         set(r, { height: bottom - it.y });
       },
       end() {
