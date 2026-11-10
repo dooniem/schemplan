@@ -164,7 +164,9 @@ export function renderPlan(L: Layout): SVGSVGElement {
         node('path', { d, fill: 'none', stroke: LEADER, 'stroke-width': 0.3 }, g);
         const cb = it.callout.box;
         const bx = pts[pts.length - 2];
-        node('line', { x1: bx, x2: bx, y1: cb.y, y2: cb.y + Math.max(cb.h, it.h), stroke: LEADER, 'stroke-width': 0.35 }, g);
+        const by = pts[pts.length - 1];
+        // Streken følger callout-teksten, og når alltid ned eller opp til lederen, også når boksen er høyere
+        node('line', { x1: bx, x2: bx, y1: Math.min(cb.y, by), y2: Math.max(cb.y + cb.h, by), stroke: LEADER, 'stroke-width': 0.35 }, g);
       }
     } else {
       const s = it.size / 2;
