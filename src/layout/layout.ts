@@ -422,7 +422,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Overskriften har fast størrelse, som i Excel uten «Skaler med dokument»
   const titleSize = (opts.titleSizePt ?? DEFAULT_TITLE_PT) * PT_TO_MM;
   const lg = file.plan.layout.logo;
-  const logoH = lg ? Math.max(titleSize * 1.2, 6) : 0;
+  // Logoen har fast standardhøyde (som ved 16 pt overskrift), så større overskrift ikke gir større logo
+  const logoH = lg ? Math.max(DEFAULT_TITLE_PT * PT_TO_MM * 1.2, 6) * clampScale(file.plan.layout.logoScale) : 0;
   // Toppteksten til høyre: litt mindre enn overskriften, midtstilt i høyden i toppfeltet
   const rightLines = (file.plan.layout.headerRight ?? '').split('|').map((s) => s.trim());
   while (rightLines.length && !rightLines[rightLines.length - 1]) rightLines.pop();

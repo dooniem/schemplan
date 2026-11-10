@@ -61,6 +61,8 @@ export interface PlanSettings {
     calendarMode?: 'month' | 'week';
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
+    /** Logoens høyde i forhold til standard. Uavhengig av overskriften. */
+    logoScale?: number;
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
     /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */

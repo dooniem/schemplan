@@ -306,7 +306,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
@@ -593,9 +593,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     scaleNow: number | undefined,
     planPt: number,
     set: (s: number | undefined) => void,
-    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string; std?: string } = {},
+    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string; std?: string; unit?: string; step?: number; what?: string } = {},
   ) => {
-    const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen' } = o;
+    const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen', unit = 'pt', step = 0.5, what = 'tekst' } = o;
     const cur = planPt * (scaleNow ?? def);
     const lo = planPt * MIN_TEXT_SCALE;
     const hi = planPt * MAX_TEXT_SCALE;
@@ -606,16 +606,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
     const wrap = el('div', { class: 'prop prop-inline' });
     wrap.append(el('span', { class: 'prop-label' }, 'Størrelse'));
-    const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': 'Tekststørrelse' });
-    const down = el('button', { type: 'button', 'aria-label': 'Mindre tekst', title: 'Mindre tekst' }, '−') as HTMLButtonElement;
-    const up = el('button', { type: 'button', 'aria-label': 'Større tekst', title: 'Større tekst' }, '+') as HTMLButtonElement;
-    const val = el('output', { class: 'step-val', 'aria-live': 'polite' }, `${fmt(cur)} pt`);
-    // Neste halve punkt opp eller ned, så størrelsene blir runde tall
+    const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': what === 'tekst' ? 'Tekststørrelse' : 'Størrelse' });
+    const down = el('button', { type: 'button', 'aria-label': `Mindre ${what}`, title: `Mindre ${what}` }, '−') as HTMLButtonElement;
+    const up = el('button', { type: 'button', 'aria-label': `Større ${what}`, title: `Større ${what}` }, '+') as HTMLButtonElement;
+    const val = el('output', { class: 'step-val', 'aria-live': 'polite' }, `${fmt(cur)} ${unit}`);
+    // Neste hele steg opp eller ned (halve punkter for tekst), så størrelsene blir runde tall
     down.disabled = cur <= lo + 1e-3;
     up.disabled = cur >= hi - 1e-3;
     // Planens størrelse er også et stopp, så teksten kan gjøres like stor som i resten av planen
-    const downTo = Math.max(lo, Math.ceil(cur * 2 - 1e-3) / 2 - 0.5);
-    const upTo = Math.min(hi, Math.floor(cur * 2 + 1e-3) / 2 + 0.5);
+    const downTo = Math.max(lo, Math.ceil(cur / step - 1e-3) * step - step);
+    const upTo = Math.min(hi, Math.floor(cur / step + 1e-3) * step + step);
     down.addEventListener('click', () => setPt(planPt < cur - 1e-3 && planPt > downTo + 1e-3 ? planPt : downTo));
     up.addEventListener('click', () => setPt(planPt > cur + 1e-3 && planPt < upTo - 1e-3 ? planPt : upTo));
     g.append(down, val, up);
@@ -697,7 +697,19 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           }, false), { std: `standard er ${layoutNow.headerRightBasePt.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt, 0,6 × overskriften`, resetLabel: 'Standard', resetTitle: 'Standardstørrelsen, i forhold til overskriften' }),
       );
     }
-  };
+      if (lay.logo) {
+      // Logoen har egen størrelse, uavhengig av overskriften
+      const s3 = section('Logo');
+      s3.append(
+        ...sizeStepper(lay.logoScale, 100, (v) =>
+          changeHeader((l) => {
+            if (v === undefined) delete l.logoScale;
+            else l.logoScale = v;
+          }, false), { unit: '%', step: 10, what: 'logo', note: 'Egen størrelse', std: 'standard er 100 %', resetLabel: 'Standard', resetTitle: 'Standardstørrelsen på logoen' }),
+        el('p', { class: 'hint' }, 'Øverst til venstre. Bytt eller fjern logoen i Innstillinger.'),
+      );
+    }
+};
 
   const buildLanePanel = (plan: PlanFile, l: Lane) => {
     panelHead('Lane', l.manual ? 'Laget i appen, følger ikke Project' : undefined);
@@ -2001,6 +2013,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     delete plan.plan.layout.legendItems;
     delete plan.plan.layout.headerRightScale;
     delete plan.plan.layout.legendScale;
+    delete plan.plan.layout.logoScale;
     host.redraw();
     buildPanel();
     syncTools();
