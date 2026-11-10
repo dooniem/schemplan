@@ -1325,7 +1325,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }
       if (showMarks && b && isEdited(b)) {
         const c = document.createElementNS(NS, 'circle');
-        for (const [k, v] of Object.entries({ cx: r.x1, cy: r.y0, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
+        // Prikken står i boksens øvre høyre hjørne, også når teksten står i callout ved siden av
+        const at = it.kind === 'box' ? { cx: it.x1, cy: it.y } : { cx: r.x1, cy: r.y0 };
+        for (const [k, v] of Object.entries({ ...at, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
         g.append(c);
       }
     }
