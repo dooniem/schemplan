@@ -207,6 +207,8 @@ export interface Box {
    * dens egen. Den gjør ingen lane høyere, tegnes bak de andre boksene, og andre bokser kan ligge inni.
    */
   spanTo?: string;
+  /** Multi Lane-boks: bunnen står så langt ned i lanen `spanTo`, i tekstlinjer fra toppen. Uten går den til bunnen av lanen. */
+  spanEnd?: number;
   /** Multi Lane-boks: teksten midt i boksen i stedet for øverst (valgfritt). */
   textMiddle?: boolean;
   /** Fet tekst i overskrifts- og Multi Lane-bokser (valgfritt). */

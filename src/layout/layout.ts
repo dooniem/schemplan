@@ -665,7 +665,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       const want = fileIndex.get(box?.spanTo ?? '') ?? -1;
       let j = i;
       while (j + 1 < lanes.length && (fileIndex.get(lanes[j + 1].id) ?? Infinity) <= want) j++;
-      const bottom = laneLayouts[j].y1 - LANE_PAD;
+      // Egen bunn inne i lanen gjelder bare når boksen faktisk går til den lanen, og aldri under lanens bunn
+      const end = lanes[j].id === box?.spanTo && box.spanEnd !== undefined ? laneLayouts[j].top + box.spanEnd * lh : Infinity;
+      const bottom = Math.min(end, laneLayouts[j].y1 - LANE_PAD);
       const textH = p.item.h;
       p.item.h = Math.max(p.item.h, bottom - p.item.y);
       if (box?.textMiddle && p.item.text) p.item.text.y += (p.item.h - textH) / 2;
@@ -963,7 +965,7 @@ function buildPieces(
     if (p.item.kind !== 'box') continue;
     if (box.spanTo !== undefined) {
       // Multi Lane-boks: bare tekstfeltet øverst tar plass i lanen. Høyden settes når lanene er lagt ut.
-      Object.assign(p.item as BoxItem, { header: true, span: true });
+      Object.assign(p.item as BoxItem, { header: true, span: true, minH: p.item.h });
       // Tekst i midten: da holdes bare kanten øverst av, og teksten flyttes når høyden er kjent
       if (box.textMiddle) p.h = PAD_Y * 2;
       continue;
