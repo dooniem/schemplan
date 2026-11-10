@@ -377,6 +377,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .prop-inline { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
 #panel textarea, #panel input[type='text'] { display: block; width: 100%; font: inherit; font-size: 13px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
 #panel textarea:focus-visible, #panel input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+#panel select { width: 100%; min-width: 0; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+#panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .hint { font-size: 11.5px; line-height: 1.4; color: var(--muted); margin: 0; }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 5px; }
 .swatch { width: 22px; height: 22px; border: 1px solid rgb(0 0 0 / 0.2); border-radius: 5px; cursor: pointer; padding: 0; }

@@ -202,6 +202,11 @@ export interface Box {
   fromLane?: string;
   /** Overskriftsboks (valgfritt): teksten står øverst, og andre bokser kan ligge inne i den. */
   header?: boolean;
+  /**
+   * Multi Lane-boks (valgfritt): boksen strekker seg ned til bunnen av denne lanen (id), som kan være
+   * dens egen. Den gjør ingen lane høyere, tegnes bak de andre boksene, og andre bokser kan ligge inni.
+   */
+  spanTo?: string;
   /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>>;
   /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */

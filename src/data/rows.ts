@@ -10,7 +10,7 @@ export interface DataRow {
   start: string;
   finish: string;
   trade: string;
-  type: 'Boks' | 'Milepæl' | 'Overskriftsboks';
+  type: 'Boks' | 'Milepæl' | 'Overskriftsboks' | 'Multi Lane-boks';
   source: 'Project' | 'Appen';
   edited: boolean;
   /** Hva som er endret i appen, med vanlige ord. */
@@ -50,6 +50,7 @@ function changesOf(b: Box): string[] {
   if (b.top !== undefined) c.push('plass i lanen');
   if (b.fromLane) c.push('flyttet');
   if (b.header) c.push('overskriftsboks');
+  if (b.spanTo !== undefined) c.push('multi lane-boks');
   if (b.milestoneStyle) c.push('milepælsutseende');
   if (b.hidden) c.push('skjult');
   return c;
@@ -76,7 +77,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         start: r ? (ms ? r.finish : r.start) : '',
         finish: r?.finish ?? '',
         trade: !r || r.trade === '(none)' ? '' : r.trade,
-        type: ms ? 'Milepæl' : b.header ? 'Overskriftsboks' : 'Boks',
+        type: ms ? 'Milepæl' : b.spanTo !== undefined ? 'Multi Lane-boks' : b.header ? 'Overskriftsboks' : 'Boks',
         source: b.manual ? 'Appen' : 'Project',
         edited: changes.length > 0 || !!l.hidden,
         changes: l.hidden ? [...changes, 'lanen er skjult'] : changes,

@@ -692,3 +692,48 @@ describe('rotert tekst og høyde', () => {
     expect(get().text!.lines).toEqual([b.text]);
   });
 });
+
+describe('Multi Lane-boks', () => {
+  const o = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
+  const setup = () => {
+    const p = example();
+    const vis = p.lanes.filter((l) => l.shown && !l.hidden);
+    const lane = vis.find((l) => l.boxes.some((b) => b.shown && !b.resolved?.isMilestone))!;
+    const box = lane.boxes.find((b) => b.shown && !b.resolved?.isMilestone)!;
+    const at = vis.indexOf(lane);
+    return { p, vis, lane, box, at };
+  };
+  it('går ned til bunnen av valgt lane uten å gjøre noen lane høyere', () => {
+    const { p, vis, box, at } = setup();
+    const before = computeLayout(p, o, approxMeasure);
+    const target = vis[Math.min(at + 2, vis.length - 1)];
+    box.spanTo = target.id;
+    const L = computeLayout(p, o, approxMeasure);
+    L.lanes.forEach((l, i) => expect(l.y1 - l.y0).toBeCloseTo(before.lanes[i].y1 - before.lanes[i].y0, 6));
+    const it = L.items.find((i) => i.id === box.id)!;
+    expect(it.kind).toBe('box');
+    const tl = L.lanes.find((l) => l.id === target.id)!;
+    if (it.kind === 'box') {
+      expect(it.span).toBe(true);
+      expect(it.callout).toBeNull();
+      expect(it.y + it.h).toBeCloseTo(tl.y1 - (tl.top - tl.y0), 5);
+    }
+    // Tegnes først, bak alle andre bokser
+    expect(L.items[0].id).toBe(box.id);
+  });
+  it('skjult eller ukjent lane gir boksens egen lane som bunn', () => {
+    const { p, box, lane } = setup();
+    box.spanTo = 'finnes-ikke';
+    const L = computeLayout(p, o, approxMeasure);
+    const it = L.items.find((i) => i.id === box.id)!;
+    const ll = L.lanes.find((l) => l.id === lane.id)!;
+    if (it.kind === 'box') expect(it.y + it.h).toBeCloseTo(ll.y1 - (ll.top - ll.y0), 5);
+  });
+  it('spanTo godtas av valideringen og må være tekst', () => {
+    const { p, box } = setup();
+    box.spanTo = p.lanes[0].id;
+    expect(validatePlan(JSON.parse(JSON.stringify(p))).errors).toEqual([]);
+    (box as unknown as { spanTo: number }).spanTo = 3;
+    expect(validatePlan(JSON.parse(JSON.stringify(p))).errors.length).toBeGreaterThan(0);
+  });
+});

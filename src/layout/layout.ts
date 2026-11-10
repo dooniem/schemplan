@@ -104,6 +104,8 @@ export interface BoxItem {
   minH?: number;
   /** Overskriftsboks: tegnes bak de andre, og andre bokser kan ligge inne i den. */
   header?: boolean;
+  /** Multi Lane-boks: går ned til bunnen av en lane lenger ned, uten å gjøre noen lane høyere. */
+  span?: boolean;
 }
 
 export interface MilestoneItem {
@@ -653,8 +655,22 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     });
     y += h;
   });
-  // Overskriftsbokser tegnes først, så boksene inne i dem ligger oppå
-  const isHeader = (i: Item) => (i.kind === 'box' && i.header ? 0 : 1);
+  // Multi Lane-bokser går ned til bunnen av lanen de er satt til. Er den lanen skjult eller ligger
+  // over boksen, brukes den nærmeste synlige lanen før den (minst boksens egen).
+  const fileIndex = new Map(file.lanes.map((l, k) => [l.id, k]));
+  lanes.forEach((lane, i) => {
+    for (const p of lanePieces[i]) {
+      if (p.item.kind !== 'box' || !p.item.span) continue;
+      const box = lane.boxes.find((b) => b.id === p.item.id);
+      const want = fileIndex.get(box?.spanTo ?? '') ?? -1;
+      let j = i;
+      while (j + 1 < lanes.length && (fileIndex.get(lanes[j + 1].id) ?? Infinity) <= want) j++;
+      const bottom = laneLayouts[j].y1 - LANE_PAD;
+      p.item.h = Math.max(p.item.h, bottom - p.item.y);
+    }
+  });
+  // Multi Lane-bokser tegnes aller først, så overskriftsbokser, så boksene inne i dem ligger oppå
+  const isHeader = (i: Item) => (i.kind !== 'box' ? 2 : i.span ? 0 : i.header ? 1 : 2);
   items.sort((a, b) => isHeader(a) - isHeader(b));
   const plotBottom = y;
 
@@ -866,8 +882,8 @@ function buildPieces(
     // Brukerens valg går foran forslaget. "*" først i teksten (fra Excel) betyr callout.
     const choice = box.callout ?? 'auto';
     // Overskriftsboks: teksten står alltid øverst i boksen, aldri i callout
-    let useCallout = !box.header && (choice === 'on' || (choice === 'auto' && forcedCallout));
-    const neverCallout = choice === 'off' || !!box.header;
+    let useCallout = !box.header && box.spanTo === undefined && (choice === 'on' || (choice === 'auto' && forcedCallout));
+    const neverCallout = choice === 'off' || !!box.header || box.spanTo !== undefined;
     let lines: string[] = [];
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
@@ -941,6 +957,11 @@ function buildPieces(
     if (!box) continue;
     if (box.top !== undefined) p.lock = box.top * lh;
     if (p.item.kind !== 'box') continue;
+    if (box.spanTo !== undefined) {
+      // Multi Lane-boks: bare tekstfeltet øverst tar plass i lanen. Høyden settes når lanene er lagt ut.
+      Object.assign(p.item as BoxItem, { header: true, span: true });
+      continue;
+    }
     if (box.header) {
       (p.item as BoxItem).header = true;
       // Uten tekst stenger bare kanten øverst
