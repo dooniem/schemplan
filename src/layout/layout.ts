@@ -708,7 +708,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const subtitle: TextBlock = {
     x: x1,
     y: legendTop + legendSizeMm * 1.1 * 0.8,
-    lines: [formatLong(file.exportedAt.slice(0, 10))],
+    lines: [formatLong(planDate(file))],
     size: legendSizeMm,
     color: '#000000',
     anchor: 'end',
@@ -1335,6 +1335,13 @@ function statusMark(
     front = { points: path.points, labels };
   }
   return { x, y0: tag ? tag.y : y0, y1, width: style.width, color: style.color, tag, front };
+}
+
+/** Datoen nederst til høyre: den nyeste av eksporten fra Project og siste endring i appen. */
+export function planDate(file: PlanFile): string {
+  const exported = file.exportedAt.slice(0, 10);
+  const edited = file.plan.layout.editedAt;
+  return edited && edited > exported ? edited : exported;
 }
 
 function formatLong(iso: string): string {
