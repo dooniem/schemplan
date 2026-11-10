@@ -1,4 +1,5 @@
 import './style.css';
+import { fileTitle, lastPart } from './filename';
 import { checkOutboundBlocked } from './csp';
 import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
@@ -500,7 +501,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   info.replaceChildren();
   plan = p;
   applyLayout(p);
-  baseName = name.replace(/\.(pdf|json)$/i, '').replace(/_(arbeidsfil|kompakt)$/i, '') || 'skjematisk-plan';
+  baseName = fileTitle(name);
   const s = summarize(p);
   const line = `${name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
     `${fmtDate(s.start)} til ${fmtDate(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
@@ -908,7 +909,8 @@ async function openFromAddress() {
   const data = params.get('plan');
   if (!data) return;
   history.replaceState(null, '', location.pathname); // også ?t=…, som bare tvinger fram ny henting av appen
-  const name = params.get('navn') || 'Plan fra Project.json';
+  // Navnet kan være hele adressen til Project-filen (for eksempel i SharePoint); bare filnavnet brukes
+  const name = lastPart(params.get('navn') ?? '') || 'Plan fra Project.json';
   try {
     const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
     const packed = Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
