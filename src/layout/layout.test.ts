@@ -420,6 +420,14 @@ describe('overskrift, logo og ukeskravering', () => {
     expect(L.logo!.w / L.logo!.h).toBeCloseTo(4);
     expect(L.logo!.y + L.logo!.h).toBeLessThan(L.plot.y0);
   });
+  it('logoens høyde følger egen størrelse, ikke overskriften', () => {
+    const p = example();
+    p.plan.layout.logo = { data: 'data:image/png;base64,AAAA', aspect: 4 };
+    const base = computeLayout(p, o, approxMeasure).logo!.h;
+    expect(computeLayout(p, { ...o, titleSizePt: 24 }, approxMeasure).logo!.h).toBeCloseTo(base);
+    p.plan.layout.logoScale = 1.5;
+    expect(computeLayout(p, o, approxMeasure).logo!.h).toBeCloseTo(base * 1.5);
+  });
   it('ny stil i ukesvisning: skraveringen følger annenhver uke', () => {
     const p = example();
     p.plan.calendar.mode = 'week';
