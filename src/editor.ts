@@ -6,6 +6,7 @@ import { CRITICAL_DEFAULT } from './layout/critical';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
+import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -321,6 +322,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (past.length > MAX_HISTORY) past.shift();
     future = [];
     dirty = true;
+    // Datoen nederst på planen blir dagen den sist ble endret
+    plan.plan.layout.editedAt = todayIso();
   };
 
   const change = (fn: (b: Box) => void, opts: { typing?: boolean; rebuild?: boolean } = {}) => {

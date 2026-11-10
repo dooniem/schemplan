@@ -77,6 +77,8 @@ export interface PlanSettings {
     headerRightScale?: number;
     /** Forklaringen og datoen nederst i forhold til standardstørrelsen. Lik for alle oppføringer. */
     legendScale?: number;
+    /** Dagen planen sist ble endret i appen (YYYY-MM-DD). Datoen nederst er den nyeste av denne og eksporten. */
+    editedAt?: string;
   };
   options: {
     legend: boolean;

@@ -222,7 +222,9 @@ export interface Layout {
   status: StatusMark | null;
 }
 
-const MARGIN = 8;
+const MARGIN = 6;
+/** Toppen er litt smalere enn sidene og bunnen, så logo og overskrift står nærmere arkets kant. Skrivere klarer 5 mm. */
+const TOP_MARGIN = 5;
 export const PAD_X = 0.7;
 export const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
@@ -428,11 +430,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const rightSize = rightBase * clampScale(file.plan.layout.headerRightScale);
   const rightH = rightLines.length * rightSize * LINE_HEIGHT;
   const headerH = Math.max(titleSize * 1.4, logoH + 1.5, rightH + 1.5);
-  const title: TextBlock = { x: W / 2, y: MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.layout.title ?? file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
+  const title: TextBlock = { x: W / 2, y: TOP_MARGIN + headerH / 2 + titleSize * 0.35, lines: [file.plan.layout.title ?? file.plan.title], size: titleSize, color: '#000000', anchor: 'middle', bold: true };
   const headerRight: TextBlock | undefined = rightLines.length
-    ? { x: W - MARGIN, y: MARGIN + (headerH - rightH) / 2 + rightSize * 0.9, lines: rightLines, size: rightSize, color: '#000000', anchor: 'end' }
+    ? { x: W - MARGIN, y: TOP_MARGIN + (headerH - rightH) / 2 + rightSize * 0.9, lines: rightLines, size: rightSize, color: '#000000', anchor: 'end' }
     : undefined;
-  const logo = lg ? { x: MARGIN, y: MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
+  const logo = lg ? { x: MARGIN, y: TOP_MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
 
   // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
@@ -610,7 +612,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     return d >= axis.start && d < axis.end;
   })();
   const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
-  const plotTop = MARGIN + headerH + statusH + calH;
+  const plotTop = TOP_MARGIN + headerH + statusH + calH;
   const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
   const avail = H - plotTop - fixedBottom;
   const natural = contentH.reduce((a, b) => a + b, 0);
@@ -706,7 +708,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const subtitle: TextBlock = {
     x: x1,
     y: legendTop + legendSizeMm * 1.1 * 0.8,
-    lines: [formatLong(file.exportedAt.slice(0, 10))],
+    lines: [formatLong(planDate(file))],
     size: legendSizeMm,
     color: '#000000',
     anchor: 'end',
@@ -736,7 +738,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     headerRight,
     headerRightBasePt: rightBase / PT_TO_MM,
     legendBasePt: legendBase / PT_TO_MM,
-    headerBottom: MARGIN + headerH,
+    headerBottom: TOP_MARGIN + headerH,
     subtitle,
     plot: { x0, x1, y0: plotTop, y1: plotBottom },
     laneTitleX,
@@ -1333,6 +1335,13 @@ function statusMark(
     front = { points: path.points, labels };
   }
   return { x, y0: tag ? tag.y : y0, y1, width: style.width, color: style.color, tag, front };
+}
+
+/** Datoen nederst til høyre: den nyeste av eksporten fra Project og siste endring i appen. */
+export function planDate(file: PlanFile): string {
+  const exported = file.exportedAt.slice(0, 10);
+  const edited = file.plan.layout.editedAt;
+  return edited && edited > exported ? edited : exported;
 }
 
 function formatLong(iso: string): string {

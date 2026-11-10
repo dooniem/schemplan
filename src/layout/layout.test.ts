@@ -2,7 +2,7 @@ import { testform, testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
-import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, tightestOrder, type Item } from './layout';
+import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, planDate, tightestOrder, type Item } from './layout';
 import { approxMeasure, LINE_HEIGHT, PT_TO_MM } from './text';
 import { validatePlan } from '../format/validate';
 
@@ -603,6 +603,21 @@ describe('omplassering', () => {
       const overlap = fa.x0 < fb.x1 - 1e-6 && fb.x0 < fa.x1 - 1e-6 && fa.y0 < fb.y1 - 1e-6 && fb.y0 < fa.y1 - 1e-6;
       expect(overlap, `${a.id} og ${b.id}`).toBe(false);
     }
+  });
+});
+
+describe('datoen nederst til høyre', () => {
+  it('er den nyeste av eksporten og siste endring i appen', () => {
+    const p = testplan();
+    p.exportedAt = '2026-11-01T12:00:00';
+    expect(planDate(p)).toBe('2026-11-01');
+    p.plan.layout.editedAt = '2026-11-10';
+    expect(planDate(p)).toBe('2026-11-10');
+    expect(validatePlan(p).errors).toEqual([]);
+    p.exportedAt = '2026-11-12T08:00:00';
+    expect(planDate(p)).toBe('2026-11-12');
+    p.plan.layout.editedAt = '10.11.2026';
+    expect(validatePlan(p).errors.length).toBeGreaterThan(0);
   });
 });
 
