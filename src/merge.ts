@@ -23,7 +23,7 @@ export interface MergeReport {
 }
 
 /** Felt som bare settes i appen og følger boksen. */
-const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'milestoneStyle', 'critical', 'textScale'] as const;
+const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'textMiddle', 'bold', 'milestoneStyle', 'critical', 'textScale'] as const;
 /** Valg fra appen som ligger i plan.layout. */
 const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale'] as const;
 

@@ -737,3 +737,38 @@ describe('Multi Lane-boks', () => {
     expect(validatePlan(JSON.parse(JSON.stringify(p))).errors.length).toBeGreaterThan(0);
   });
 });
+
+describe('Multi Lane-boks: tekst i midten og fet skrift', () => {
+  const o = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
+  const pick = () => {
+    const p = testplan();
+    const vis = p.lanes.filter((l) => l.shown && !l.hidden);
+    const lane = vis.find((l) => l.boxes.some((b) => b.shown && !b.resolved?.isMilestone && b.text.trim()))!;
+    const box = lane.boxes.find((b) => b.shown && !b.resolved?.isMilestone && b.text.trim())!;
+    box.spanTo = vis[Math.min(vis.indexOf(lane) + 2, vis.length - 1)].id;
+    return { p, box };
+  };
+  it('teksten står øverst som standard, og midt i boksen når det er valgt', () => {
+    const { p, box } = pick();
+    const top = computeLayout(p, o, approxMeasure).items.find((i) => i.id === box.id)!;
+    box.textMiddle = true;
+    const mid = computeLayout(p, o, approxMeasure).items.find((i) => i.id === box.id)!;
+    if (top.kind !== 'box' || mid.kind !== 'box') throw new Error('ikke boks');
+    expect(top.text!.y - top.y).toBeLessThan(top.h / 3);
+    const lines = mid.text!.lines.length;
+    const centre = mid.text!.y - mid.text!.size * 0.85 + (lines * mid.text!.size * LINE_HEIGHT) / 2;
+    expect(centre - mid.y).toBeCloseTo(mid.h / 2, 0);
+  });
+  it('fet skrift gjelder overskrifts- og Multi Lane-bokser, ikke vanlige', () => {
+    const { p, box } = pick();
+    box.bold = true;
+    const it = computeLayout(p, o, approxMeasure).items.find((i) => i.id === box.id)!;
+    expect(it.kind === 'box' && it.text?.bold).toBe(true);
+    delete box.spanTo;
+    const plain = computeLayout(p, o, approxMeasure).items.find((i) => i.id === box.id)!;
+    expect(plain.kind === 'box' && plain.text?.bold).toBeFalsy();
+    box.header = true;
+    const hdr = computeLayout(p, o, approxMeasure).items.find((i) => i.id === box.id)!;
+    expect(hdr.kind === 'box' && hdr.text?.bold).toBe(true);
+  });
+});

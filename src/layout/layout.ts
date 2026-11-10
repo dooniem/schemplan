@@ -666,7 +666,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       let j = i;
       while (j + 1 < lanes.length && (fileIndex.get(lanes[j + 1].id) ?? Infinity) <= want) j++;
       const bottom = laneLayouts[j].y1 - LANE_PAD;
+      const textH = p.item.h;
       p.item.h = Math.max(p.item.h, bottom - p.item.y);
+      if (box?.textMiddle && p.item.text) p.item.text.y += (p.item.h - textH) / 2;
     }
   });
   // Multi Lane-bokser tegnes aller først, så overskriftsbokser, så boksene inne i dem ligger oppå
@@ -894,6 +896,8 @@ function buildPieces(
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
+    // Fet skrift kan velges for overskrifts- og Multi Lane-bokser
+    const bold = !!box.bold && (!!box.header || box.spanTo !== undefined);
     if (!useCallout) {
       const inner = Math.max(w - 2 * PAD_X, 0.5);
       // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
@@ -901,7 +905,7 @@ function buildPieces(
       const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)));
       if (inner < longestWord && !neverCallout) useCallout = true;
       else {
-        lines = wrapLines(rawLines, inner, bs, measure);
+        lines = wrapLines(rawLines, inner, bs, measure, bold);
         const h = lines.length * blh + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
         const words = new Set(rawLines.join(' ').split(/\s+/));
@@ -909,7 +913,7 @@ function buildPieces(
         if ((w / h < 0.25 || brokeWord) && !neverCallout) useCallout = true;
         else {
           item.h = h;
-          item.text = { x: bx0 + w / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle' };
+          item.text = { x: bx0 + w / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}) };
         }
       }
     }
@@ -960,6 +964,8 @@ function buildPieces(
     if (box.spanTo !== undefined) {
       // Multi Lane-boks: bare tekstfeltet øverst tar plass i lanen. Høyden settes når lanene er lagt ut.
       Object.assign(p.item as BoxItem, { header: true, span: true });
+      // Tekst i midten: da holdes bare kanten øverst av, og teksten flyttes når høyden er kjent
+      if (box.textMiddle) p.h = PAD_Y * 2;
       continue;
     }
     if (box.header) {
