@@ -14,6 +14,8 @@ export interface Focus {
   reset(): void;
   /** Fagene i fokus (tom når ingen er valgt). */
   readonly trades: string[];
+  /** «Vis bare disse fagene» er på. */
+  readonly onlyTrades: boolean;
 }
 
 export interface Period {
@@ -193,7 +195,8 @@ export function createFocus(
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     if (tradeG && !isEditing()) {
       const t = tradeG.getAttribute('data-trade')!;
-      if (e.shiftKey) trades.has(t) ? trades.delete(t) : trades.add(t);
+      // Ctrl-, Cmd- eller Shift-klikk legger til eller tar bort et fag
+      if (e.shiftKey || e.ctrlKey || e.metaKey) trades.has(t) ? trades.delete(t) : trades.add(t);
       else if (trades.size === 1 && trades.has(t)) trades.clear();
       else trades = new Set([t]);
       if (!trades.size) onlyTrades = false;
@@ -250,7 +253,7 @@ export function createFocus(
   }
 
   // Fagene som er i fokus. Resten tones ned med CSS, eller skjules med «Vis bare disse»;
-  // det endrer bare visningen, ikke PDF-en.
+  // på skjermen. «Lagre PDF» i linjen lagrer det samme som en PDF for deling.
   function paintTrades() {
     if (!svg) return;
     const on = trades.size > 0;
@@ -272,6 +275,7 @@ export function createFocus(
     paintTrades();
     bar.hidden = !period && !trades.size;
     onlyBtn.hidden = !trades.size;
+    saveBtn.hidden = !trades.size;
     onlyBtn.setAttribute('aria-pressed', String(onlyTrades));
     onlyBtn.textContent = trades.size === 1 ? 'Vis bare dette faget' : 'Vis bare disse fagene';
     if (!svg || !L || bar.hidden) return;
@@ -316,6 +320,7 @@ export function createFocus(
     bar.querySelector('.focus-text')!.textContent = text;
   }
   const onlyBtn = bar.querySelector<HTMLButtonElement>('.focus-only-btn')!;
+  const saveBtn = bar.querySelector<HTMLButtonElement>('.focus-save')!;
   onlyBtn.addEventListener('click', () => {
     onlyTrades = !onlyTrades;
     paint();
@@ -325,6 +330,10 @@ export function createFocus(
   return {
     get trades() {
       return [...trades];
+    },
+    /** «Vis bare disse fagene» er på. */
+    get onlyTrades() {
+      return onlyTrades && trades.size > 0;
     },
     afterDraw(s, layout) {
       svg = s;
