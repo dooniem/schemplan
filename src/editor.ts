@@ -79,6 +79,7 @@ export function resetBox(b: Box): void {
   delete b.hidden;
   delete b.header;
   delete b.spanTo;
+  delete b.spanEnd;
   delete b.textMiddle;
   delete b.bold;
   delete b.milestoneStyle;
@@ -398,10 +399,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return at < 0 ? [] : vis.slice(at);
   };
   /** Gjør boksen til Multi Lane-boks: den går ned til bunnen av lanen under (eller sin egen, når den er nederst). */
-  const setSpan = (id: string, on: boolean | string) => {
+  const setSpan = (id: string, on: boolean | string, end?: number) => {
     commit((pl) => {
       const b = findBox(pl, id);
       if (!b) return;
+      if (end === undefined) delete b.spanEnd;
+      else b.spanEnd = end;
       if (on === false) {
         delete b.spanTo;
         return;
@@ -1259,7 +1262,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-        sf.append(el('p', { class: 'hint' }, 'Boksen går ned til bunnen av lanen du velger, uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å velge lane.'));
+        if (b.spanEnd !== undefined) sf.append(lockedRow('Egen høyde, slutter inne i lanen', 'Fyll lanen', 'La boksen gå helt ned til bunnen av lanen', () => setSpan(b.id, b.spanTo!)));
+        sf.append(el('p', { class: 'hint' }, 'Boksen går ned i lanene under uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å endre høyden; den snapper til bunnen av hver lane.'));
       }
       sf.append(
         segmented<Rotation>('Rotasjon', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
@@ -1457,29 +1461,54 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
 
-  /** Multi Lane-boks: bunnen dras til en lane, og boksen går ned til bunnen av den. */
+  /**
+   * Multi Lane-boks: bunnen dras fritt nedover lanene, i trinn på en kvart tekstlinje. Den snapper til
+   * bunnen av hver lane (og til kantene på andre bokser), så den lett fyller en lane helt.
+   */
   const startSpanResize = (it: BoxItem): Drag | null => {
     const L = layoutNow;
     const home = laneAt(it.y);
     if (!L || !home) return null;
+    const unit = L.unit;
     const pad = home.top - home.y0;
     const below = L.lanes.slice(L.lanes.indexOf(home));
+    const minBottom = it.y + (it.minH ?? unit);
+    const maxBottom = below[below.length - 1].y1 - pad;
     const g = ghostLayer();
     const r = shape(g, 'rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
-    let to = below.find((l) => it.y + it.h <= l.y1 + 1e-6) ?? home;
-    const start = to;
+    const line = shape(g, 'line', { x1: L.laneTitleX, x2: L.plot.x1, y1: 0, y2: 0, stroke: ACCENT, 'stroke-width': 1.5, 'stroke-dasharray': '5 3', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    const snap = snapper(g, new Set([it.id]));
+    // Lanebunnene trekker litt sterkere enn kantene på andre bokser: omtrent ti skjermpunkter
+    const laneTol = () => Math.abs(toMm(0, 10).y - toMm(0, 0).y) || 1.5;
+    let bottom = it.y + it.h;
+    let filled: LaneLayout | null = null;
     return {
       startY: it.y + it.h,
       startClient: 0,
       moved: false,
       move(dy) {
-        const y = it.y + it.h + dy;
-        to = below.find((l) => y < l.y1) ?? below[below.length - 1];
-        set(r, { height: to.y1 - pad - it.y });
+        const want = clamp(it.y + it.h + dy, minBottom, maxBottom);
+        filled = null;
+        snap.show(null);
+        const t = laneTol();
+        const near = snapOff ? undefined : below.filter((l) => l.y1 - pad >= minBottom - 1e-6).find((l) => Math.abs(l.y1 - pad - want) <= t);
+        if (near) {
+          filled = near;
+          bottom = near.y1 - pad;
+        } else {
+          const hit = snap.find([want]);
+          bottom = hit ? clamp(want + hit.d, minBottom, maxBottom) : clamp(it.y + Math.round((want - it.y) / (unit / 4)) * (unit / 4), minBottom, maxBottom);
+          if (hit && Math.abs(bottom - hit.y) < 1e-6) snap.show(hit);
+        }
+        set(line, { y1: bottom, y2: bottom, visibility: filled ? 'visible' : 'hidden' });
+        set(r, { height: bottom - it.y });
       },
       end() {
         g.remove();
-        if (to !== start) setSpan(it.id, to.id);
+        if (Math.abs(bottom - (it.y + it.h)) < 1e-6) return;
+        if (filled) return setSpan(it.id, filled.id);
+        const lane = below.find((l) => bottom <= l.y1 - pad + 1e-6) ?? below[below.length - 1];
+        setSpan(it.id, lane.id, Math.max(0, lines(bottom - lane.top, unit)));
       },
     };
   };

@@ -772,3 +772,26 @@ describe('Multi Lane-boks: tekst i midten og fet skrift', () => {
     expect(hdr.kind === 'box' && hdr.text?.bold).toBe(true);
   });
 });
+
+describe('Multi Lane-boks: egen høyde', () => {
+  const o = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
+  it('spanEnd gir bunnen inne i lanen, aldri under lanens bunn', () => {
+    const p = testplan();
+    const vis = p.lanes.filter((l) => l.shown && !l.hidden);
+    const lane = vis.find((l) => l.boxes.some((b) => b.shown && !b.resolved?.isMilestone))!;
+    const box = lane.boxes.find((b) => b.shown && !b.resolved?.isMilestone)!;
+    const target = vis[Math.min(vis.indexOf(lane) + 1, vis.length - 1)];
+    box.spanTo = target.id;
+    box.spanEnd = 0.5;
+    const L = computeLayout(p, o, approxMeasure);
+    const it = L.items.find((i) => i.id === box.id)!;
+    const tl = L.lanes.find((l) => l.id === target.id)!;
+    if (it.kind !== 'box') throw new Error('ikke boks');
+    expect(it.y + it.h).toBeCloseTo(Math.max(it.y + it.minH!, tl.top + 0.5 * L.unit), 5);
+    box.spanEnd = 999;
+    const L2 = computeLayout(p, o, approxMeasure);
+    const it2 = L2.items.find((i) => i.id === box.id)!;
+    const tl2 = L2.lanes.find((l) => l.id === target.id)!;
+    expect(it2.kind === 'box' && it2.y + it2.h).toBeCloseTo(tl2.y1 - (tl2.top - tl2.y0), 5);
+  });
+});
