@@ -784,9 +784,14 @@ $<HTMLButtonElement>('#print').addEventListener('click', () => {
 const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', deling: '' };
 /** Navnene på fagene i fokus, slik de står i forklaringen. */
 const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : x));
-async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: string[] = []) {
+/** Fagene som skal med i PDF-en: bare dem ('bare'), eller alle med de andre nedtonet ('nedtonet'). */
+type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
+// Samme nedtoning som på skjermen
+const DIM_OPACITY = 0.15;
+async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick) {
   if (!plan || !shown) return;
-  const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}` : '';
+  const onlyTrades = pick?.trades ?? [];
+  const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
   // Utkikken får perioden i filnavnet, så den ikke forveksles med hele planen
   const lookTag = lookWindow ? `_utkikk-${lookWindow.tag}` : '';
   const name = `${baseName}${SUFFIX[variant]}${lookTag}${fileTag}.pdf`;
@@ -817,11 +822,22 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
     let target = shown;
     if (onlyTrades.length) {
       const keep = new Set(onlyTrades);
-      for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
+      const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.resolved?.trade ?? ''] as [string, string])));
+      if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
       saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
       const v = viewOf(saved);
       const layout = computeLayout(v.plan, v.opts, measure);
-      target = { layout, svg: renderPlan(layout) };
+      const svg = renderPlan(layout);
+      // Nedtonet: alt står på samme plass som på skjermen, men de andre fagene blir svake
+      if (pick?.mode === 'nedtonet') {
+        svg.querySelectorAll('g.items > g[data-id]').forEach((g) => {
+          if (!keep.has(tradeOf.get(g.getAttribute('data-id')!) ?? '')) g.setAttribute('opacity', String(DIM_OPACITY));
+        });
+        svg.querySelectorAll('g[data-trade]').forEach((g) => {
+          if (!keep.has(g.getAttribute('data-trade')!)) g.setAttribute('opacity', String(DIM_OPACITY));
+        });
+      }
+      target = { layout, svg };
     }
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
@@ -869,13 +885,21 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, onlyTrades: str
 }
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
-$<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, focus.trades));
-// Valget for bare valgte fag vises når et fag er i fokus
+$<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'bare' }));
+$<HTMLButtonElement>('#save-trades-dim').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'nedtonet' }));
+// Lagre-knappen i fremhevingslinjen lagrer slik planen vises: bare fagene, eller med de andre nedtonet
+$<HTMLButtonElement>('#focus-save').addEventListener('click', (e) =>
+  save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: focus.onlyTrades ? 'bare' : 'nedtonet' }),
+);
+// Valgene for fag vises når et fag er i fokus
 $<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
   if ((e as ToggleEvent).newState !== 'open') return;
   const t = focus.trades;
+  const names = tradeNames(t).join(', ');
   $<HTMLButtonElement>('#save-trades').hidden = !t.length || !plan;
-  $('#save-trades-text').textContent = `Bare ${tradeNames(t).join(', ')}. Vanlig PDF til deling, uten de andre fagene.`;
+  $<HTMLButtonElement>('#save-trades-dim').hidden = !t.length || !plan;
+  $('#save-trades-text').textContent = `Bare ${names}. De andre fagene er tatt bort.`;
+  $('#save-trades-dim-text').textContent = `Hele planen, med ${names} fremhevet og de andre fagene nedtonet.`;
 });
 // Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
 // Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.

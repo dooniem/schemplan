@@ -304,6 +304,10 @@
           <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
           <span class="pm-text"><strong>Lagre PDF med bare valgte fag</strong><span class="pm-desc" id="save-trades-text">Bare boksene i fagene du har valgt i forklaringen.</span></span>
         </button>
+        <button type="button" id="save-trades-dim" class="pm-item" role="menuitem" hidden>
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
+          <span class="pm-text"><strong>Lagre PDF med valgte fag fremhevet</strong><span class="pm-desc" id="save-trades-dim-text">Hele planen, med de andre fagene nedtonet.</span></span>
+        </button>
       </div>
       <div class="pm-group" role="group">
         <button type="button" id="print" class="pm-item" role="menuitem" disabled>
@@ -350,7 +354,7 @@
           <ul>
             <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
             <li>Hold musen over en boks for datoer.</li>
-            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Shift-klikk velger flere.</li>
+            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
             <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
           </ul>
           <h4>Rediger</h4>
@@ -416,7 +420,8 @@
         <div id="sheet" class="sheet-host landscape"></div>
         <div id="focus-bar" class="focus-bar no-print" role="status" hidden>
           <span class="focus-text"></span>
-          <button type="button" class="tb focus-only-btn" aria-pressed="false" hidden title="Skjuler boksene i de andre fagene. Gjelder bare visningen, ikke PDF-en.">Vis bare dette faget</button>
+          <button type="button" class="tb focus-only-btn" aria-pressed="false" hidden title="Skjuler boksene i de andre fagene.">Vis bare dette faget</button>
+          <button type="button" class="tb focus-save" id="focus-save" hidden title="Lagrer en PDF for deling slik planen vises nå: med de andre fagene nedtonet, eller bare de valgte fagene.">Lagre PDF</button>
           <button type="button" class="icon" title="Fjern fremhevingen (Esc)" aria-label="Fjern fremhevingen">×</button>
         </div>
         <div id="arrange-bar" class="focus-bar arrange-bar no-print" role="status" hidden>

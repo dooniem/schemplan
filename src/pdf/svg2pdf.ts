@@ -1,6 +1,6 @@
 // Tegner SVG-en fra renderPlan inn på en PDF-side som ren vektor.
 // Bare det renderPlan bruker er støttet: rect, line, path (M L C Z), text/tspan, g,
-// fill-opacity, rotate() på tekst og skravurmønsteret for ferier.
+// fill-opacity, opacity på grupper, rotate() på tekst og skravurmønsteret for ferier.
 import {
   LineCapStyle,
   LineJoinStyle,
@@ -75,6 +75,16 @@ function attr(el: Element, name: string): string | null {
   return null;
 }
 
+/** Gjennomsiktighet fra opacity på elementet og gruppene rundt (for nedtonede fag). */
+function opacityOf(el: Element): number {
+  let o = 1;
+  for (let e: Element | null = el; e && e.tagName !== 'svg'; e = e.parentElement) {
+    const v = e.getAttribute('opacity');
+    if (v !== null) o *= Number(v);
+  }
+  return o;
+}
+
 function alphaState(c: Ctx, a: number): PDFName {
   const key = Math.round(a * 100);
   let n = c.alpha.get(key);
@@ -100,7 +110,7 @@ function paint(c: Ctx, el: Element): 'f' | 's' | 'b' | null {
   const fillC = rgb(attr(el, 'fill') ?? '#000000');
   const strokeC = rgb(attr(el, 'stroke') ?? 'none');
   const sw = Number(attr(el, 'stroke-width') ?? '1');
-  const fo = Number(attr(el, 'fill-opacity') ?? '1');
+  const fo = Number(attr(el, 'fill-opacity') ?? '1') * opacityOf(el);
   if (fillC) c.ops.push(setFillingRgbColor(...fillC));
   if (strokeC && sw > 0) c.ops.push(setStrokingRgbColor(...strokeC), setLineWidth(sw));
   if (strokeC && attr(el, 'stroke-linejoin') === 'round') c.ops.push(setLineJoin(LineJoinStyle.Round));
@@ -164,6 +174,8 @@ function drawText(c: Ctx, el: SVGTextElement) {
   let y = num(el, 'y');
   const spans = Array.from(el.children).filter((s) => s.tagName === 'tspan');
   const lines = spans.length ? spans : [el];
+  const op = opacityOf(el);
+  if (op < 1) c.ops.push(pushGraphicsState(), setGraphicsState(alphaState(c, op)));
   lines.forEach((s, k) => {
     const dy = s.getAttribute('dy');
     if (dy !== null) y += Number(dy);
@@ -197,6 +209,7 @@ function drawText(c: Ctx, el: SVGTextElement) {
       endText(),
     );
   });
+  if (op < 1) c.ops.push(popGraphicsState());
 }
 
 function walk(c: Ctx, el: Element) {
@@ -229,6 +242,8 @@ function walk(c: Ctx, el: Element) {
     } else if (tag === 'line') {
       c.ops.push(setFillingRgbColor(0, 0, 0));
       const st = rgb(attr(child, 'stroke') ?? 'none');
+      const op = opacityOf(child);
+      if (st && op < 1) c.ops.push(setGraphicsState(alphaState(c, op)));
       if (st) c.ops.push(setStrokingRgbColor(...st), setLineWidth(num(child, 'stroke-width', 1)), moveTo(num(child, 'x1'), num(child, 'y1')), lineTo(num(child, 'x2'), num(child, 'y2')), stroke());
     } else if (tag === 'path') {
       const mode = paint(c, child);
