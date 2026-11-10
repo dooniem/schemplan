@@ -1564,7 +1564,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!home) return null;
     const L = layoutNow;
     const unit = L.unit;
-    const fh = r.y1 - r.y0;
+    // Multi Lane-boks: i lanen tar den bare plass til teksten øverst, så det er den som flyttes innenfor lanen
+    const span = it.kind === 'box' && !!it.span;
+    const fh = span ? Math.min((it as BoxItem).minH ?? r.y1 - r.y0, r.y1 - r.y0) : r.y1 - r.y0;
     let lane = home;
     let g: SVGGElement | null = null;
     let rect: SVGRectElement | null = null;
@@ -1591,7 +1593,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           g = ghostLayer();
           // Lanen boksen havner i, markert svakt
           target = shape(g, 'rect', { x: L.laneTitleX, y: home.y0, width: L.plot.x1 - L.laneTitleX, height: home.y1 - home.y0, fill: ACCENT, 'fill-opacity': 0.06 });
-          rect = shape(g, 'rect', { x: r.x0, y: r.y0, width: r.x1 - r.x0, height: fh, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+          rect = shape(g, 'rect', { x: r.x0, y: r.y0, width: r.x1 - r.x0, height: r.y1 - r.y0, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
         }
         // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
         const first = L.lanes[0];
@@ -1602,11 +1604,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         // Topp eller bunn snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
         if (!snap) snap = snapper(g!, new Set([it.id, ...kidsOf()]));
         const top = r.y0 + dy;
-        const hit = it.kind === 'box' ? snap.find([top, top + bh]) : null;
+        const hit = it.kind === 'box' ? snap.find(span ? [top] : [top, top + bh]) : null;
         const want = hit ? top + hit.d : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
-        y = clamp(want, lane.top, maxY);
+        // I samme lane står bunnen av en Multi Lane-boks fast, så toppen kan flyttes ned uten at bunnen følger
+        y = clamp(want, lane.top, span && lane === home ? Math.min(maxY, r.y1 - fh) : maxY);
         snap.show(hit && Math.abs(y - want) < 1e-6 ? hit : null);
-        set(rect!, { y });
+        set(rect!, span && lane === home ? { y, height: r.y1 - y } : { y, height: r.y1 - r.y0 });
         set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
       },
       end() {
@@ -1620,6 +1623,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             if (lane !== home) moveBox(plan, m.id, lane.id);
             const b = findBox(plan, m.id);
             if (b) b.top = lines(y + m.dy - lane.top, unit);
+            // Multi Lane-boks i en annen lane: den går like mange lanes ned som før
+            if (b && span && lane !== home && b.spanTo !== undefined) {
+              const from = L.lanes.findIndex((l) => l.id === b.spanTo);
+              const shift = L.lanes.indexOf(lane) - L.lanes.indexOf(home);
+              if (from >= 0) b.spanTo = L.lanes[clamp(from + shift, L.lanes.indexOf(lane), L.lanes.length - 1)].id;
+            }
           }
         });
       },
