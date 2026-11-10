@@ -231,7 +231,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         optPos(b, 'height', bp);
         if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
-        for (const k of ['hidden', 'manual', 'header', 'critical'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        for (const k of ['hidden', 'manual', 'header', 'critical', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
         if (b.milestoneStyle !== undefined) {

@@ -51,6 +51,8 @@ function changesOf(b: Box): string[] {
   if (b.fromLane) c.push('flyttet');
   if (b.header) c.push('overskriftsboks');
   if (b.spanTo !== undefined) c.push('multi lane-boks');
+  if (b.bold) c.push('fet skrift');
+  if (b.textMiddle) c.push('tekst i midten');
   if (b.milestoneStyle) c.push('milepælsutseende');
   if (b.hidden) c.push('skjult');
   return c;

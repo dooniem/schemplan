@@ -60,7 +60,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.milestoneStyle || b.textScale);
+  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.bold || b.milestoneStyle || b.textScale);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -79,6 +79,8 @@ export function resetBox(b: Box): void {
   delete b.hidden;
   delete b.header;
   delete b.spanTo;
+  delete b.textMiddle;
+  delete b.bold;
   delete b.milestoneStyle;
   delete b.textScale;
 }
@@ -1227,6 +1229,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       // Tre valg trenger hele bredden, så navnet står over knappene
       sf.lastElementChild!.classList.replace('prop-inline', 'prop');
+      if (b.header || b.spanTo !== undefined)
+        sf.append(
+          switchRow('Fet skrift', !!b.bold, (v) =>
+            change((x) => {
+              if (v) x.bold = true;
+              else delete x.bold;
+            }),
+          ),
+        );
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
       if (b.spanTo !== undefined && plan) {
         const wrap = el('label', { class: 'prop prop-inline' });
@@ -1239,7 +1250,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         }
         sel.addEventListener('change', () => setSpan(b.id, sel.value));
         wrap.append(sel);
-        sf.append(wrap, el('p', { class: 'hint' }, 'Boksen går ned til bunnen av lanen du velger, uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å velge lane.'));
+        sf.append(
+          wrap,
+          segmented('Tekst', b.textMiddle ? 'middle' : 'top', [['top', 'Øverst'], ['middle', 'I midten']], (v) =>
+            change((x) => {
+              if (v === 'middle') x.textMiddle = true;
+              else delete x.textMiddle;
+            }),
+          ),
+        );
+        sf.append(el('p', { class: 'hint' }, 'Boksen går ned til bunnen av lanen du velger, uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å velge lane.'));
       }
       sf.append(
         segmented<Rotation>('Rotasjon', b.rotation, [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) =>
