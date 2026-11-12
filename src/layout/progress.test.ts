@@ -92,6 +92,35 @@ describe('fremdriftsfront: samme svar som Project', () => {
   });
 });
 
+describe('fremdriftsfront mot baseline', () => {
+  it('i rute mot planen nå, men etter mot baseline når planen er skjøvet', () => {
+    // Planen er skjøvet en uke; baseline var uke 2–5. 25 % av 20 dager = 5 dager.
+    const p = plan([{ id: 'a', tasks: [['2026-01-12', '2026-02-06', 25]] }]);
+    p.tasks[0].baselineStart = '2026-01-05';
+    p.tasks[0].baselineFinish = '2026-01-30';
+    const m = statusFriday(p, '2026-01-16');
+    // Nå: start 12.1, status etter dag 10 av 20 fra 5.1 = 5 dager inn i aktiviteten = 25 %
+    expect(frontPoints(p, m, { late: false })[0].delta).toBe(0);
+    // Baseline: 5 dager inn fra 5.1 = 9.1, status 16.1 = 10 dager. 5 dager bak.
+    expect(frontPoints(p, m, { late: false, against: 'baseline' })[0].delta).toBe(-5);
+  });
+
+  it('aktiviteter uten baseline måles mot datoene nå', () => {
+    const p = plan([{ id: 'a', tasks: [['2026-01-05', '2026-01-30', 25]] }]);
+    const m = statusFriday(p, '2026-01-16');
+    expect(frontPoints(p, m, { late: false, against: 'baseline' })[0].delta).toBe(-5);
+  });
+
+  it('skulle vært ferdig etter baseline, selv om boksen pågår nå', () => {
+    const p = plan([{ id: 'a', tasks: [['2026-01-12', '2026-01-23', 50]] }]);
+    p.tasks[0].baselineStart = '2026-01-05';
+    p.tasks[0].baselineFinish = '2026-01-09';
+    const m = statusFriday(p, '2026-01-16');
+    expect(frontPoints(p, m, { late: false, against: 'baseline' })).toEqual([]);
+    expect(frontPoints(p, m, { late: true, against: 'baseline' })[0].delta).toBeLessThan(0);
+  });
+});
+
 describe('fremdriftsfront: tegning', () => {
   it('sikksakk ut til boksen som henger etter, og tilbake', () => {
     const p = plan([{ id: 'a', tasks: [['2026-01-05', '2026-01-30', 25]] }, { id: 'b', tasks: [['2026-01-05', '2026-01-30', 50]] }]);

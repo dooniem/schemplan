@@ -252,4 +252,7 @@ export interface Task {
   flag20: boolean;
   percentComplete: number;
   trade: string | null;
+  /** Start og slutt i baseline. Mangler de, har aktiviteten ingen baseline. */
+  baselineStart?: IsoDate | null;
+  baselineFinish?: IsoDate | null;
 }

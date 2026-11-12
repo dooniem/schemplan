@@ -1346,9 +1346,8 @@ function statusMark(
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
   }
   let front: StatusMark['front'] = null;
-  // Fronten måles foreløpig bare mot planen slik den er nå
-  if (style.front?.on && style.front.against === 'plan') {
-    const pts = frontPoints(file, m, { late: style.front.late });
+  if (style.front?.on) {
+    const pts = frontPoints(file, m, { late: style.front.late, against: style.front.against });
     const path = frontPath(pts, items, axis, x, y0, y1);
     const size = base * 0.8;
     // Avviket i en lapp i linjens farge ytterst ved punktet, innenfor planen
