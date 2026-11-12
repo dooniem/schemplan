@@ -678,9 +678,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
   const fmtDate = (d: string) => d.split('-').reverse().join('.');
   const tradeName = (t: string) => (t === '(none)' ? 'Uten fag' : t);
-  /** Fargeruter med fagfargene og lanefargene i planen. */
+  /**
+   * Fargeruter for bokser: fagfargene, så de faste lyse fargene (de samme som i lane-panelet),
+   * så lanefargene i planen. De faste fargene står der selv om planen ikke bruker dem.
+   */
   const planSwatches = (plan: PlanFile): [string, string][] => [
     ...tradeColors(plan).filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+    ...LANE_COLORS.map((c): [string, string] => [c, c === '#FFFFFF' ? 'Hvit' : 'Lys farge']),
     ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
   ];
   const NEW_TRADE = '\u0000nytt';
@@ -1332,7 +1336,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (tradeColors(plan).some((c) => c.name === trade))
         sg.append(btn(`Endre faget «${tradeName(trade)}»`, null, () => selectTrade(trade), 'Farge og navn for hele faget, og teksten i forklaringen', 'linkish'));
 
-      // Bakgrunnsfarge: alle fagfarger og lanefarger, pluss egen farge. Ingen farger fjernes.
+      // Bakgrunnsfarge: fagfarger, de faste lyse fargene og lanefarger, pluss egen farge. Ingen farger fjernes.
       const sc = section('Farge');
       const pf = projectFill(plan, b);
       const nowFill = currentFill(plan, b);
