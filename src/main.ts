@@ -554,6 +554,8 @@ async function updateFrom(file: File): Promise<boolean> {
     ['Project har endret teksten du hadde redigert (teksten fra Project gjelder):', report.textChanged],
     ['Project har endret faget du hadde endret (faget fra Project gjelder):', report.tradeChanged],
     ['Project har flyttet bokser du hadde flyttet (Project gjelder):', report.moveDropped],
+    ['Egne bokser flyttet med boksen de følger:', report.followMoved],
+    ['Egne bokser som fulgte en boks som er borte fra Project (de står der de sto):', report.followLost],
     ['Project har endret navnet på lanes du hadde gitt nytt navn (navnet fra Project gjelder):', report.laneNameChanged],
   ]);
   note.classList.add('small');

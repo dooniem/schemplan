@@ -265,6 +265,11 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
+        if (b.follows !== undefined) {
+          const f = b.follows;
+          if (!isObj(f) || typeof f.box !== 'string' || (f.edge !== 'start' && f.edge !== 'finish') || typeof f.at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(f.at))
+            err(`${bp}.follows`, 'må ha boks-id, start eller finish og en dato');
+        }
         if (b.trade !== undefined && !(typeof b.trade === 'string' && b.trade.trim())) err(`${bp}.trade`, 'må være et fagnavn');
         if (b.milestoneStyle !== undefined) {
           const m = b.milestoneStyle;
