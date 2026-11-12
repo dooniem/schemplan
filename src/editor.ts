@@ -8,7 +8,20 @@ import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
-import { createCtxMenu, icon, type IconName } from './ctxmenu';
+import { createCtxMenu, icon, type CtxItem, type IconName } from './ctxmenu';
+import type { PlanImage } from './format/types';
+import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
+import { drawImage } from './render/svg';
+import { imageFiles, readImage, type ReadImage } from './imagefile';
+
+type ImageMode = 'none' | 'crop' | 'points';
+
+/** Musepekeren for et håndtak, vridd med bildet. */
+const cursorFor = (h: Handle, rotation: number) => {
+  const dirs = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+  const i = (dirs.indexOf(h) + Math.round(rotation / 45) + 80) % 8;
+  return ['ns', 'nesw', 'ew', 'nwse'][i % 4] + '-resize';
+};
 import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -323,6 +336,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selectedHeader = false;
   /** Flere valgte bokser (Shift-klikk eller rektangel). Når den har to eller flere, er `selected` null. */
   let group: string[] = [];
+  /** Valgt bilde, og om det beskjæres. Bare én ting er valgt om gangen. */
+  let selectedImage: string | null = null;
+  let imageMode: ImageMode = 'none';
+  /** Punktet som sist ble dratt i punktbeskjæringen (Delete sletter det). */
+  let activePoint = -1;
   /** Valgt fag (klikk i legenden). */
   let selectedTrade: string | null = null;
   /** Nytt fag: navnefeltet i panelet får fokus én gang. */
@@ -563,6 +581,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
     group = group.filter((id) => findBox(prev, id));
+    if (selectedImage && !findImage(prev, selectedImage)) clearImage();
     host.redraw();
     buildPanel();
     syncTools();
@@ -1038,6 +1057,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    clearImage();
     selectedTrade = null;
     group = [];
     buildPanel();
@@ -1292,6 +1312,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.replaceChildren();
     if (!plan || !active) return;
     if (criticalMode) return buildCriticalPanel(plan);
+    const imSel = selectedImage ? findImage(plan, selectedImage) : null;
+    if (imSel) return buildImagePanel(plan, imSel);
     if (!b && group.length > 1) return buildGroupPanel(plan);
     if (!b && selectedHeader) return buildHeaderPanel(plan);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
@@ -1321,6 +1343,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for nytt fag, eller for å gi valgte bokser faget.',
           'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
         ]],
+        ['Bilder', [
+          'Høyreklikk hvor som helst på arket og velg «Sett inn bilde». Ctrl+V setter inn et bilde fra utklippstavlen, og du kan dra bildefiler inn på arket.',
+          'Dra i hjørnene for å endre størrelsen og i den runde knotten for å rotere. Dobbeltklikk for å beskjære.',
+          'Høyreklikk en milepæl for å bruke et bilde som symbol. Bildet følger milepælen.',
+        ]],
       ];
       for (const [title, tips] of groups) {
         const s = section(title);
@@ -1328,6 +1355,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         tips.forEach((t) => ul.append(el('li', {}, t)));
         s.append(ul);
         if (title === 'Arket') s.append(btn('Nytt fag', 'plus', () => createTrade([]), 'Lager et nytt fag. Navn og farge velger du i panelet.', 'button small'));
+        if (title === 'Bilder') s.append(btn('Sett inn bilde …', 'image', () => pickImage(null), 'Velg en bildefil. Den settes inn midt i det du ser av arket.', 'button small'));
       }
       // Skjulte oppføringer står ikke i forklaringen, så de vises igjen herfra
       const hiddenLeg = Object.entries(plan.plan.layout.legendItems ?? {}).filter(([, v]) => v.hidden);
@@ -1337,7 +1365,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }
       const keys = section('Hurtigtaster');
       const dl = el('dl', { class: 'keys' });
-      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Dupliser boks'], ['Ctrl+C', 'Kopier boks'], ['Ctrl+V', 'Lim inn'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
+      for (const [k, t] of [['Ctrl+Z', 'Angre'], ['Ctrl+Y', 'Gjør om'], ['Ctrl+D', 'Dupliser boks'], ['Ctrl+C', 'Kopier boks'], ['Ctrl+V', 'Lim inn boks eller bilde'], ['Delete', 'Skjul boks'], ['Esc', 'Fjern valget']]) {
         const kbd = el('kbd', {}, k);
         const dt = el('dt', {});
         dt.append(kbd);
@@ -1630,6 +1658,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
+    imageOverlay(g);
     svgNow.append(g);
   };
 
@@ -1985,6 +2014,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = [];
     selectedLane = null;
     selectedHeader = false;
+    clearImage();
     selectedTrade = null;
     typingSession = false;
     buildPanel();
@@ -1996,6 +2026,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    clearImage();
     selectedTrade = t;
     typingSession = false;
     buildPanel();
@@ -2007,6 +2038,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selectedTrade = null;
     selectedLane = id;
     selectedHeader = false;
+    clearImage();
     typingSession = false;
     buildPanel();
     overlay();
@@ -2018,6 +2050,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selectedLane = null;
     selectedTrade = null;
     selectedHeader = true;
+    clearImage();
     typingSession = false;
     buildPanel();
     overlay();
@@ -2037,6 +2070,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     else cur.push(id);
     selectedLane = null;
     selectedHeader = false;
+    clearImage();
     selectedTrade = null;
     typingSession = false;
     if (cur.length > 1) {
@@ -2055,6 +2089,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    clearImage();
     selectedTrade = null;
     buildPanel();
     overlay();
@@ -2170,6 +2205,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       suppressClick = false;
       return;
     }
+    // Bilder velges når knappen trykkes ned
+    if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid')) return;
     const g = itemOf(e);
     if (criticalMode) {
       const id = boxAt(e);
@@ -2189,6 +2226,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     else if (!(e.shiftKey && !id)) select(id);
   });
   sheet.addEventListener('dblclick', (e) => {
+    const imgG = active ? (e.target as Element | null)?.closest?.('g.images > g[data-image]') : null;
+    if (imgG) {
+      // Dobbeltklikk på et bilde: beskjær
+      selectImage(imgG.getAttribute('data-image')!, 'crop');
+      return;
+    }
     const g = itemOf(e);
     if (!g && inHeader(e)) {
       selectHeader();
@@ -2216,7 +2259,22 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!active || e.button !== 0 || !layoutNow || criticalMode) return;
     const t = e.target as Element;
     let d: Drag | null = null;
-    if (t.closest('.box-handle')) {
+    const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
+    const imgG = t.closest('g.images > g[data-image]');
+    if (imgHandle) {
+      // Ctrl-klikk på et punkt sletter det, som i Office
+      if (imgHandle.classList.contains('img-pt') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        deletePoint(Number(imgHandle.getAttribute('data-i')));
+        suppressClick = true;
+        return;
+      }
+      d = startImageHandle(imgHandle);
+    } else if (imgG) {
+      const id = imgG.getAttribute('data-image')!;
+      if (id !== selectedImage) selectImage(id);
+      d = startImageMove(id);
+    } else if (t.closest('.box-handle')) {
       const it = layoutNow.items.find((i) => i.id === selected);
       if (it?.kind === 'box') d = startBoxResize(it);
     } else if (t.closest('.lane-edge')) {
@@ -2253,6 +2311,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
     snapOff = e.altKey;
+    shiftNow = e.shiftKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
     else drag.move(p.y - drag.startY);
@@ -2275,11 +2334,655 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   // boksvalg, og tomt sted i lanen gir ny boks og skjulte bokser.
   const ctx = createCtxMenu();
   const plain = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim();
+
+  // ---- Bilder ----
+  // Settes inn fra fildialogen (høyreklikk), utklippstavlen (Ctrl+V) eller ved å dra en fil inn på arket.
+  // Valgt bilde får håndtak for størrelse og rotasjon. «Beskjær» gir kanthåndtak, «Rediger punkter» en mangekant.
+  /** Siste punkt musen var over arket, i mm. Bilder fra utklippstavlen havner der. */
+  let lastPointer: Pt | null = null;
+  /** Bildet slik det dras akkurat nå, før det lagres i planen. */
+  let livePlaced: PlacedImage | null = null;
+  let shiftNow = false;
+  const imagesOf = (plan: PlanFile) => plan.plan.layout.images ?? [];
+  const findImage = (plan: PlanFile, id: string) => imagesOf(plan).find((im) => im.id === id) ?? null;
+  const placedOf = (id: string) => (livePlaced?.id === id ? livePlaced : layoutNow?.images.find((p) => p.id === id) ?? null);
+  const milestonePt = (id: string): Pt | null => {
+    const it = layoutNow?.items.find((i) => i.id === id);
+    return it?.kind === 'milestone' ? { x: it.x, y: it.y } : null;
+  };
+  /** Punktet bildet er festet til: milepælen, eller midten av datoen. */
+  const anchorOf = (im: PlanImage): Pt | null => {
+    if (im.milestone) return milestonePt(im.milestone.id);
+    if (im.date) {
+      const x = layoutNow?.xOfDate(im.date.day);
+      return x == null ? null : { x, y: 0 };
+    }
+    return null;
+  };
+  const storePlaced = (plan: PlanFile, p: PlacedImage) => {
+    const im = findImage(plan, p.id);
+    if (im && layoutNow) storeImage(im, p, layoutNow.width, layoutNow.height, anchorOf(im));
+  };
+  const imageId = () => `img${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const changeImage = (id: string, fn: (im: PlanImage, plan: PlanFile) => void) =>
+    commit((pl) => {
+      const im = findImage(pl, id);
+      if (im) fn(im, pl);
+    });
+  /** Endrer bildet slik det står på arket (størrelse, rotasjon, beskjæring) og lagrer det. */
+  const changePlaced = (id: string, fn: (p: PlacedImage) => PlacedImage) => {
+    const p = placedOf(id);
+    if (p) commit((pl) => storePlaced(pl, fn(p)));
+  };
+
+  function clearImage() {
+    selectedImage = null;
+    imageMode = 'none';
+    activePoint = -1;
+  }
+  const selectImage = (id: string | null, mode: ImageMode = 'none') => {
+    group = [];
+    selected = null;
+    selectedLane = null;
+    selectedHeader = false;
+    selectedTrade = null;
+    typingSession = false;
+    selectedImage = id;
+    imageMode = id ? mode : 'none';
+    activePoint = -1;
+    buildPanel();
+    overlay();
+  };
+  /** Vanlig beskjæring, punktbeskjæring eller ingen av dem. Punktene starter som det som vises nå. */
+  const setImageMode = (mode: ImageMode) => {
+    const id = selectedImage;
+    const plan = host.getPlan();
+    const im = id && plan ? findImage(plan, id) : null;
+    if (!id || !im) return;
+    if (mode === 'points' && !im.points) {
+      const p = placedOf(id);
+      if (p)
+        changePlaced(id, (q) => ({ ...q, points: rectPoints(q.crop), crop: FULL }));
+    }
+    imageMode = imageMode === mode ? 'none' : mode;
+    activePoint = -1;
+    buildPanel();
+    overlay();
+  };
+
+  const fileInput = el('input', { type: 'file', accept: 'image/*', multiple: '', hidden: '', 'aria-hidden': 'true' }) as HTMLInputElement;
+  document.body.append(fileInput);
+  /** Hvor neste bilde fra fildialogen settes inn, og eventuelt milepælene det blir symbol for. */
+  let pickFor: { at: Pt | null; milestones?: string[] } = { at: null };
+  const pickImage = (at: Pt | null, milestones?: string[]) => {
+    pickFor = { at, milestones };
+    fileInput.multiple = !milestones;
+    fileInput.click();
+  };
+  fileInput.addEventListener('change', () => {
+    const files = imageFiles(fileInput.files);
+    fileInput.value = '';
+    if (files.length) void insertImages(files, pickFor.at, pickFor.milestones);
+  });
+
+  /** Midten av det som vises av arket, så et bilde fra utklippstavlen havner der du ser. */
+  const visibleCenter = (): Pt | null => {
+    if (!svgNow) return null;
+    const r = svgNow.getBoundingClientRect();
+    const v = sheet.getBoundingClientRect();
+    const x0 = Math.max(r.left, v.left, 0);
+    const x1 = Math.min(r.right, v.right, window.innerWidth);
+    const y0 = Math.max(r.top, v.top, 0);
+    const y1 = Math.min(r.bottom, v.bottom, window.innerHeight);
+    if (x1 <= x0 || y1 <= y0) return null;
+    return toMm((x0 + x1) / 2, (y0 + y1) / 2);
+  };
+
+  /** Symbolstørrelse for en milepæl: litt større enn flagget, så bildet er lett å se. */
+  const symbolSize = (id: string, px: [number, number]) => {
+    const it = layoutNow?.items.find((i) => i.id === id);
+    const side = it?.kind === 'milestone' ? it.size * 1.6 : 6;
+    const k = side / Math.max(px[0], px[1]);
+    return { w: px[0] * k, h: px[1] * k };
+  };
+
+  const insertImages = async (files: Blob[], at: Pt | null, milestones?: string[]) => {
+    const L = layoutNow;
+    if (!L || !host.getPlan()) return;
+    const read: ReadImage[] = [];
+    for (const f of files) {
+      try {
+        read.push(await readImage(f));
+      } catch {
+        window.alert('Kunne ikke lese bildet. Bruk PNG, JPEG, GIF, WebP eller SVG.');
+      }
+    }
+    if (!read.length) return;
+    const W = L.width;
+    const H = L.height;
+    const made: string[] = [];
+    commit((pl) => {
+      const list = (pl.plan.layout.images ??= []);
+      if (milestones?.length) {
+        // Symbol for milepælene: bytter ut et bilde milepælen alt har
+        for (const ms of milestones) {
+          const old = list.findIndex((x) => x.milestone?.id === ms);
+          const s = symbolSize(ms, read[0].px);
+          const im: PlanImage = { id: imageId(), data: read[0].data, px: read[0].px, x: 0, y: 0, w: s.w / W, h: s.h / W, rotation: 0, milestone: { id: ms, dx: 0, dy: 0 } };
+          const pt = milestonePt(ms);
+          if (pt) {
+            im.x = pt.x / W;
+            im.y = pt.y / H;
+          }
+          if (old >= 0) list.splice(old, 1, im);
+          else list.push(im);
+          made.push(im.id);
+        }
+        return;
+      }
+      const c = at ?? lastPointer ?? visibleCenter() ?? { x: W / 2, y: H / 2 };
+      read.forEach((r, i) => {
+        // Flere bilder samtidig legges litt forskjøvet, så alle kan ses
+        const im = newImage(imageId(), r.data, r.px, { x: c.x + i * 6, y: c.y + i * 6 }, W, H);
+        list.push(im);
+        made.push(im.id);
+      });
+    });
+    if (made.length) selectImage(made[made.length - 1]);
+  };
+
+  /** Bruker et bilde som allerede er symbol for en milepæl på andre milepæler: samme bilde, størrelse, rotasjon og beskjæring. */
+  const copySymbol = (fromId: string, milestones: string[]) => {
+    const plan = host.getPlan();
+    const src = plan ? findImage(plan, fromId) : null;
+    if (!src?.milestone) return;
+    const made: string[] = [];
+    commit((pl) => {
+      const list = (pl.plan.layout.images ??= []);
+      for (const ms of milestones) {
+        if (ms === src.milestone!.id) continue;
+        const im: PlanImage = { ...structuredClone(src), id: imageId(), milestone: { ...src.milestone!, id: ms } };
+        const old = list.findIndex((x) => x.milestone?.id === ms);
+        if (old >= 0) list.splice(old, 1, im);
+        else list.push(im);
+        made.push(im.id);
+      }
+    });
+    if (made.length === 1) selectImage(made[0]);
+  };
+
+  /** Bilder som er symbol for en milepæl, ett per ulikt bilde, med navnet på milepælen. */
+  const symbolChoices = (plan: PlanFile) => {
+    const seen = new Set<string>();
+    const out: { id: string; name: string }[] = [];
+    for (const im of imagesOf(plan)) {
+      if (!im.milestone) continue;
+      const key = `${im.data.length}:${im.data.slice(-40)}:${im.w}:${im.h}:${im.rotation}:${JSON.stringify(im.crop ?? null)}:${JSON.stringify(im.points ?? null)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const b = findBox(plan, im.milestone.id);
+      out.push({ id: im.id, name: b ? plain(b.text) || 'Milepæl' : 'Milepæl' });
+    }
+    return out;
+  };
+
+  const removeImage = (id: string) => {
+    if (selectedImage === id) clearImage();
+    commit((pl) => {
+      pl.plan.layout.images = imagesOf(pl).filter((im) => im.id !== id);
+      if (!pl.plan.layout.images.length) delete pl.plan.layout.images;
+    });
+    overlay();
+  };
+  const duplicateImage = (id: string) => {
+    const plan = host.getPlan();
+    const src = plan ? findImage(plan, id) : null;
+    if (!src || !layoutNow) return;
+    const copy: PlanImage = structuredClone(src);
+    copy.id = imageId();
+    // Kopien står litt nedenfor og til høyre, og er ikke festet
+    const p = placedOf(id);
+    if (p) {
+      copy.x = (p.cx + 5) / layoutNow.width;
+      copy.y = (p.cy + 5) / layoutNow.height;
+    }
+    delete copy.milestone;
+    delete copy.date;
+    commit((pl) => (pl.plan.layout.images ??= []).push(copy));
+    selectImage(copy.id);
+  };
+  const moveImageInOrder = (id: string, front: boolean) =>
+    commit((pl) => {
+      const list = imagesOf(pl);
+      const i = list.findIndex((im) => im.id === id);
+      if (i < 0) return;
+      const [im] = list.splice(i, 1);
+      if (front) list.push(im);
+      else list.unshift(im);
+    });
+  /** Fest til datoen midt i det synlige, uten at bildet flytter seg. Eller løsne, også fra en milepæl. */
+  const pinImage = (id: string, on: boolean) => {
+    const p = placedOf(id);
+    if (!p || !layoutNow) return;
+    const L = layoutNow;
+    const c = frameCenter(p);
+    changeImage(id, (im) => {
+      storeImage(im, p, L.width, L.height);
+      delete im.milestone;
+      if (!on) {
+        delete im.date;
+        return;
+      }
+      const day = L.dateAt(clamp(c.x, L.plot.x0, L.plot.x1 - 1e-6));
+      const x = L.xOfDate(day) ?? c.x;
+      im.date = { day, dx: Math.round(((c.x - x) / L.width) * 10000) / 10000 };
+    });
+  };
+  /** Ny dato for et festet bilde: det flyttes sidelengs til datoen. */
+  const setImageDate = (id: string, day: string) =>
+    changeImage(id, (im) => {
+      im.date = { day, dx: 0 };
+    });
+
+  /** Viser bildet slik det dras, uten å tegne hele planen på nytt. */
+  const showLive = (p: PlacedImage) => {
+    livePlaced = p;
+    const g = svgNow?.querySelector(`g.images > g[data-image="${CSS.escape(p.id)}"]`);
+    if (g) {
+      const fresh = drawImage(p, g.parentElement!);
+      g.replaceWith(fresh);
+    }
+    overlay();
+  };
+  /** Festet til dato: midten av det synlige blir stående på samme x. */
+  const keepX = (p: PlacedImage, x: number): PlacedImage => (p.date ? { ...p, cx: p.cx + x - frameCenter(p).x } : p);
+  /** Millimeter per skjermpunkt, så håndtakene er like store uansett zoom. */
+  const mmPerPx = () => 1 / (svgNow?.getScreenCTM()?.a || 1);
+
+  const imageDrag = (id: string, update: (p0: PlacedImage, q: Pt, from: Pt) => PlacedImage, onEnd?: () => void): Drag | null => {
+    const p0 = placedOf(id);
+    if (!p0) return null;
+    let from: Pt | null = null;
+    let last: PlacedImage | null = null;
+    return {
+      startY: 0,
+      startClient: 0,
+      moved: false,
+      move() {},
+      moveXY(x, y) {
+        from ??= { x, y };
+        last = update(p0, { x, y }, from);
+        showLive(last);
+      },
+      end() {
+        livePlaced = null;
+        if (last) {
+          const p = last;
+          commit((pl) => storePlaced(pl, p));
+        } else overlay();
+        onEnd?.();
+      },
+    };
+  };
+  const startImageMove = (id: string) =>
+    imageDrag(id, (p0, q, from) => ({ ...p0, cx: p0.date ? p0.cx : p0.cx + q.x - from.x, cy: p0.cy + q.y - from.y }));
+
+  const startImageHandle = (t: Element): Drag | null => {
+    const id = selectedImage;
+    if (!id) return null;
+    const p0 = placedOf(id);
+    if (!p0) return null;
+    const x0 = frameCenter(p0).x;
+    const h = t.getAttribute('data-h') as Handle | null;
+    if (t.classList.contains('img-rot')) return imageDrag(id, (p, q) => keepX(rotateTo(p, q, shiftNow), x0));
+    if (t.classList.contains('img-size') && h) return imageDrag(id, (p, q) => keepX(resizeBy(p, h, q, shiftNow), x0));
+    if (t.classList.contains('img-crop') && h) return imageDrag(id, (p, q) => ({ ...p, crop: cropTo(p, h, q) }));
+    const i = Number(t.getAttribute('data-i'));
+    if (t.classList.contains('img-pt') && p0.points) {
+      activePoint = i;
+      return imageDrag(id, (p, q) => {
+        const pts = [...p.points!];
+        pts[i] = movePoint(p, q, snapOff ? 0 : 6 * mmPerPx());
+        return { ...p, points: pts };
+      });
+    }
+    if (t.classList.contains('img-mid') && p0.points) {
+      // Nytt punkt midt på kanten, som dras med en gang
+      activePoint = i + 1;
+      return imageDrag(id, (p, q) => {
+        const pts = [...p.points!];
+        pts.splice(i + 1, 0, movePoint(p, q, snapOff ? 0 : 6 * mmPerPx()));
+        return { ...p, points: pts };
+      });
+    }
+    return null;
+  };
+  const deletePoint = (i: number) => {
+    const id = selectedImage;
+    const p = id ? placedOf(id) : null;
+    if (!id || !p?.points || p.points.length <= 3) return;
+    activePoint = -1;
+    changePlaced(id, (q) => ({ ...q, points: q.points!.filter((_, k) => k !== i) }));
+  };
+
+  /** Rammen, håndtakene og beskjæringen for valgt bilde. Tegnes i markeringslaget, kommer ikke med i PDF. */
+  const imageOverlay = (g: SVGGElement) => {
+    const p = selectedImage ? placedOf(selectedImage) : null;
+    if (!p || !layoutNow) return;
+    const k = mmPerPx();
+    const add = (tag: string, attrs: Record<string, string | number>) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, String(v));
+      g.append(e);
+      return e;
+    };
+    const poly = (pts: Pt[]) => pts.map((q) => `${q.x},${q.y}`).join(' ');
+    const square = (q: Pt, size: number, attrs: Record<string, string | number>) =>
+      add('rect', { x: q.x - size / 2, y: q.y - size / 2, width: size, height: size, transform: `rotate(${p.rotation} ${q.x} ${q.y})`, 'vector-effect': 'non-scaling-stroke', 'stroke-width': 1, 'pointer-events': 'all', ...attrs });
+    const at = (u: number, v: number) => toSheet(p, u, v);
+    if (imageMode !== 'none') {
+      // Hele bildet svakt bak, og det som blir igjen i full styrke oppå
+      drawImage(p, g, '-ghost', { full: true, opacity: 0.35 });
+      drawImage(p, g, '-sel');
+      add('polygon', { points: poly([at(0, 0), at(1, 0), at(1, 1), at(0, 1)]), fill: 'none', stroke: '#7F7F7F', 'stroke-width': 1, 'stroke-dasharray': '4 3', 'vector-effect': 'non-scaling-stroke' });
+    }
+    if (imageMode === 'crop') {
+      const [u0, v0, u1, v1] = p.crop;
+      add('polygon', { points: poly([at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)]), fill: 'none', stroke: '#000000', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
+      for (const h of HANDLES) {
+        const [hu, hv] = handleAt(h);
+        const q = at(u0 + hu * (u1 - u0), v0 + hv * (v1 - v0));
+        // Svarte vinkler i hjørnene og streker på kantene, som beskjæring i Office
+        const corner = hu !== 0.5 && hv !== 0.5;
+        const len = (corner ? 14 : 18) * k;
+        const thick = 5 * k;
+        const sx = hu === 0 ? 1 : hu === 1 ? -1 : 0;
+        const sy = hv === 0 ? 1 : hv === 1 ? -1 : 0;
+        const tr = `rotate(${p.rotation} ${q.x} ${q.y})`;
+        const mk = (x: number, y: number, w: number, hh: number) => add('rect', { x, y, width: w, height: hh, transform: tr, fill: '#000000', stroke: '#FFFFFF', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
+        if (corner) {
+          mk(sx > 0 ? q.x : q.x - len, sy > 0 ? q.y : q.y - thick, len, thick);
+          mk(sx > 0 ? q.x : q.x - thick, sy > 0 ? q.y : q.y - len, thick, len);
+        } else if (sx) mk(sx > 0 ? q.x : q.x - thick, q.y - len / 2, thick, len);
+        else mk(q.x - len / 2, sy > 0 ? q.y : q.y - thick, len, thick);
+        square(q, 22 * k, { class: 'edit-handle img-crop', 'data-h': h, fill: 'transparent', stroke: 'none', cursor: cursorFor(h, p.rotation) });
+      }
+      return;
+    }
+    if (imageMode === 'points' && p.points) {
+      const pts = p.points.map(([u, v]) => at(u, v));
+      add('polygon', { points: poly(pts), fill: 'none', stroke: '#D0021B', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke' });
+      pts.forEach((q, i) => {
+        const n = pts[(i + 1) % pts.length];
+        square({ x: (q.x + n.x) / 2, y: (q.y + n.y) / 2 }, 7 * k, { class: 'edit-handle img-mid', 'data-i': i, fill: '#FFFFFF', stroke: '#000000', cursor: 'copy' });
+      });
+      pts.forEach((q, i) => square(q, 8 * k, { class: 'edit-handle img-pt', 'data-i': i, fill: i === activePoint ? ACCENT : '#000000', stroke: '#FFFFFF', cursor: 'move' }));
+      return;
+    }
+    const c = frameCorners(p);
+    add('polygon', { points: poly(c), fill: 'none', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke' });
+    // Hva bildet er festet til: stiplet strek til milepælen, eller ned til datoen
+    const fc = frameCenter(p);
+    const im = host.getPlan() ? findImage(host.getPlan()!, p.id) : null;
+    const anchor = im ? anchorOf(im) : null;
+    if (im?.milestone && anchor)
+      add('line', { x1: anchor.x, y1: anchor.y, x2: fc.x, y2: fc.y, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
+    if (im?.date && anchor)
+      add('line', { x1: anchor.x, y1: layoutNow.plot.y0, x2: anchor.x, y2: layoutNow.plot.y1, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
+    const f = frameUv(p.crop, p.points);
+    for (const h of HANDLES) {
+      const [hu, hv] = handleAt(h);
+      const q = at(f[0] + hu * (f[2] - f[0]), f[1] + hv * (f[3] - f[1]));
+      square(q, 9 * k, { class: 'edit-handle img-size', 'data-h': h, fill: '#FFFFFF', stroke: ACCENT, cursor: cursorFor(h, p.rotation) });
+    }
+    // Rund knott over rammen for å rotere
+    const top = at((f[0] + f[2]) / 2, f[1]);
+    const up = { x: top.x - (fc.x - top.x), y: top.y - (fc.y - top.y) };
+    const dist = Math.hypot(up.x - top.x, up.y - top.y) || 1;
+    const knob = { x: top.x + ((up.x - top.x) / dist) * 22 * k, y: top.y + ((up.y - top.y) / dist) * 22 * k };
+    add('line', { x1: top.x, y1: top.y, x2: knob.x, y2: knob.y, stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
+    const rc = add('circle', { cx: knob.x, cy: knob.y, r: 6 * k, fill: '#FFFFFF', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle img-rot', 'pointer-events': 'all', cursor: 'grab' });
+    rc.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra for å rotere. Shift: trinn på 15°.' }));
+  };
+
+  // ---- Panelet for bilder ----
+  const buildImagePanel = (plan: PlanFile, im: PlanImage) => {
+    const p = placedOf(im.id);
+    const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
+    const where = ms ? `Symbol for «${plain(ms.text) || 'milepæl'}»` : im.date ? `Festet til ${fmtDate(im.date.day)}` : 'Fritt på arket';
+    panelHead('Bilde', `${im.px[0]} × ${im.px[1]} px · ${where}`);
+    const cm = (mm: number) => Math.round(mm) / 10;
+    /** Tallfelt med navnet over, som datofeltene. */
+    const numField = (label: string, value: number, step: number, onSet: (v: number) => void, id?: string) => {
+      const lab = el('label', {}, label);
+      const inp = el('input', { type: 'number', step: String(step), value: String(value), inputmode: 'decimal', ...(id ? { id } : {}) }) as HTMLInputElement;
+      inp.addEventListener('change', () => {
+        const v = Number(inp.value.replace(',', '.'));
+        if (Number.isFinite(v)) onSet(v);
+      });
+      lab.append(inp);
+      return lab;
+    };
+
+    const ss = section('Størrelse og rotasjon');
+    if (p) {
+      const f = frameUv(p.crop, p.points);
+      const fw = (f[2] - f[0]) * p.w;
+      const fh = (f[3] - f[1]) * p.h;
+      // Bredde og høyde gjelder det som vises; formen beholdes
+      const scaleTo = (k: number) => changePlaced(im.id, (q) => keepX(keepPoint({ ...q, w: q.w * k, h: q.h * k }, q, [(f[0] + f[2]) / 2, (f[1] + f[3]) / 2]), frameCenter(q).x));
+      const fields = el('div', { class: 'row dates' });
+      fields.append(
+        numField('Bredde, cm', cm(fw), 0.1, (v) => v > 0 && scaleTo((v * 10) / fw), 'image-width'),
+        numField('Høyde, cm', cm(fh), 0.1, (v) => v > 0 && scaleTo((v * 10) / fh)),
+        numField('Rotasjon, °', Math.round(p.rotation * 10) / 10, 1, (v) => changePlaced(im.id, (q) => keepX(rotateBy(q, normDeg(v) - q.rotation), frameCenter(q).x))),
+      );
+      const row = el('div', { class: 'row img-actions' });
+      const nat = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
+      const natBtn = btn('Opprinnelig størrelse', 'resize', () => changePlaced(im.id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), frameCenter(q).x)), 'Bildets egen størrelse og form, med midten på samme sted. Rotasjon og beskjæring beholdes.', 'button small');
+      natBtn.disabled = Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05;
+      const rl = btn('', 'rotateLeft', () => changePlaced(im.id, (q) => keepX(rotateBy(q, -90), frameCenter(q).x)), 'Roter 90° mot klokken', 'button small icon-only');
+      const rr = btn('', 'rotate', () => changePlaced(im.id, (q) => keepX(rotateBy(q, 90), frameCenter(q).x)), 'Roter 90° med klokken', 'button small icon-only');
+      rl.setAttribute('aria-label', 'Roter 90° mot klokken');
+      rr.setAttribute('aria-label', 'Roter 90° med klokken');
+      row.append(rl, rr, natBtn);
+      ss.append(fields, row, el('p', { class: 'hint' }, 'Dra i hjørnene for å endre størrelsen; Shift gir fri form. Dra i den runde knotten for å rotere; Shift gir trinn på 15°.'));
+    }
+
+    const sc = section('Beskjæring');
+    sc.append(
+      segmented<ImageMode>('Verktøy', imageMode, [['none', 'Av'], ['crop', 'Kanter'], ['points', 'Punkter']], (v) => setImageMode(v === 'none' ? imageMode : v)),
+    );
+    if (im.crop || im.points)
+      sc.append(lockedRow(im.points ? 'Beskåret langs punkter' : 'Beskåret', 'Vis hele', 'Fjern beskjæringen og vis hele bildet', () => {
+        imageMode = 'none';
+        changeImage(im.id, (x) => {
+          delete x.crop;
+          delete x.points;
+        });
+      }));
+    sc.append(
+      el(
+        'p',
+        { class: 'hint' },
+        imageMode === 'crop'
+          ? 'Dra i de svarte vinklene og strekene. Enter eller Esc når du er ferdig.'
+          : imageMode === 'points'
+            ? 'Dra de svarte punktene. Dra et hvitt punkt midt på en kant for å lage et nytt. Ctrl-klikk eller høyreklikk et punkt for å slette det. Punktene fanges av bildets kanter; hold Alt for å dra fritt. Enter eller Esc når du er ferdig.'
+            : 'Kanter skjærer bort rett inn fra hver side. Punkter former en mangekant, som «Rediger punkt» i PowerPoint. De kan brukes sammen. Dobbeltklikk bildet for å beskjære kantene.',
+      ),
+    );
+
+    const sp = section('Plassering');
+    if (im.milestone) {
+      sp.append(lockedRow('Følger milepælen', 'Løsne', 'Bildet blir stående der det er, og milepælen får sitt eget symbol igjen', () => pinImage(im.id, false)));
+      const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
+      if (others.length) sp.append(el('p', { class: 'hint' }, 'Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke dette bildet der også, med samme størrelse og rotasjon.'));
+    } else {
+      sp.append(switchRow('Fest til dato', !!im.date, (v) => pinImage(im.id, v), 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned'));
+      if (im.date) {
+        const wrap = el('label', { class: 'prop prop-inline' });
+        wrap.append(el('span', { class: 'prop-label' }, 'Dato'));
+        const d = el('input', { type: 'date', value: im.date.day, min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
+        d.addEventListener('change', () => d.value && setImageDate(im.id, d.value));
+        wrap.append(d);
+        sp.append(wrap);
+      }
+      sp.append(el('p', { class: 'hint' }, im.date ? 'Midten av bildet står på datoen. Dra bildet opp eller ned; løsne det for å flytte sidelengs.' : 'Dra bildet hvor du vil. Fest det til en dato for at det skal følge tidslinjen.'));
+    }
+    if (imagesOf(plan).length > 1) {
+      const row = el('div', { class: 'row img-actions' });
+      row.append(btn('Fremst', 'front', () => moveImageInOrder(im.id, true), 'Legg bildet over de andre bildene', 'button small'), btn('Bakerst', 'front', () => moveImageInOrder(im.id, false), 'Legg bildet under de andre bildene', 'button small'));
+      sp.append(row);
+    }
+
+    const foot = el('div', { class: 'panel-foot' });
+    const reset = btn('Tilbakestill', 'undo', () => {
+      imageMode = 'none';
+      const q = placedOf(im.id);
+      if (!q) return;
+      changePlaced(im.id, (x) => keepX(resetSize({ ...x, rotation: 0, crop: FULL, points: null }, im.px, layoutNow!.width, layoutNow!.height), frameCenter(x).x));
+    }, 'Opprinnelig størrelse, uten rotasjon og beskjæring', 'button push');
+    reset.disabled = !!p && !im.crop && !im.points && !im.rotation && (() => {
+      const n = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
+      return Math.abs(p.w - n.w) < 0.05 && Math.abs(p.h - n.h) < 0.05;
+    })();
+    foot.append(
+      btn('Dupliser', 'copy', () => duplicateImage(im.id), 'Lag en kopi (Ctrl+D)'),
+      btn('Slett', 'trash', () => removeImage(im.id), 'Slett bildet (Delete)'),
+      reset,
+    );
+    panel.append(foot);
+  };
+
+  /** Menyen for et bilde. */
+  const imageMenu = (e: MouseEvent, id: string) => {
+    const plan = host.getPlan();
+    const im = plan ? findImage(plan, id) : null;
+    const p = placedOf(id);
+    if (!plan || !im || !p) return;
+    if (selectedImage !== id) selectImage(id);
+    const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
+    const nat = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
+    const x0 = frameCenter(p).x;
+    ctx.open(e.clientX, e.clientY, 'Bilde', [
+      {
+        heading: 'Beskjæring',
+        items: [
+          { label: 'Beskjær', icon: 'crop', checked: imageMode === 'crop' ? true : undefined, hint: 'Svarte kanter du drar inn for å skjære bort, som i Office. Enter når du er ferdig.', onSelect: () => setImageMode('crop') },
+          { label: 'Rediger punkter', icon: 'points', checked: imageMode === 'points' ? true : undefined, hint: 'Beskjær langs en mangekant: dra punktene, dra et hvitt punkt for å lage et nytt.', onSelect: () => setImageMode('points') },
+          { label: 'Fjern beskjæring', icon: 'undo', disabled: !im.crop && !im.points, hint: im.crop || im.points ? 'Viser hele bildet igjen.' : 'Bildet er ikke beskåret.', onSelect: () => changeImage(id, (x) => { delete x.crop; delete x.points; }) },
+        ],
+      },
+      {
+        items: [
+          { label: 'Opprinnelig størrelse', icon: 'resize', disabled: Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05, hint: 'Bildets egen størrelse og form. Rotasjon og beskjæring beholdes.', onSelect: () => changePlaced(id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), x0)) },
+          { label: 'Roter 90° med klokken', icon: 'rotate', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, 90), x0)) },
+          { label: 'Roter 90° mot klokken', icon: 'rotateLeft', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -90), x0)) },
+          { label: 'Rett opp', icon: 'undo', disabled: !im.rotation, hint: im.rotation ? 'Fjerner rotasjonen.' : 'Bildet er ikke rotert.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -q.rotation), x0)) },
+        ],
+      },
+      {
+        items: ms
+          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen.', onSelect: () => pinImage(id, false) }]
+          : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${fmtDate(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
+      },
+      {
+        items: [
+          { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi litt nedenfor.', onSelect: () => duplicateImage(id) },
+          ...(imagesOf(plan).length > 1
+            ? [
+                { label: 'Fremst', icon: 'front' as const, hint: 'Legger bildet over de andre bildene.', onSelect: () => moveImageInOrder(id, true) },
+                { label: 'Bakerst', icon: 'front' as const, hint: 'Legger bildet under de andre bildene.', onSelect: () => moveImageInOrder(id, false) },
+              ]
+            : []),
+        ],
+      },
+      { items: [{ label: 'Slett', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Angre med Ctrl+Z.', onSelect: () => removeImage(id) }] },
+    ], ms ? `Symbol for ${plain(ms.text) || 'milepæl'}` : im.date ? `Festet til ${fmtDate(im.date.day)}` : `${im.px[0]} × ${im.px[1]} px`);
+  };
+
+  /** «Sett inn bilde» i høyreklikkmenyene, med hint om utklippstavlen. */
+  const insertItem = (at: Pt) => ({
+    label: 'Sett inn bilde …',
+    icon: 'image' as const,
+    kbd: 'Ctrl+V',
+    hint: 'Velg en bildefil. Ctrl+V setter inn et bilde fra utklippstavlen, og du kan også dra en fil inn på arket.',
+    onSelect: () => pickImage(at),
+  });
+
+  /** Valg for milepæler: bilde som symbol, eller samme bilde som en annen milepæl har. */
+  const milestoneImageGroup = (plan: PlanFile, ids: string[]) => {
+    const has = ids.map((id) => imagesOf(plan).find((im) => im.milestone?.id === id)).filter((x): x is PlanImage => !!x);
+    const choices = symbolChoices(plan).filter((c) => !ids.includes(findImage(plan, c.id)?.milestone?.id ?? ''));
+    const n = ids.length;
+    const items: CtxItem[] = [
+      { label: has.length ? 'Bytt bilde …' : 'Bruk bilde som symbol …', icon: 'image', hint: `Bildet erstatter flagget eller ruteren og følger milepælen${n > 1 ? 'e' : ''} når ${n > 1 ? 'de' : 'den'} flyttes.`, onSelect: () => pickImage(null, ids) },
+      ...choices.slice(0, 6).map((c) => ({ label: `Bruk samme bilde som «${c.name.length > 28 ? `${c.name.slice(0, 27)}…` : c.name}»`, icon: 'copy' as const, hint: 'Samme bilde, størrelse, rotasjon og beskjæring.', onSelect: () => copySymbol(c.id, ids) })),
+    ];
+    if (has.length) items.push({ label: 'Fjern bildet', icon: 'trash', hint: 'Milepælen får flagget eller ruteren igjen.', onSelect: () => commit((pl) => { pl.plan.layout.images = imagesOf(pl).filter((im) => !im.milestone || !ids.includes(im.milestone.id)); if (!pl.plan.layout.images.length) delete pl.plan.layout.images; }) });
+    return { heading: 'Symbol', items };
+  };
+
+  // Lim inn: et bilde på utklippstavlen settes inn, ellers limes kopierte bokser inn
+  let pasteTimer = 0;
+  document.addEventListener('paste', (e) => {
+    if (!active || (e.target as HTMLElement | null)?.matches?.('input, textarea, select, [contenteditable]')) return;
+    window.clearTimeout(pasteTimer);
+    const files = imageFiles([...(e.clipboardData?.items ?? [])].filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter((f): f is File => !!f));
+    if (files.length) {
+      e.preventDefault();
+      void insertImages(files, lastPointer ?? visibleCenter());
+      return;
+    }
+    if (clipboard.length) {
+      e.preventDefault();
+      pasteFromClipboard();
+    }
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (!active || !layoutNow) return;
+    const q = toMm(e.clientX, e.clientY);
+    lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
+  });
+  sheet.addEventListener('pointerleave', () => (lastPointer = null));
+  // Dra bildefiler inn på arket
+  sheet.addEventListener('dragover', (e) => {
+    if (!active || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  sheet.addEventListener('drop', (e) => {
+    if (!active) return;
+    const files = imageFiles(e.dataTransfer?.files);
+    if (!files.length) return;
+    e.preventDefault();
+    void insertImages(files, toMm(e.clientX, e.clientY));
+  });
   sheet.addEventListener('contextmenu', (e) => {
     if (!active || !layoutNow) return;
     const plan = host.getPlan();
     const p = toMm(e.clientX, e.clientY);
     const L = layoutNow;
+    // Høyreklikk på et bilde eller et punkt i punktbeskjæringen
+    const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid');
+    if (plan && imgT) {
+      e.preventDefault();
+      if (imgT.classList.contains('img-pt')) {
+        const i = Number(imgT.getAttribute('data-i'));
+        const n = placedOf(selectedImage!)?.points?.length ?? 0;
+        ctx.open(e.clientX, e.clientY, 'Punkt', [
+          { items: [{ label: 'Slett punkt', icon: 'trash', kbd: 'Ctrl+klikk', disabled: n <= 3, hint: n <= 3 ? 'Mangekanten må ha minst tre punkter.' : 'Kantene på hver side slås sammen.', onSelect: () => deletePoint(i) }] },
+          { items: [{ label: 'Ferdig med punktene', icon: 'check', kbd: 'Enter', hint: 'Avslutter punktbeskjæringen. Bildet er fortsatt valgt.', onSelect: () => setImageMode('points') }] },
+        ], 'Rediger punkter');
+      } else imageMenu(e, imgT.getAttribute('data-image') ?? selectedImage!);
+      return;
+    }
+    // Utenfor lanene (marger, kalender, forklaring): bare bilder kan settes inn
+    const sheetMenu = () => {
+      e.preventDefault();
+      ctx.open(e.clientX, e.clientY, 'Arket', [{ items: [insertItem(p)] }]);
+    };
     // Høyreklikk i forklaringen: skjul oppføringen eller endre den
     const legHit = (e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]');
     if (plan && legHit) {
@@ -2327,13 +3030,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       ctx.open(e.clientX, e.clientY, 'Topptekst', [
         { items: [{ label: 'Endre overskrift og tekst til høyre', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner toppteksten i panelet til høyre.', onSelect: () => selectHeader() }] },
+        { items: [insertItem(p)] },
       ]);
       return;
     }
-    if (!plan || p.x < L.laneTitleX || p.x > L.plot.x1) return;
+    if (!plan) return;
+    if (p.x < L.laneTitleX || p.x > L.plot.x1) return sheetMenu();
     const ln = laneAt(p.y);
     const lane = ln && findLane(plan, ln.id);
-    if (!ln || !lane) return;
+    if (!ln || !lane) return sheetMenu();
     e.preventDefault();
     const hitId = boxAt(e);
     const box = hitId ? findBox(plan, hitId) : null;
@@ -2371,7 +3076,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const id = box.id;
       const ms = !!box.resolved?.isMilestone;
       const dates = box.resolved ? (ms ? fmtDate(box.resolved.start) : `${fmtDate(box.resolved.start)} – ${fmtDate(box.resolved.finish)}`) : '';
+      // Bilde som symbol: gjelder alle valgte milepæler når milepælen er blant dem
+      const msIds = ms ? (group.includes(id) ? group.filter((x) => findBox(plan, x)?.resolved?.isMilestone) : [id]) : [];
       ctx.open(e.clientX, e.clientY, plain(box.text) || (ms ? 'Milepæl' : 'Boks'), [
+        ...(ms ? [milestoneImageGroup(plan, msIds)] : []),
         {
           items: ms
             ? []
@@ -2443,6 +3151,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           heading: hiddenBoxes.length ? 'Skjulte bokser' : undefined,
           items: hiddenBoxes.map((hb) => ({ label: plain(hb.text) || '(uten tekst)', icon: 'show' as const, hint: 'Vis boksen igjen på samme plass.', onSelect: () => commit((pl) => delete findBox(pl, hb.id)!.hidden) })),
         },
+        { items: [insertItem(p)] },
       ], 'Lane');
     }
   });
@@ -2455,6 +3164,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+    clearImage();
       group = [];
     }
     buildPanel();
@@ -2659,8 +3369,37 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (e.key === 'Escape') {
       if (inField) t.blur();
       else if (criticalMode) setCriticalMode(false);
+      else if (selectedImage && imageMode !== 'none') setImageMode(imageMode);
       else select(null);
       return;
+    }
+    if (!inField && selectedImage) {
+      if (e.key === 'Enter' && imageMode !== 'none') {
+        e.preventDefault();
+        setImageMode(imageMode);
+        return;
+      }
+      if (!mod && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        if (imageMode === 'points' && activePoint >= 0) deletePoint(activePoint);
+        else removeImage(selectedImage);
+        return;
+      }
+      if (mod && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        duplicateImage(selectedImage);
+        return;
+      }
+      // Piltaster flytter bildet 1 mm, med Shift 5 mm. Festet til dato: bare opp og ned.
+      const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const a = arrows[e.key];
+      if (a && !mod && imageMode === 'none') {
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        const id = selectedImage;
+        changePlaced(id, (q) => ({ ...q, cx: q.date ? q.cx : q.cx + a[0] * step, cy: q.cy + a[1] * step }));
+        return;
+      }
     }
     if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane || group.length)) {
       e.preventDefault();
@@ -2678,12 +3417,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     // Kopier og lim inn, også mellom lanes og mellom planer som åpnes etter hverandre
     if (k === 'c' && (selected || group.length) && !window.getSelection()?.toString()) {
-      if (copyToClipboard()) e.preventDefault();
+      if (copyToClipboard()) {
+        e.preventDefault();
+        // Teksten legges også på utklippstavlen, så et eldre bilde der ikke limes inn i stedet for boksene
+        void navigator.clipboard?.writeText(clipboard.map((c) => plain(c.box.text)).join('\n')).catch(() => {});
+      }
       return;
     }
+    // Lim inn håndteres i paste-hendelsen, så et bilde på utklippstavlen kan settes inn.
+    // Kommer ingen paste-hendelse (eldre nettlesere), limes kopierte bokser inn likevel.
     if (k === 'v' && clipboard.length) {
-      e.preventDefault();
-      pasteFromClipboard();
+      window.clearTimeout(pasteTimer);
+      pasteTimer = window.setTimeout(pasteFromClipboard, 60);
       return;
     }
     if (k === 'z' && !e.shiftKey) {
@@ -2716,11 +3461,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+    clearImage();
       group = [];
       buildPanel();
       syncTools();
     },
-    owns: (e) => !!itemOf(e) || (e instanceof MouseEvent && !!boxAt(e)) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
+    owns: (e) => (active && !!(e.target as Element | null)?.closest?.('g.images > g[data-image]')) || !!itemOf(e) || (e instanceof MouseEvent && !!boxAt(e)) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
     get active() {
       return active;
     },
@@ -2740,6 +3486,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+    clearImage();
       group = [];
       typingSession = false;
       host.redraw();

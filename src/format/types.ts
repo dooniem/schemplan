@@ -85,6 +85,8 @@ export interface PlanSettings {
     legendScale?: number;
     /** Dagen planen sist ble endret i appen (YYYY-MM-DD). Datoen nederst er den nyeste av denne og eksporten. */
     editedAt?: string;
+    /** Bilder satt inn i appen, tegnet oppå planen i denne rekkefølgen. */
+    images?: PlanImage[];
   };
   options: {
     legend: boolean;
@@ -92,6 +94,37 @@ export interface PlanSettings {
     filterOutput: boolean;
     colorBy: 'trade' | 'lane';
   };
+}
+
+/** Bilde satt inn i appen. Plass og størrelse er andeler av arket, så bildet står likt på A4 og A1. */
+export interface PlanImage {
+  id: string;
+  /** PNG eller JPEG som data-URL. */
+  data: string;
+  /** Bildets opprinnelige størrelse i piksler, til «Opprinnelig størrelse». */
+  px: [number, number];
+  /** Midten av hele bildet (uten beskjæring), som andel av arkets bredde og høyde. */
+  x: number;
+  y: number;
+  /** Bredde og høyde på hele bildet, begge som andel av arkets bredde. */
+  w: number;
+  h: number;
+  /** Grader med klokken, fra −180 til 180. */
+  rotation: number;
+  /** Vanlig beskjæring: det som er igjen, som [venstre, topp, høyre, bunn] fra 0 til 1 over hele bildet. */
+  crop?: [number, number, number, number];
+  /** Punktbeskjæring: hjørnene i en mangekant, fra 0 til 1 over hele bildet. Gjelder sammen med `crop`. */
+  points?: [number, number][];
+  /**
+   * Festet til en dato: midten av det synlige står dx (andel av arkets bredde) til høyre for midten av dagen,
+   * og følger datoen når kalenderen endres. Bildet flyttes da bare opp og ned.
+   */
+  date?: { day: IsoDate; dx: number };
+  /**
+   * Bildet er symbolet til en milepæl (boks-id) og følger den. dx og dy er avstanden fra milepælens
+   * punkt til midten av det synlige, som andel av arkets bredde. Milepælens eget symbol tegnes ikke.
+   */
+  milestone?: { id: string; dx: number; dy: number };
 }
 
 export interface IsoWeek {

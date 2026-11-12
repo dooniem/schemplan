@@ -121,6 +121,26 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))
           err('plan.layout.logo', 'må være et PNG- eller JPEG-bilde som data-URL, med forholdet mellom bredde og høyde');
       }
+      if (lay.images !== undefined) {
+        const fin = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+        const uv = (v: unknown) => fin(v) && (v as number) >= 0 && (v as number) <= 1;
+        const ok = (im: unknown) => {
+          if (!isObj(im)) return false;
+          const i = im as Obj;
+          return (
+            typeof i.id === 'string' &&
+            typeof i.data === 'string' &&
+            /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(i.data) &&
+            Array.isArray(i.px) && i.px.length === 2 && i.px.every((v) => fin(v) && (v as number) > 0) &&
+            fin(i.x) && fin(i.y) && fin(i.w) && (i.w as number) > 0 && fin(i.h) && (i.h as number) > 0 && fin(i.rotation) &&
+            (i.crop === undefined || (Array.isArray(i.crop) && i.crop.length === 4 && i.crop.every(uv))) &&
+            (i.points === undefined || (Array.isArray(i.points) && i.points.length >= 3 && i.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(uv)))) &&
+            (i.date === undefined || (isObj(i.date) && typeof (i.date as Obj).day === 'string' && ISO_DATE.test((i.date as Obj).day as string) && fin((i.date as Obj).dx))) &&
+            (i.milestone === undefined || (isObj(i.milestone) && typeof (i.milestone as Obj).id === 'string' && fin((i.milestone as Obj).dx) && fin((i.milestone as Obj).dy)))
+          );
+        };
+        if (!Array.isArray(lay.images) || !lay.images.every(ok)) err('plan.layout.images', 'må være en liste med bilder (PNG eller JPEG som data-URL) med plass, størrelse og rotasjon');
+      }
       if (lay.tradeColors !== undefined) {
         const tc = lay.tradeColors;
         const hex = (v: unknown) => typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v);

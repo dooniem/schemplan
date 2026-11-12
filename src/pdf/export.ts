@@ -1,7 +1,7 @@
 // Lager PDF-en: arbeidsfil (planen innebygd, kan redigeres videre i appen) eller vanlig PDF til deling.
 // Lastes først når brukeren lagrer, så pdf-lib og skriftene ikke gjør appen tregere å åpne.
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { clip, closePath, concatTransformationMatrix, drawObject, endPath, lineTo, moveTo, PDFDocument, PDFPage, popGraphicsState, pushGraphicsState, rectangle, rgb, type PDFImage } from 'pdf-lib';
 import type { PlanFile } from '../format/types';
 import type { Layout } from '../layout/layout';
 import regularUrl from '../assets/fonts/carlito-regular.ttf?inline';
@@ -34,6 +34,8 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
     page.drawImage(img, { x: x * MM_TO_PT, y: (L.height - y - h) * MM_TO_PT, width: w * MM_TO_PT, height: h * MM_TO_PT });
   }
 
+  await drawImages(doc, page, L);
+
   doc.setTitle(plan.plan.title, { showInWindowTitleBar: true });
   if (variant === 'arbeidsfil') {
     doc.setCreator(`Skjematisk plan v${appVersion}`);
@@ -50,4 +52,40 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
     page.drawText(label, { x: 8 * MM_TO_PT, y: 3 * MM_TO_PT, size: size * MM_TO_PT, font: fonts.regular, color: rgb(0.45, 0.45, 0.45) });
   }
   return doc.save({ useObjectStreams: true });
+}
+
+/** Bildene satt inn i appen, oppå planen, med rotasjon og beskjæring som på skjermen. Like bilder bygges inn én gang. */
+async function drawImages(doc: PDFDocument, page: PDFPage, L: Layout) {
+  const embedded = new Map<string, PDFImage>();
+  for (const im of L.images) {
+    let img = embedded.get(im.href);
+    if (!img) {
+      const bytes = bytesOf(im.href);
+      img = im.href.startsWith('data:image/png') ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+      embedded.set(im.href, img);
+    }
+    const name = page.node.newXObject('Im', img.ref);
+    const t = (im.rotation * Math.PI) / 180;
+    const cos = Math.cos(t);
+    const sin = Math.sin(t);
+    const x = -im.w / 2;
+    const y = -im.h / 2;
+    const [u0, v0, u1, v1] = im.crop;
+    const ops = [
+      pushGraphicsState(),
+      // Fra mm med y nedover til punkter, så til bildets midte og rotasjon, som i SVG-en
+      concatTransformationMatrix(MM_TO_PT, 0, 0, -MM_TO_PT, 0, L.height * MM_TO_PT),
+      concatTransformationMatrix(cos, sin, -sin, cos, im.cx, im.cy),
+      rectangle(x + u0 * im.w, y + v0 * im.h, (u1 - u0) * im.w, (v1 - v0) * im.h),
+      clip(),
+      endPath(),
+    ];
+    if (im.points) {
+      im.points.forEach(([u, v], i) => ops.push(i === 0 ? moveTo(x + u * im.w, y + v * im.h) : lineTo(x + u * im.w, y + v * im.h)));
+      ops.push(closePath(), clip(), endPath());
+    }
+    // Bildet fyller enhetskvadratet med første rad øverst; y snus fordi siden tegnes med y nedover
+    ops.push(concatTransformationMatrix(im.w, 0, 0, -im.h, x, y + im.h), drawObject(name), popGraphicsState());
+    page.pushOperators(...ops);
+  }
 }
