@@ -1,5 +1,6 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
+import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
@@ -190,17 +191,19 @@ export function removeBox(plan: PlanFile, id: string): void {
 export const LANE_COLORS = ['#FFFFFF', '#DDDDDD', '#8DCDF8', '#BEE5B0', '#FCC781', '#D7B4F3', '#98DEDE', '#F8F1AE', '#D7CAB7', '#EA8183', '#CEE5ED', '#F6CDC7', '#FFC5D3'];
 /** Navn på lanefargene, i samme rekkefølge som LANE_COLORS. */
 const LANE_COLOR_NAMES = ['Hvit', 'Grå', 'Blå', 'Grønn', 'Oransje', 'Lilla', 'Turkis', 'Gul', 'Brun', 'Rød', 'Lyseblå', 'Melon', 'Rosa'];
-/** Lanefargene med navn. */
-export const LANE_PALETTE: [string, string][] = LANE_COLORS.map((c, i) => [c, LANE_COLOR_NAMES[i]]);
+/** Fargerute: farge, navn og eventuelt nummer. */
+export type Swatch = [string, string, number?];
+/** Lanefargene med navn og nummer 0–12. */
+export const LANE_PALETTE: Swatch[] = LANE_COLORS.map((c, i) => [c, LANE_COLOR_NAMES[i], i]);
 
-/** Faste farger for bokser og fag, med navn. */
-export const BOX_PALETTE: [string, string][] = [
+/** Faste farger for bokser og fag, med navn og nummer 1–22. */
+export const BOX_PALETTE: Swatch[] = (<[string, string][]>[
   ['#E6194B', 'Rød'], ['#3CB44B', 'Grønn'], ['#FFE119', 'Gul'], ['#4363D8', 'Blå'], ['#F58231', 'Oransje'],
   ['#911EB4', 'Lilla'], ['#42D4F4', 'Cyan'], ['#F032E6', 'Magenta'], ['#BFEF45', 'Lime'], ['#FABED4', 'Rosa'],
   ['#469990', 'Blågrønn'], ['#DCBEFF', 'Lavendel'], ['#9A6324', 'Brun'], ['#FFFAC8', 'Beige'], ['#800000', 'Rødbrun'],
   ['#AAFFC3', 'Mint'], ['#808000', 'Oliven'], ['#FFD8B1', 'Aprikos'], ['#000075', 'Marine'], ['#A9A9A9', 'Grå'],
   ['#FFFFFF', 'Hvit'], ['#000000', 'Svart'],
-];
+]).map(([c, n], i): Swatch => [c, n, i + 1]);
 
 /** Har brukeren endret lanen? */
 export function isLaneEdited(l: Lane): boolean {
@@ -587,15 +590,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return b;
   };
   /** Fargeruter. Like farger vises bare én gang. */
-  const swatches = (current: string | null, list: [string, string][], onPick: (fill: string) => void) => {
+  const swatches = (current: string | null, list: Swatch[], onPick: (fill: string) => void) => {
     const sw = el('div', { class: 'swatches' });
     const seen = new Set<string>();
-    for (const [fill, name] of list) {
+    for (const [fill, name, num] of list) {
       const key = fill.toUpperCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      const s = el('button', { type: 'button', class: 'swatch', title: name, 'aria-label': name, 'aria-pressed': String(current === key) });
+      const label = num === undefined ? name : `${num} ${name}`;
+      const s = el('button', { type: 'button', class: 'swatch', title: label, 'aria-label': label, 'aria-pressed': String(current === key) });
       s.style.background = fill;
+      if (num !== undefined) {
+        // Samme nummer som fargen har i fargevalget i Project
+        s.textContent = String(num);
+        s.style.color = autoTextColor(key);
+      }
       s.addEventListener('click', () => onPick(key));
       sw.append(s);
     }
@@ -695,7 +704,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * Fargeruter for bokser: de faste boksfargene, så fagfargene i planen som ikke er blant dem.
    * De faste fargene står der selv om planen ikke bruker dem.
    */
-  const planSwatches = (plan: PlanFile): [string, string][] => [
+  const planSwatches = (plan: PlanFile): Swatch[] => [
     ...BOX_PALETTE,
     ...tradeColors(plan).filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
   ];
