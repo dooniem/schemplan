@@ -1927,6 +1927,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         // En overskriftsboks tar med seg boksene som ligger inne i den
         const kids = kidItems().map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }));
         commit((plan) => {
+          // Med «Fyll hele arket» fordeles ledig plass likt på lanene. Slippes boksen lenger ned enn
+          // innholdet i lanen gikk, ville lanen blitt høyere og lanene over lavere, så boksen havnet
+          // nesten der den var. Lanen beholder derfor høyden den har, så boksen står der den ble sluppet.
+          const pl = findLane(plan, lane.id);
+          if (!L.compact && pl && !pl.height && y + (r.y1 - r.y0) - lane.y0 > lane.minH + 1e-6) pl.height = lines(lane.y1 - lane.y0, unit);
           for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
             if (lane !== home) moveBox(plan, m.id, lane.id);
             const b = findBox(plan, m.id);
@@ -2968,6 +2973,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
   });
   sheet.addEventListener('pointerleave', () => (lastPointer = null));
+  // Nettleserens egen dra-og-slipp av bilder i tegningen skal ikke starte: den ville lagt inn en kopi
+  sheet.addEventListener('dragstart', (e) => {
+    if (active) e.preventDefault();
+  });
   // Dra bildefiler inn på arket
   sheet.addEventListener('dragover', (e) => {
     if (!active || !e.dataTransfer?.types.includes('Files')) return;
