@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane, snapshotOf } from './editor';
+import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, newMilestone, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane, snapshotOf } from './editor';
 import { validatePlan } from './format/validate';
 import { computeLayout, type BoxItem } from './layout/layout';
 import { approxMeasure } from './layout/text';
@@ -48,6 +48,14 @@ describe('nye, kopierte, flyttede og skjulte bokser', () => {
     const n = newBox(p, '1', '2026-05-01', '2026-05-30')!;
     removeBox(p, n.id);
     expect(laneOf(p, n.id)).toBeNull();
+  });
+  it('ny milepæl tegnes som milepæl og er gyldig i planfilen', () => {
+    const p = testplan();
+    const m = newMilestone(p, '1', '2026-05-04')!;
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: false }, approxMeasure);
+    const it2 = L.items.find((i) => i.id === m.id);
+    expect(it2?.kind).toBe('milestone');
   });
   it('ny boks tegnes, skjult boks tegnes ikke', () => {
     const p = testplan();
