@@ -1,6 +1,7 @@
 // Oppdater fra Project: fletter en fersk plan inn i en arbeidsfil.
 // Datoer, tekst, fag og lanes kommer fra Project. Det brukeren har endret i appen blir stående.
-import type { Box, Lane, PlanFile } from './format/types';
+import type { Box, BoxFollow, Lane, PlanFile } from './format/types';
+import { applyFollows } from './links';
 
 export interface MergeReport {
   /** Bokser fra Project som fant igjen redigeringene sine. */
@@ -22,6 +23,10 @@ export interface MergeReport {
   manualKept: number;
   /** Lanes laget i appen som er beholdt. */
   manualLanes: number;
+  /** Egne bokser som er flyttet fordi boksen de følger, har fått nye datoer. */
+  followMoved: string[];
+  /** Egne bokser som fulgte en boks som er borte fra Project. De står der de sto. */
+  followLost: string[];
 }
 
 /** Felt som bare settes i appen og følger boksen. */
@@ -34,7 +39,7 @@ const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c)
 
 export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; report: MergeReport } {
   const plan: PlanFile = structuredClone(fresh);
-  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], tradeChanged: [], moveDropped: [], laneNameChanged: [], manualKept: 0, manualLanes: 0 };
+  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], tradeChanged: [], moveDropped: [], laneNameChanged: [], manualKept: 0, manualLanes: 0, followMoved: [], followLost: [] };
 
   for (const k of APP_LAYOUT) if (work.plan.layout[k] !== undefined) (plan.plan.layout as Record<string, unknown>)[k] = structuredClone(work.plan.layout[k]);
 
@@ -54,6 +59,8 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   const oldLanes = new Map(work.lanes.map((l) => [l.id, l]));
   const freshLaneIds = new Set(plan.lanes.map((l) => l.id));
   const moves: { box: Box; from: Lane; to: string }[] = [];
+  /** Gammel id → boksen fra Project den ble til, så egne bokser finner igjen boksen de følger. */
+  const newOf = new Map<string, Box>();
 
   for (const lane of plan.lanes) {
     const ol = oldLanes.get(lane.id);
@@ -67,6 +74,7 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
         continue;
       }
       used.add(ob);
+      newOf.set(ob.id, fb);
       report.kept++;
       for (const f of APP_FIELDS) if (ob[f] !== undefined) (fb as unknown as Record<string, unknown>)[f] = structuredClone(ob[f]);
       // Fag valgt i appen gjelder så lenge Project ikke har endret faget selv
@@ -116,12 +124,26 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   }
 
   // Bokser laget i appen følger lanen sin
+  const manualOf = new Map<string, Box>();
   for (const ol of work.lanes)
     for (const b of ol.boxes)
       if (b.manual) {
-        plan.lanes.find((l) => l.id === ol.id)!.boxes.push(structuredClone(b));
+        const c = structuredClone(b);
+        manualOf.set(b.id, c);
+        plan.lanes.find((l) => l.id === ol.id)!.boxes.push(c);
         report.manualKept++;
       }
+  // Koblingene peker på boksene selv til id-ene er ferdige
+  const follows: { f: BoxFollow; target: Box }[] = [];
+  for (const b of manualOf.values()) {
+    if (!b.follows) continue;
+    const target = manualOf.get(b.follows.box) ?? newOf.get(b.follows.box);
+    if (target) follows.push({ f: b.follows, target });
+    else {
+      report.followLost.push(label(b.text));
+      delete b.follows;
+    }
+  }
 
   for (const m of moves) {
     m.from.boxes.splice(m.from.boxes.indexOf(m.box), 1);
@@ -144,6 +166,10 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       }
       seen.add(b.id);
     }
+  for (const { f, target } of follows) f.box = target.id;
+  const before = new Map([...manualOf.values()].map((b) => [b, b.resolved?.start]));
+  applyFollows(plan);
+  for (const [b, start] of before) if (b.resolved?.start !== start) report.followMoved.push(label(b.text));
   return { plan, report };
 }
 
@@ -187,6 +213,7 @@ export function summarizeMerge(r: MergeReport): string {
     r.goneLanes.length && `${r.goneLanes.length} lanes borte`,
     r.manualKept && `${r.manualKept} egne bokser beholdt`,
     r.manualLanes && `${r.manualLanes} egne lanes beholdt`,
+    r.followMoved.length && `${r.followMoved.length} egne bokser flyttet med`,
   ].filter(Boolean);
   return `Oppdatert fra Project: ${parts.join(', ')}.`;
 }

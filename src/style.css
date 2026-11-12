@@ -481,6 +481,9 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 
 /* Kritisk linje: klikk tar boksen med eller ut */
 .sheet-host.critical-mode g[data-id] { cursor: pointer; }
+/* Velg boksen en egen boks skal følge */
+.sheet-host.follow-mode, .sheet-host.follow-mode g[data-id] { cursor: crosshair; }
+.follow-acts { gap: 16px; }
 /* Kritisk linje: rød som linjen i planen, og fylt når du merker bokser */
 #critical-mode { --crit: #D00000; color: var(--crit); border-color: color-mix(in srgb, var(--crit) 55%, transparent); font-weight: 600; }
 #critical-mode:hover:not(:disabled) { background: color-mix(in srgb, var(--crit) 10%, transparent); }
