@@ -520,7 +520,19 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
 
   /** Bokser kopiert med Ctrl+C. Ligger bare i minnet så lenge siden er åpen. */
-  let clipboard: { box: Box; lane: string }[] = [];
+  let clipboard: { box: Box; lane: string; symbol?: PlanImage }[] = [];
+  /** Bildet som er symbol for milepælen, så kopien får det samme. */
+  const symbolOf = (plan: PlanFile, id: string) => {
+    const im = (plan.plan.layout.images ?? []).find((x) => x.milestone?.id === id);
+    return im ? structuredClone(im) : undefined;
+  };
+  /** Gir kopierte milepæler det samme symbolet som milepælen de er kopiert fra. */
+  const addSymbols = (pl: PlanFile, pairs: [PlanImage | undefined, Box][]) => {
+    for (const [src, b] of pairs) {
+      if (!src?.milestone) continue;
+      (pl.plan.layout.images ??= []).push({ ...structuredClone(src), id: imageId(), milestone: { ...src.milestone, id: b.id } });
+    }
+  };
   const copyToClipboard = () => {
     const plan = host.getPlan();
     if (!plan) return false;
@@ -528,7 +540,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     clipboard = ids.flatMap((id) => {
       const b = findBox(plan, id);
       const l = laneOf(plan, id);
-      return b && l ? [{ box: structuredClone(b), lane: l.id }] : [];
+      return b && l ? [{ box: structuredClone(b), lane: l.id, symbol: symbolOf(plan, id) }] : [];
     });
     return clipboard.length > 0;
   };
@@ -538,7 +550,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Valgt lane, eller lanen til valgt boks. Ellers lanen boksene ble kopiert fra.
     const target = selectedLane ?? (selected ? laneOf(plan, selected)?.id ?? null : null);
     let made: Box[] = [];
-    commit((pl) => (made = pasteBoxes(pl, clipboard, target)));
+    commit((pl) => {
+      made = pasteBoxes(pl, clipboard, target);
+      addSymbols(pl, made.map((b, i) => [clipboard[i].symbol, b]));
+    });
     if (made.length === 1) select(made[0].id);
     else if (made.length > 1) {
       selected = null;
@@ -552,7 +567,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!selected) return;
     let made: Box | null = null;
     const id = selected;
-    commit((pl) => (made = copyBox(pl, id)));
+    commit((pl) => {
+      const sym = symbolOf(pl, id);
+      made = copyBox(pl, id);
+      if (made) addSymbols(pl, [[sym, made]]);
+    });
     if (made) select((made as Box).id);
   };
   const removeGroup = () => {
@@ -1346,7 +1365,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ['Bilder', [
           'Høyreklikk hvor som helst på arket og velg «Sett inn bilde». Ctrl+V setter inn et bilde fra utklippstavlen, og du kan dra bildefiler inn på arket.',
           'Dra i hjørnene for å endre størrelsen og i den runde knotten for å rotere. Dobbeltklikk for å beskjære.',
-          'Høyreklikk en milepæl for å bruke et bilde som symbol. Bildet følger milepælen.',
+          'Høyreklikk en milepæl for å bruke et bilde som symbol. Bildet følger milepælen, og drar du i bildet, flyttes milepælen. Hold Alt for å flytte bare bildet.',
         ]],
       ];
       for (const [title, tips] of groups) {
@@ -2273,7 +2292,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     } else if (imgG) {
       const id = imgG.getAttribute('data-image')!;
       if (id !== selectedImage) selectImage(id);
-      d = startImageMove(id);
+      // Et symbol drar milepælen med seg, som flagget og ruteren gjør. Med Alt flyttes bare bildet.
+      const ms = host.getPlan() && findImage(host.getPlan()!, id)?.milestone;
+      const msItem = ms && !e.altKey ? layoutNow.items.find((i) => i.id === ms.id) : undefined;
+      d = msItem ? startMove(msItem) : startImageMove(id);
     } else if (t.closest('.box-handle')) {
       const it = layoutNow.items.find((i) => i.id === selected);
       if (it?.kind === 'box') d = startBoxResize(it);
@@ -2817,7 +2839,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (im.milestone) {
       sp.append(lockedRow('Følger milepælen', 'Løsne', 'Bildet blir stående der det er, og milepælen får sitt eget symbol igjen', () => pinImage(im.id, false)));
       const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
-      if (others.length) sp.append(el('p', { class: 'hint' }, 'Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke dette bildet der også, med samme størrelse og rotasjon.'));
+      sp.append(el('p', { class: 'hint' }, `Dra bildet for å flytte milepælen opp eller ned. Hold Alt mens du drar, eller bruk piltastene, for å flytte bare bildet. Kopierer du milepælen, får kopien samme bilde.${others.length ? ' Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke bildet der også.' : ''}`));
     } else {
       sp.append(switchRow('Fest til dato', !!im.date, (v) => pinImage(im.id, v), 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned'));
       if (im.date) {
@@ -2884,7 +2906,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       },
       {
         items: ms
-          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen.', onSelect: () => pinImage(id, false) }]
+          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) }]
           : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${fmtDate(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
       },
       {
@@ -3138,6 +3160,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
                     let made: Box[] = [];
                     commit((pl) => {
                       made = pasteBoxes(pl, clipboard, ln.id);
+                      addSymbols(pl, made.map((b, i) => [clipboard[i].symbol, b]));
                       // Én boks havner der du høyreklikket
                       if (made.length === 1) made[0].top = lines(Math.max(0, p.y - ln.top), L.unit);
                     });
