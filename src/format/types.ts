@@ -88,6 +88,10 @@ export interface PlanSettings {
     editedAt?: string;
     /** Bilder satt inn i appen, tegnet oppå planen i denne rekkefølgen. */
     images?: PlanImage[];
+    /** Endringer fra Project ved siste oppdatering: nye bokser, og bokser med nye datoer (med datoene de hadde før). */
+    changes?: Record<string, BoxChange>;
+    /** Marker endringene fra siste oppdatering på arket. */
+    showChanges?: boolean;
     /** Egendefinert planområde: topp- og bunnkanten som punkter [x, y], andeler av arket fra venstre til høyre. */
     planArea?: { top?: [number, number][]; bottom?: [number, number][] };
   };
@@ -287,6 +291,13 @@ export interface BoxFollow {
   box: string;
   edge: 'start' | 'finish';
   at: IsoDate;
+}
+
+/** En boks som er ny fra Project, eller som har fått nye datoer (start og finish er datoene før). */
+export interface BoxChange {
+  kind: 'new' | 'moved';
+  start?: string;
+  finish?: string;
 }
 
 export interface MilestoneStyle {

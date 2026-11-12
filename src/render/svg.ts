@@ -1,4 +1,4 @@
-import type { Layout, TextBlock } from '../layout/layout';
+import { CHANGE_COLOR, type Layout, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
@@ -185,6 +185,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
     if (it.kind === 'milestone' && it.verticalLine) node('line', { x1: it.x, x2: it.x, y1: y0, y2: y1, stroke: it.color, 'stroke-width': 0.5 }, vlines);
   });
 
+  // Endringer fra siste oppdatering: stiplet omriss der boksen sto før, bak boksene
+  if (L.changes.some((c) => c.ghost)) {
+    const gg = node('g', { class: 'change-ghosts', 'pointer-events': 'none' }, svg);
+    for (const c of L.changes)
+      if (c.ghost) node('rect', { x: c.ghost.x0, y: c.y, width: Math.max(0.6, c.ghost.x1 - c.ghost.x0), height: c.h, fill: CHANGE_COLOR, 'fill-opacity': 0.08, stroke: CHANGE_COLOR, 'stroke-width': 0.3, 'stroke-dasharray': '1 0.7' }, gg);
+  }
+
   // Bokser og milepæler
   const itemsG = node('g', { class: 'items' }, svg);
   for (const it of L.items) {
@@ -248,6 +255,14 @@ export function renderPlan(L: Layout): SVGSVGElement {
   }
 
   // Kritisk linje oppå boksene. Klikk går gjennom den til boksene under.
+  // Ramme rundt det som er nytt eller har nye datoer
+  if (L.changes.length) {
+    const cg = node('g', { class: 'change-marks', 'pointer-events': 'none' }, svg);
+    const pad = 0.5;
+    for (const c of L.changes)
+      node('rect', { x: c.x0 - pad, y: c.y - pad, width: c.x1 - c.x0 + pad * 2, height: c.h + pad * 2, rx: 0.6, fill: 'none', stroke: CHANGE_COLOR, 'stroke-width': c.kind === 'new' ? 0.6 : 0.4, ...(c.kind === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, cg);
+  }
+
   if (L.critical && L.critical.points.length >= 4) {
     const pts = L.critical.points;
     const d = pts.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
@@ -316,6 +331,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
     } else if (e.symbol === 'flag') {
       node('line', { x1: cx + s * 0.6, x2: cx + s * 0.6, y1: cy - s, y2: cy + s, stroke: '#404040', 'stroke-width': 0.3 }, leg);
       node('path', { d: `M${r(cx + s * 0.6)} ${r(cy - s)} L${r(cx - s * 1.2)} ${r(cy - s * 0.45)} L${r(cx + s * 0.6)} ${r(cy + s * 0.1)} Z`, fill: '#008000' }, leg);
+    } else if (e.symbol === 'new' || e.symbol === 'moved') {
+      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, rx: 0.4, fill: '#FFFFFF', stroke: CHANGE_COLOR, 'stroke-width': e.symbol === 'new' ? 0.6 : 0.4, ...(e.symbol === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, leg);
     } else if (e.symbol === 'holiday') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
     } else {
