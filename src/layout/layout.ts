@@ -1,4 +1,4 @@
-import type { Box, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
+import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
@@ -176,9 +176,27 @@ export interface LegendEntry {
   trade?: string;
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
-  symbol?: 'diamond' | 'flag' | 'holiday';
+  symbol?: 'diamond' | 'flag' | 'holiday' | 'new' | 'moved';
   /** Nøkkelen i plan.layout.legendItems: fagnavnet, eller FERIE_KEY. */
   key: string;
+}
+
+/** Nøkler i plan.layout.legendItems for endringsvisningen. */
+export const CHANGE_KEYS = { new: '(ny)', moved: '(ny dato)' } as const;
+/** Fargen endringene markeres med. */
+export const CHANGE_COLOR = '#E8590C';
+
+/** Markering av en boks som er ny eller har fått nye datoer ved siste oppdatering fra Project. */
+export interface ChangeMark {
+  id: string;
+  kind: 'new' | 'moved';
+  /** Rammen rundt boksen eller milepælen slik den står nå. */
+  x0: number;
+  x1: number;
+  y: number;
+  h: number;
+  /** Der den sto før (bare for nye datoer, og bare når de gamle datoene er i kalenderen). */
+  ghost: { x0: number; x1: number } | null;
 }
 
 /** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
@@ -222,6 +240,7 @@ export interface Layout {
   dateAt(x: number): string;
   /** Bilder satt inn i appen, i mm. Bilder festet til en dato utenfor kalenderen er ikke med. */
   images: PlacedImage[];
+  changes: ChangeMark[];
   /** x for midten av en dag (YYYY-MM-DD), eller null når dagen ikke er med i kalenderen. */
   xOfDate(iso: string): number | null;
   /** Logo øverst til venstre, i mm. */
@@ -577,6 +596,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   });
 
   // ---- Legend ----
+  // Endringer fra siste oppdatering som vises på arket
+  const changeOf = file.plan.layout.showChanges ? (file.plan.layout.changes ?? {}) : {};
+  const changeKinds = new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && changeOf[b.id]).map((b) => changeOf[b.id].kind)));
   const usedTrades = new Set<string>();
   lanePieces.flat().forEach((p) => p.item.kind === 'box' && usedTrades.add((p.item as BoxItem & { trade?: string }).trade ?? ''));
   // Som overskriften krymper ikke bunnteksten (legend og dato) når planen skaleres ned
@@ -590,18 +612,19 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   if (opts.showLegend ?? file.plan.options.legend) {
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
-    const symbolEntries: { name: string; symbol: 'diamond' | 'flag' | 'holiday' }[] = ny
-      ? [
-          // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
-          ...(file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const }] : []),
-        ]
-      : [];
+    const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved'; key: string }[] = [
+      // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
+      ...(ny && file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
+      ...(['new', 'moved'] as const)
+        .filter((k) => changeKinds.has(k))
+        .map((k) => ({ name: k === 'new' ? 'Ny fra Project' : 'Ny dato fra Project', symbol: k, key: CHANGE_KEYS[k] })),
+    ];
     // Oppføringer kan skjules eller få egen tekst i appen
     const items = file.plan.layout.legendItems ?? {};
     const tradeEntries = fileColors.filter((c) => usedTrades.has(c.name) && !items[c.name]?.hidden);
     const entries = [
       ...tradeEntries.map((c) => ({ c, symbol: undefined, trade: c.name as string | undefined, key: c.name })),
-      ...symbolEntries.filter(() => !items[FERIE_KEY]?.hidden).map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined, key: FERIE_KEY })),
+      ...symbolEntries.filter((e) => !items[e.key]?.hidden).map((e) => ({ c: { name: e.name, fill: '#FFFFFF', border: null, text: '#000000' } as TradeColor, symbol: e.symbol, trade: undefined, key: e.key })),
     ];
     const names = entries.map(({ c, key }) => items[key]?.text?.trim() || (ny && c.name === '(none)' ? 'Uten fag' : c.name));
     // Forklaringen skal helst stå på én rad. Først tettes mellomrommet, så krympes den
@@ -993,6 +1016,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     compact,
     style: ny ? 'ny' : 'excel',
     logo,
+    changes: changeMarks(items, changeOf, axis),
     images: (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p),
     xOfDate,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
@@ -1604,4 +1628,27 @@ export function planDate(file: PlanFile): string {
 function formatLong(iso: string): string {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
+}
+
+/** Rammer rundt bokser og milepæler som er nye eller har nye datoer, og hvor de sto før. */
+function changeMarks(items: Item[], changes: Record<string, BoxChange>, axis: TimeAxis): ChangeMark[] {
+  const marks: ChangeMark[] = [];
+  const inCal = (t: number) => t >= axis.start && t < axis.end;
+  for (const it of items) {
+    const c = changes[it.id];
+    if (!c) continue;
+    const s = c.start ? parseIso(c.start) : NaN;
+    const f = c.finish ? parseIso(c.finish) : NaN;
+    if (it.kind === 'box') {
+      const ghost = c.kind === 'moved' && (inCal(s) || inCal(f)) && f >= s
+        ? { x0: axis.xStart(Math.max(s, axis.start)), x1: axis.xEnd(Math.min(f, addDays(axis.end, -1))) }
+        : null;
+      marks.push({ id: it.id, kind: c.kind, x0: it.x0, x1: it.x1, y: it.y, h: it.h, ghost });
+    } else {
+      const half = it.size / 2;
+      const gx = c.kind === 'moved' && inCal(f) ? axis.xEnd(f) : null;
+      marks.push({ id: it.id, kind: c.kind, x0: it.x - half, x1: it.x + half, y: it.y - half, h: it.size, ghost: gx === null ? null : { x0: gx - half, x1: gx + half } });
+    }
+  }
+  return marks;
 }

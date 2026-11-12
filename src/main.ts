@@ -702,6 +702,13 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.fit === 'sheet') === opts.fitToSheet)));
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
   $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
+  const nChanges = Object.keys(plan?.plan.layout.changes ?? {}).length;
+  const showChanges = $<HTMLInputElement>('#show-changes');
+  showChanges.disabled = !nChanges;
+  showChanges.checked = !!nChanges && !!plan?.plan.layout.showChanges;
+  $('#show-changes-hint').textContent = nChanges
+    ? `${nChanges} ${nChanges === 1 ? 'boks' : 'bokser'} ny eller med nye datoer ved siste oppdatering`
+    : 'Vises etter Oppdater fra Project';
   $<HTMLInputElement>('#show-bottom-cal').checked = opts.showBottomCalendar ?? plan?.plan.calendar.bottomCalendar ?? false;
   $<HTMLInputElement>('#show-legend').disabled = !plan;
   $<HTMLInputElement>('#show-bottom-cal').disabled = !plan;
@@ -774,6 +781,11 @@ document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((btn) =>
     draw();
   }),
 );
+$<HTMLInputElement>('#show-changes').addEventListener('change', (e) => {
+  if (!plan) return;
+  plan.plan.layout.showChanges = (e.target as HTMLInputElement).checked;
+  draw();
+});
 $<HTMLInputElement>('#show-legend').addEventListener('change', (e) => {
   opts.showLegend = (e.target as HTMLInputElement).checked;
   draw();

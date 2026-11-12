@@ -1,5 +1,5 @@
 // Datafanen: én rad per boks og milepæl, slik planen ser ut nå (med endringene fra appen).
-import type { Box, PlanFile } from '../format/types';
+import type { Box, BoxChange, PlanFile } from '../format/types';
 import { boxTrade, tradeColors } from '../trades';
 
 export interface DataRow {
@@ -20,6 +20,8 @@ export interface DataRow {
   /** Med i den kritiske linjen. */
   critical: boolean;
   movedFrom: string;
+  /** Endring ved siste oppdatering fra Project: ny, eller nye datoer (med datoene før). Tom ellers. */
+  fromProject: string;
   taskIds: string;
   taskNames: string;
   fill: string;
@@ -57,8 +59,18 @@ function changesOf(b: Box): string[] {
   if (b.bold) c.push('fet skrift');
   if (b.textMiddle) c.push('tekst i midten');
   if (b.milestoneStyle) c.push('milepælsutseende');
+  if (b.textScale !== undefined) c.push('tekststørrelse');
+  if (b.follows) c.push('følger en annen boks');
   if (b.hidden) c.push('skjult');
   return c;
+}
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+function changeText(c: BoxChange | undefined, milestone: boolean): string {
+  if (!c) return '';
+  if (c.kind === 'new') return 'Ny';
+  if (!c.finish) return 'Nye datoer';
+  return milestone || !c.start ? `Ny dato (var ${ddmm(c.finish)})` : `Nye datoer (var ${ddmm(c.start)}–${ddmm(c.finish)})`;
 }
 
 export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow[] {
@@ -89,6 +101,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         hidden: !!b.hidden || !!l.hidden,
         critical: !!b.critical,
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
+        fromProject: changeText(plan.plan.layout.changes?.[b.id], ms),
         taskIds: b.taskIds.join(', '),
         taskNames: b.taskIds.map((id) => names.get(id) ?? '').filter(Boolean).join('; '),
         fill: (b.fill ?? (r && trade ? tradeFill.get(trade) : '') ?? '').toUpperCase(),
@@ -131,6 +144,7 @@ export const COLUMNS: { key: keyof DataRow; title: string; width: number; date?:
   { key: 'hidden', title: 'Skjult', width: 8 },
   { key: 'critical', title: 'Kritisk linje', width: 12 },
   { key: 'movedFrom', title: 'Flyttet fra', width: 20 },
+  { key: 'fromProject', title: 'Siste oppdatering', width: 30 },
   { key: 'fill', title: 'Farge', width: 9 },
   { key: 'taskIds', title: 'Aktivitets-ID', width: 14 },
   { key: 'taskNames', title: 'Aktiviteter i Project', width: 40 },

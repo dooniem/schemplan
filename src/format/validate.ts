@@ -119,6 +119,13 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
+      if (lay.showChanges !== undefined) needBool(lay, 'showChanges', 'plan.layout');
+      if (lay.changes !== undefined) {
+        const ch = lay.changes;
+        const dateOk = (v: unknown) => v === undefined || (typeof v === 'string' && ISO_DATE.test(v));
+        if (!isObj(ch) || !Object.values(ch).every((v) => isObj(v) && (v.kind === 'new' || v.kind === 'moved') && dateOk(v.start) && dateOk(v.finish)))
+          err('plan.layout.changes', 'må ha kind (new/moved) og eventuelt start og finish (YYYY-MM-DD) for hver boks');
+      }
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
       if (lay.calendarMode !== undefined) needEnum(lay, 'calendarMode', 'plan.layout', ['month', 'week']);
       if (lay.logo !== undefined) {

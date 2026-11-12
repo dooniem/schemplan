@@ -27,6 +27,26 @@ describe('oppdater fra Project', () => {
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
 
+  it('husker hva som er nytt og hvilke bokser som har fått nye datoer', () => {
+    const work = testplan();
+    const fresh = testplan();
+    const before = { ...box(fresh, '1_1').resolved! };
+    box(fresh, '1_1').resolved!.finish = '2026-04-30';
+    const extra = structuredClone(box(fresh, '1_2'));
+    Object.assign(extra, { id: '9_9', text: 'Helt ny', taskIds: [999] });
+    fresh.lanes[0].boxes.push(extra);
+    const { plan } = mergePlans(work, fresh);
+    expect(plan.plan.layout.changes).toEqual({
+      '1_1': { kind: 'moved', start: before.start, finish: before.finish },
+      '9_9': { kind: 'new' },
+    });
+    expect(plan.plan.layout.showChanges).toBe(true);
+    expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
+    // Neste oppdatering uten endringer fjerner markeringen
+    const again = mergePlans(plan, structuredClone(fresh)).plan;
+    expect(again.plan.layout.changes).toBeUndefined();
+  });
+
   it('bilder satt inn i appen følger med', () => {
     const work = testplan();
     work.plan.layout.images = [{ id: 'i1', data: 'data:image/png;base64,AA==', px: [10, 10], x: 0.5, y: 0.5, w: 0.1, h: 0.1, rotation: 30, crop: [0, 0, 0.5, 1], date: { day: '2026-03-02', dx: 0 } }];

@@ -1,6 +1,6 @@
 // Oppdater fra Project: fletter en fersk plan inn i en arbeidsfil.
 // Datoer, tekst, fag og lanes kommer fra Project. Det brukeren har endret i appen blir stående.
-import type { Box, BoxFollow, Lane, PlanFile } from './format/types';
+import type { Box, BoxChange, BoxFollow, Lane, PlanFile } from './format/types';
 import { applyFollows } from './links';
 
 export interface MergeReport {
@@ -32,7 +32,7 @@ export interface MergeReport {
 /** Felt som bare settes i appen og følger boksen. */
 const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'spanEnd', 'compactTop', 'compactSpanEnd', 'textMiddle', 'bold', 'milestoneStyle', 'critical', 'textScale', 'calloutWidthCm'] as const;
 /** Valg fra appen som ligger i plan.layout. */
-const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale', 'calloutMaxWidthCm', 'images', 'planArea'] as const;
+const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale', 'calloutMaxWidthCm', 'images', 'planArea', 'showChanges'] as const;
 
 const label = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim() || '(uten tekst)';
 const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c).join(',') : '');
@@ -61,6 +61,8 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   const moves: { box: Box; from: Lane; to: string }[] = [];
   /** Gammel id → boksen fra Project den ble til, så egne bokser finner igjen boksen de følger. */
   const newOf = new Map<string, Box>();
+  /** Det som er nytt eller har nye datoer i denne oppdateringen, til endringsvisningen. */
+  const changes: Record<string, BoxChange> = {};
 
   for (const lane of plan.lanes) {
     const ol = oldLanes.get(lane.id);
@@ -71,8 +73,11 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       if (!ob || used.has(ob)) ob = byId.get(fb.id);
       if (!ob || used.has(ob)) {
         report.newBoxes.push(label(fb.text));
+        changes[fb.id] = { kind: 'new' };
         continue;
       }
+      if (ob.resolved && fb.resolved && (ob.resolved.start !== fb.resolved.start || ob.resolved.finish !== fb.resolved.finish))
+        changes[fb.id] = { kind: 'moved', start: ob.resolved.start, finish: ob.resolved.finish };
       used.add(ob);
       newOf.set(ob.id, fb);
       report.kept++;
@@ -179,6 +184,11 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       const id = idNow(im.milestone.id);
       return ids.has(id) ? [{ ...im, milestone: { ...im.milestone, id } }] : [];
     });
+  // Endringene gjelder bare siste oppdatering. Markeringen slås på når det er noe å vise.
+  if (Object.keys(changes).length) {
+    plan.plan.layout.changes = changes;
+    plan.plan.layout.showChanges = true;
+  } else delete plan.plan.layout.changes;
   const before = new Map([...manualOf.values()].map((b) => [b, b.resolved?.start]));
   applyFollows(plan);
   for (const [b, start] of before) if (b.resolved?.start !== start) report.followMoved.push(label(b.text));
