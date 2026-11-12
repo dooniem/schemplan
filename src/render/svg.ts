@@ -1,6 +1,7 @@
 import type { Layout, TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
+import type { PlacedImage } from '../layout/image';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -44,6 +45,35 @@ function text(t: TextBlock, parent: Element) {
     span.textContent = line;
   });
   return el;
+}
+
+/**
+ * Tegner et bilde med beskjæring. Gruppen er flyttet og rotert, så beskjæringen kan regnes i
+ * bildets egne mål. suffix skiller klippene når samme bilde tegnes flere ganger (markering ved redigering).
+ */
+export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { full?: boolean; opacity?: number } = {}) {
+  const g = node('g', { 'data-image': p.id, transform: `translate(${r(p.cx)} ${r(p.cy)}) rotate(${r(p.rotation)})` }, parent);
+  if (opts.opacity !== undefined) g.setAttribute('opacity', String(opts.opacity));
+  const x = -p.w / 2;
+  const y = -p.h / 2;
+  const img = node('image', { x, y, width: p.w, height: p.h, href: p.href, preserveAspectRatio: 'none' });
+  if (opts.full) {
+    g.append(img);
+    return g;
+  }
+  const key = `${p.id}${suffix}`.replace(/[^A-Za-z0-9_-]/g, '_');
+  const defs = node('defs', {}, g);
+  const [u0, v0, u1, v1] = p.crop;
+  const rc = node('clipPath', { id: `imc-${key}` }, defs);
+  node('rect', { x: x + u0 * p.w, y: y + v0 * p.h, width: (u1 - u0) * p.w, height: (v1 - v0) * p.h }, rc);
+  const inner = node('g', { 'clip-path': `url(#imc-${key})` }, g);
+  if (p.points) {
+    const pc = node('clipPath', { id: `imp-${key}` }, defs);
+    node('polygon', { points: p.points.map(([u, v]) => `${r(x + u * p.w)},${r(y + v * p.h)}`).join(' ') }, pc);
+    img.setAttribute('clip-path', `url(#imp-${key})`);
+  }
+  inner.append(img);
+  return g;
 }
 
 export function renderPlan(L: Layout): SVGSVGElement {
@@ -173,7 +203,9 @@ export function renderPlan(L: Layout): SVGSVGElement {
       const lb = it.labelBox;
       node('rect', { x: lb.x, y: lb.y, width: lb.w, height: lb.h, fill: '#FFFFFF', 'fill-opacity': labelBg }, g);
       const left = lb.x >= it.x;
-      if (it.symbol === 'diamond') {
+      if (it.imageSymbol) {
+        // Bildet er symbolet og tegnes oppå planen sammen med de andre bildene
+      } else if (it.symbol === 'diamond') {
         // Ruter, strek bort til en loddrett strek foran teksten
         const bar = left ? lb.x : lb.x + lb.w;
         node('line', { x1: it.x, x2: bar, y1: it.y, y2: it.y + s * 0.3, stroke: LEADER, 'stroke-width': 0.3 }, g);
@@ -272,6 +304,12 @@ export function renderPlan(L: Layout): SVGSVGElement {
     }
     text(e.label, leg);
   });
+
+  // Bilder satt inn i appen ligger oppå planen
+  if (L.images.length) {
+    const ig = node('g', { class: 'images' }, svg);
+    L.images.forEach((im) => drawImage(im, ig));
+  }
 
   if (L.logo) node('image', { x: L.logo.x, y: L.logo.y, width: L.logo.w, height: L.logo.h, href: L.logo.href, preserveAspectRatio: 'xMinYMid meet' }, svg);
   text(L.title, svg);

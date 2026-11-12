@@ -543,3 +543,11 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
   .topbar:has(#lookahead-step:not([hidden])) #version { display: none; }
   .topbar:has(#lookahead-step:not([hidden])) .search input { width: 110px; }
 }
+/* Bilder: knapper med ikon i panelet */
+#panel .img-actions .button { display: inline-flex; align-items: center; gap: 4px; }
+#panel .img-actions .button .pico { width: 14px; height: 14px; }
+#panel .img-actions .icon-only { padding: 3px 5px; }
+#panel .img-actions .button:last-child { margin-left: auto; }
+.row.dates input[type='number'] { font-variant-numeric: tabular-nums; }
+.row.dates input[type='number'] { width: 100%; }
+#sheet.editing svg.plan g.images > g[data-image] { cursor: move; }

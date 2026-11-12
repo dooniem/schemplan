@@ -27,6 +27,14 @@ describe('oppdater fra Project', () => {
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
 
+  it('bilder satt inn i appen følger med', () => {
+    const work = testplan();
+    work.plan.layout.images = [{ id: 'i1', data: 'data:image/png;base64,AA==', px: [10, 10], x: 0.5, y: 0.5, w: 0.1, h: 0.1, rotation: 30, crop: [0, 0, 0.5, 1], date: { day: '2026-03-02', dx: 0 } }];
+    const { plan } = mergePlans(work, testplan());
+    expect(plan.plan.layout.images).toEqual(work.plan.layout.images);
+    expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
+  });
+
   it('callout-bredden fra arbeidsfilen gjelder, som de andre startverdiene', () => {
     const work = testplan();
     work.plan.layout.calloutMaxWidthCm = 2.5;

@@ -1,6 +1,7 @@
 import type { Box, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
+import { placeImage, type PlacedImage } from './image';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
@@ -120,6 +121,8 @@ export interface MilestoneItem {
   label: TextBlock;
   labelBox: { x: number; y: number; w: number; h: number };
   verticalLine: boolean;
+  /** Et bilde satt inn i appen er symbolet; flagget eller ruteren tegnes ikke. */
+  imageSymbol?: boolean;
 }
 
 export type Item = BoxItem | MilestoneItem;
@@ -213,6 +216,10 @@ export interface Layout {
   style: PlanStyle;
   /** Datoen (ÅÅÅÅ-MM-DD) som starter ved x, til nye bokser. */
   dateAt(x: number): string;
+  /** Bilder satt inn i appen, i mm. Bilder festet til en dato utenfor kalenderen er ikke med. */
+  images: PlacedImage[];
+  /** x for midten av en dag (YYYY-MM-DD), eller null når dagen ikke er med i kalenderen. */
+  xOfDate(iso: string): number | null;
   /** Logo øverst til venstre, i mm. */
   logo: { x: number; y: number; w: number; h: number; href: string } | null;
   /** Kritisk linje gjennom de merkede boksene, eller null. */
@@ -785,6 +792,18 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     .filter((h) => h.e >= axis.start && h.s < axis.end)
     .map((h) => ({ x0: axis.xStart(Math.max(h.s, axis.start)), x1: axis.xEnd(Math.min(h.e, addDays(axis.end, -1))) }));
 
+  // Milepæler med bilde som symbol: symbolet tegnes ikke, bildet står der i stedet
+  const symbolImages = new Set((file.plan.layout.images ?? []).flatMap((im) => (im.milestone ? [im.milestone.id] : [])));
+  for (const it of items) if (it.kind === 'milestone' && symbolImages.has(it.id)) it.imageSymbol = true;
+  const milestoneAt = (id: string) => {
+    const it = items.find((i) => i.id === id);
+    return it?.kind === 'milestone' ? { x: it.x, y: it.y } : null;
+  };
+  const xOfDate = (iso: string) => {
+    const t = parseIso(iso);
+    if (!(t >= axis.start && t < axis.end)) return null;
+    return (axis.xStart(t) + axis.xEnd(t)) / 2;
+  };
   return {
     width: W,
     height: H,
@@ -812,6 +831,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     compact,
     style: ny ? 'ny' : 'excel',
     logo,
+    images: (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p),
+    xOfDate,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
     unit: lh,
     overview,

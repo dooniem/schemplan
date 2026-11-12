@@ -29,6 +29,14 @@ const ICONS = {
   diamond: 'M12 4l8 8-8 8-8-8z',
   flag: 'M6 21V4 M6 4h11l-2.5 4 2.5 4H6',
   undo: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-4',
+  image: 'M4 5h16v14H4z M4 16l5-5 4 4 2-2 5 5 M15.5 9h.01',
+  crop: 'M7 3v14h14 M3 7h14v14',
+  points: 'M7 18L9 6l9 3-3 9z M5.5 16.5h3v3h-3z M7.5 4.5h3v3h-3z M16.5 7.5h3v3h-3z',
+  rotate: 'M20 12a8 8 0 1 1-2.4-5.7 M20 4v4.5h-4.5',
+  rotateLeft: 'M4 12a8 8 0 1 0 2.4-5.7 M4 4v4.5h4.5',
+  resize: 'M4 9V4h5 M4 4l6 6 M20 15v5h-5 M20 20l-6-6',
+  calendar: 'M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5',
+  front: 'M9 9h11v11H9z M4 15V4h11',
   unpin: 'M12 16v5 M8 3h8 M9 3v5l-3 5h12l-3-5V3 M3 3l18 18',
 } as const;
 export type IconName = keyof typeof ICONS;
