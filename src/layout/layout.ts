@@ -40,6 +40,8 @@ export interface LayoutOptions {
   lookahead?: LookaheadExtras;
   /** Statuslinjen, når den er slått på og har en dato. */
   status?: { moment: StatusMoment; style: StatusLine };
+  /** Dagens dato (YYYY-MM-DD) når linjen for i dag er slått på. */
+  today?: string;
 }
 
 /** Statuslinjen i mm. */
@@ -241,6 +243,8 @@ export interface Layout {
   /** Bilder satt inn i appen, i mm. Bilder festet til en dato utenfor kalenderen er ikke med. */
   images: PlacedImage[];
   changes: ChangeMark[];
+  /** Linjen for i dag (midt på dagen), når den er slått på og dagen er i kalenderen. */
+  todayX: number | null;
   /** x for midten av en dag (YYYY-MM-DD), eller null når dagen ikke er med i kalenderen. */
   xOfDate(iso: string): number | null;
   /** Logo øverst til venstre, i mm. */
@@ -1017,6 +1021,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     style: ny ? 'ny' : 'excel',
     logo,
     changes: changeMarks(items, changeOf, axis),
+    todayX: opts.today ? xOfDate(opts.today) : null,
     images: (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p),
     xOfDate,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),

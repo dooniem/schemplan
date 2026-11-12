@@ -3780,6 +3780,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         return;
       }
     }
+    // Piltast opp/ned flytter valgt boks en kvart linje i lanen, med Shift en hel linje
+    if (!inField && !mod && !e.altKey && selected && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && layoutNow) {
+      const L = layoutNow;
+      const it = L.items.find((i) => i.id === selected);
+      const ln = it?.kind === 'box' && !it.span ? laneAt(it.y) : null;
+      if (it?.kind === 'box' && ln) {
+        e.preventDefault();
+        const step = (e.shiftKey ? 1 : 0.25) * (e.key === 'ArrowUp' ? -1 : 1);
+        const at = Math.max(0, Math.round((lines(it.y - ln.top, L.unit) + step) * 4) / 4);
+        const id = selected;
+        commit((pl) => {
+          const b = findBox(pl, id);
+          if (!b) return;
+          if (L.compact) b.compactTop = at;
+          else b.top = at;
+        });
+        return;
+      }
+    }
     if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane || group.length)) {
       e.preventDefault();
       if (group.length) removeGroup();

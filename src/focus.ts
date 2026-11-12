@@ -115,6 +115,10 @@ export function createFocus(
       add('Slutt', norsk(r.finish));
       if (r.start) add('Varighet', duration(r.start, r.finish));
     }
+    if (r.progress) add('Ferdig', r.progress);
+    if (r.baseline) add('Baseline', r.baseline);
+    if (r.fromProject) add('Oppdatering', r.fromProject);
+    if (r.taskNames) add(r.taskNames.includes('; ') ? 'Aktiviteter' : 'Aktivitet', r.taskNames.split('; ').slice(0, 3).join(', ') + (r.taskNames.split('; ').length > 3 ? ' …' : ''));
     return dl;
   };
 

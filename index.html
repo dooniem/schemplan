@@ -117,6 +117,10 @@
             <input type="checkbox" id="show-bottom-cal" role="switch" />
           </label>
           <label class="set-switch">
+            <span><strong>Dagens dato</strong><small>Tynn stiplet linje på dagen i dag, også på PDF</small></span>
+            <input type="checkbox" id="show-today" role="switch" />
+          </label>
+          <label class="set-switch">
             <span><strong>Endringer fra Project</strong><small id="show-changes-hint">Ramme rundt nye bokser og nye datoer etter siste oppdatering</small></span>
             <input type="checkbox" id="show-changes" role="switch" />
           </label>
@@ -304,7 +308,7 @@
       <div class="pm-group" role="group">
         <button type="button" id="save-work" class="pm-item" role="menuitem" disabled>
           <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v5 M7 3v18h5 M14 3v4h4 M15 21v-2.5l4.5-4.5 2.5 2.5-4.5 4.5z"/></svg>
-          <span class="pm-text"><strong>Lagre arbeidsfil</strong><span class="pm-desc">PDF med planen innebygd. Åpne den her igjen for å redigere. Internt dokument.</span></span>
+          <span class="pm-text"><strong>Lagre arbeidsfil</strong><span class="pm-desc">PDF med planen innebygd. Åpne den her igjen for å redigere. Internt dokument.</span></span><span class="ctx-kbd">Ctrl+S</span>
         </button>
         <button type="button" id="save-share" class="pm-item" role="menuitem" disabled>
           <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3 M8 7l4-4 4 4 M5 12v8h14v-8"/></svg>

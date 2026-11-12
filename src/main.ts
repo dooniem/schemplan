@@ -63,7 +63,12 @@ let shown: { layout: ReturnType<typeof computeLayout>; svg: SVGSVGElement } | nu
 const fontsReady = Promise.all(['400 10px Carlito', '700 10px Carlito'].map((f) => document.fonts.load(f))).catch(() => []);
 // Innstillinger som lagres i arbeidsfilen, slik de var sist planen ble åpnet eller lagret
 let savedSettings = '';
-const settingsNow = () => (plan ? JSON.stringify([opts, plan.plan.layout]) : '');
+// Bilder endres bare gjennom redigeringen (som har egen «ulagret»), og logoen telles på lengden,
+// så sammenligningen er billig nok til å gjøres ved hver tegning.
+const settingsNow = () =>
+  plan ? JSON.stringify([opts, { ...plan.plan.layout, images: undefined, logo: plan.plan.layout.logo && [plan.plan.layout.logo.data.length, plan.plan.layout.logo.aspect] }]) : '';
+/** Arbeidsfilen som sist ble lagret med Lagre som. Ctrl+S skriver til den igjen uten dialog. */
+let workHandle: FileSystemFileHandle | null = null;
 /** Sant når planen har endringer som ikke er lagret i en arbeidsfil. */
 const unsaved = () => !!plan && (editor.dirty || settingsNow() !== savedSettings);
 const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3', style: 'ny' };
@@ -192,7 +197,7 @@ let lookWindow: LookaheadWindow | null = null;
 function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
   const sl = p.plan.layout.statusLine;
   const moment = sl?.on ? resolveStatus(sl, p, todayIso()) : null;
-  const o: LayoutOptions = { ...opts, status: moment && sl ? { moment, style: sl } : undefined };
+  const o: LayoutOptions = { ...opts, status: moment && sl ? { moment, style: sl } : undefined, today: p.plan.layout.todayLine ? todayIso() : undefined };
   const r = p.plan.layout.lookahead;
   if (!r?.on) return { plan: p, window: null, opts: o };
   const v = applyLookahead(p, r, todayIso(), moment?.day);
@@ -359,6 +364,7 @@ function draw() {
   editor.afterDraw(svg, layout);
   search.afterDraw(svg);
   focus.afterDraw(svg, layout);
+  syncUnsaved();
   if (!dataSection.hidden) dataView.refresh();
   const ms = Math.round(performance.now() - t0);
   const shrunk = layout.textScale < 0.999 ? ` Teksten er krympet til ${pt(layout.textSizePt)} pt for å få plass.` : '';
@@ -515,6 +521,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   applyLayout(p);
   baseName = fileTitle(name);
   savedSettings = settingsNow();
+  workHandle = null;
   const s = summarize(p);
   const line = `${name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
     `${fmtDate(s.start)} til ${fmtDate(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
@@ -702,6 +709,7 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-fit]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.fit === 'sheet') === opts.fitToSheet)));
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
   $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
+  $<HTMLInputElement>('#show-today').checked = !!plan?.plan.layout.todayLine;
   const nChanges = Object.keys(plan?.plan.layout.changes ?? {}).length;
   const showChanges = $<HTMLInputElement>('#show-changes');
   showChanges.disabled = !nChanges;
@@ -781,6 +789,11 @@ document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((btn) =>
     draw();
   }),
 );
+$<HTMLInputElement>('#show-today').addEventListener('change', (e) => {
+  if (!plan) return;
+  plan.plan.layout.todayLine = (e.target as HTMLInputElement).checked;
+  draw();
+});
 $<HTMLInputElement>('#show-changes').addEventListener('change', (e) => {
   if (!plan) return;
   plan.plan.layout.showChanges = (e.target as HTMLInputElement).checked;
@@ -862,7 +875,7 @@ const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : 
 type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
 // Samme nedtoning som på skjermen
 const DIM_OPACITY = 0.15;
-async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick) {
+async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false) {
   if (!plan || !shown) return;
   const onlyTrades = pick?.trades ?? [];
   const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
@@ -919,8 +932,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
     const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
-    let handle: FileSystemFileHandle | null = null;
-    if (picker) {
+    let handle: FileSystemFileHandle | null = again && variant === 'arbeidsfil' ? workHandle : null;
+    if (picker && !handle) {
       try {
         handle = await picker(pickOpts);
       } catch (e) {
@@ -952,6 +965,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     if (variant === 'arbeidsfil') {
       editor.markSaved();
       savedSettings = settingsNow();
+      if (handle) workHandle = handle;
+      syncUnsaved();
     }
   } catch (e) {
     if ((e as Error).name === 'AbortError') saveStatus.textContent = '';
@@ -962,6 +977,20 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
   } finally {
     btn.disabled = false;
   }
+}
+// Ctrl+S: lagre arbeidsfilen. Andre gang skrives den til samme fil uten dialog.
+window.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 's') return;
+  e.preventDefault();
+  const btn = $<HTMLButtonElement>('#save-work');
+  if (plan && !btn.disabled) void save('arbeidsfil', btn, undefined, true);
+});
+/** Prikk på Lagre-knappen når planen har endringer som ikke er lagret. */
+function syncUnsaved() {
+  const b = $<HTMLButtonElement>('#save-menu');
+  const u = unsaved();
+  b.classList.toggle('unsaved', u);
+  b.title = u ? 'Planen har endringer som ikke er lagret' : '';
 }
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));

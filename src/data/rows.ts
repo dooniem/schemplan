@@ -1,5 +1,5 @@
 // Datafanen: én rad per boks og milepæl, slik planen ser ut nå (med endringene fra appen).
-import type { Box, BoxChange, PlanFile } from '../format/types';
+import type { Box, BoxChange, PlanFile, Task } from '../format/types';
 import { boxTrade, tradeColors } from '../trades';
 
 export interface DataRow {
@@ -22,6 +22,10 @@ export interface DataRow {
   movedFrom: string;
   /** Endring ved siste oppdatering fra Project: ny, eller nye datoer (med datoene før). Tom ellers. */
   fromProject: string;
+  /** Snitt av % ferdig for aktivitetene i boksen. Tom uten aktiviteter. */
+  progress: string;
+  /** Slutt mot baseline (siste baseline-slutt blant aktivitetene), i kalenderdager. Tom uten baseline. */
+  baseline: string;
   taskIds: string;
   taskNames: string;
   fill: string;
@@ -73,8 +77,20 @@ function changeText(c: BoxChange | undefined, milestone: boolean): string {
   return milestone || !c.start ? `Ny dato (var ${ddmm(c.finish)})` : `Nye datoer (var ${ddmm(c.start)}–${ddmm(c.finish)})`;
 }
 
+const DAY_MS = 86400000;
+/** % ferdig og avvik mot baseline for aktivitetene bak en boks. */
+export function progressOf(tasks: Task[], finish: string | undefined): { progress: string; baseline: string } {
+  const progress = tasks.length ? `${Math.round(tasks.reduce((s, t) => s + t.percentComplete, 0) / tasks.length)} %` : '';
+  const base = tasks.map((t) => t.baselineFinish).filter((d): d is string => !!d).sort().pop();
+  if (!base || !finish) return { progress, baseline: '' };
+  const d = Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${base}T00:00:00Z`)) / DAY_MS);
+  const days = (n: number) => `${n} ${n === 1 ? 'dag' : 'dager'}`;
+  return { progress, baseline: d === 0 ? 'I rute' : d > 0 ? `${days(d)} senere` : `${days(-d)} tidligere` };
+}
+
 export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow[] {
   const names = new Map(plan.tasks.map((t) => [t.uid, t.name]));
+  const taskOf = new Map(plan.tasks.map((t) => [t.uid, t]));
   const laneName = new Map(plan.lanes.map((l) => [l.id, plainText(l.name)]));
   const tradeFill = new Map(tradeColors(plan).map((c) => [c.name, c.fill ?? '']));
   const rows: DataRow[] = [];
@@ -102,6 +118,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         critical: !!b.critical,
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         fromProject: changeText(plan.plan.layout.changes?.[b.id], ms),
+        ...progressOf(b.taskIds.map((id) => taskOf.get(id)).filter((t): t is Task => !!t), r?.finish),
         taskIds: b.taskIds.join(', '),
         taskNames: b.taskIds.map((id) => names.get(id) ?? '').filter(Boolean).join('; '),
         fill: (b.fill ?? (r && trade ? tradeFill.get(trade) : '') ?? '').toUpperCase(),
@@ -145,6 +162,8 @@ export const COLUMNS: { key: keyof DataRow; title: string; width: number; date?:
   { key: 'critical', title: 'Kritisk linje', width: 12 },
   { key: 'movedFrom', title: 'Flyttet fra', width: 20 },
   { key: 'fromProject', title: 'Siste oppdatering', width: 30 },
+  { key: 'progress', title: '% ferdig', width: 9 },
+  { key: 'baseline', title: 'Mot baseline', width: 16 },
   { key: 'fill', title: 'Farge', width: 9 },
   { key: 'taskIds', title: 'Aktivitets-ID', width: 14 },
   { key: 'taskNames', title: 'Aktiviteter i Project', width: 40 },
