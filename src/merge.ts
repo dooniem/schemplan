@@ -167,6 +167,18 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       seen.add(b.id);
     }
   for (const { f, target } of follows) f.box = target.id;
+  // Rekkefølgen fra Omplasser og bildesymboler peker på boks-id-er, og Project kan ha gitt boksene nye id-er.
+  // Bildesymboler til milepæler som er borte, fjernes, så de ikke ligger usynlige igjen i filen.
+  const idNow = (id: string) => newOf.get(id)?.id ?? id;
+  for (const l of plan.lanes) if (l.order) l.order = l.order.map(idNow);
+  const ids = new Set(plan.lanes.flatMap((l) => l.boxes.map((b) => b.id)));
+  const images = plan.plan.layout.images;
+  if (images)
+    plan.plan.layout.images = images.flatMap((im) => {
+      if (!im.milestone) return [im];
+      const id = idNow(im.milestone.id);
+      return ids.has(id) ? [{ ...im, milestone: { ...im.milestone, id } }] : [];
+    });
   const before = new Map([...manualOf.values()].map((b) => [b, b.resolved?.start]));
   applyFollows(plan);
   for (const [b, start] of before) if (b.resolved?.start !== start) report.followMoved.push(label(b.text));

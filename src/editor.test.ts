@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
+import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane, snapshotOf } from './editor';
 import { validatePlan } from './format/validate';
 import { computeLayout, type BoxItem } from './layout/layout';
 import { approxMeasure } from './layout/text';
@@ -180,5 +180,17 @@ describe('bokser i en overskriftsboks', () => {
     expect(inHeaderBox(header, box('e', 0, 40, 40, 5))).toBe(false);
     expect(inHeaderBox(header, box('f', 20, 40, 15, 40, { span: true }))).toBe(false);
     expect(inHeaderBox(header, header)).toBe(false);
+  });
+});
+
+describe('snapshotOf', () => {
+  it('lager en uavhengig kopi av objekter og lister', () => {
+    const orig = { a: [{ b: 1 }], c: { d: 'bilde', e: undefined as number | undefined } };
+    const copy = snapshotOf(orig);
+    copy.a[0].b = 2;
+    copy.c.d = 'annet';
+    expect(orig).toEqual({ a: [{ b: 1 }], c: { d: 'bilde', e: undefined } });
+    expect(copy).not.toBe(orig);
+    expect('e' in copy.c).toBe(true);
   });
 });

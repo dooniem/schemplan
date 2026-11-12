@@ -61,6 +61,11 @@ let baseName = 'skjematisk-plan';
 let shown: { layout: ReturnType<typeof computeLayout>; svg: SVGSVGElement } | null = null;
 // Skriften må være lastet før teksten måles, ellers blir målene fra reserveskriften
 const fontsReady = Promise.all(['400 10px Carlito', '700 10px Carlito'].map((f) => document.fonts.load(f))).catch(() => []);
+// Innstillinger som lagres i arbeidsfilen, slik de var sist planen ble åpnet eller lagret
+let savedSettings = '';
+const settingsNow = () => (plan ? JSON.stringify([opts, plan.plan.layout]) : '');
+/** Sant når planen har endringer som ikke er lagret i en arbeidsfil. */
+const unsaved = () => !!plan && (editor.dirty || settingsNow() !== savedSettings);
 const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'fill', textSizePt: 9, fitToSheet: true, minTextPt: DEFAULT_MIN_TEXT_PT, paper: 'A3', style: 'ny' };
 const measure = canvasMeasure();
 const host = $<HTMLDivElement>('#sheet');
@@ -509,6 +514,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   plan = p;
   applyLayout(p);
   baseName = fileTitle(name);
+  savedSettings = settingsNow();
   const s = summarize(p);
   const line = `${name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
     `${fmtDate(s.start)} til ${fmtDate(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
@@ -525,6 +531,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
+  if (unsaved() && !confirm('Planen har endringer som ikke er lagret. Vil du åpne en annen plan likevel?')) return;
   const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
   if (!r) return;
   editor.reset();
@@ -539,7 +546,8 @@ async function updateFrom(file: File): Promise<boolean> {
   if (!plan) return false;
   const current = plan;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (String.fromCharCode(...bytes.subarray(0, 4)) !== '%PDF') return false;
+  // Som ved vanlig åpning tåles noen byte foran PDF-hodet
+  if (!String.fromCharCode(...bytes.subarray(0, 1024)).includes('%PDF')) return false;
   const r = await readPlan(bytes, file.name);
   if (!r) return false;
   const { mergePlans, summarizeMerge } = await import('./merge');
@@ -861,7 +869,10 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
       const keep = new Set(onlyTrades);
       const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])));
       if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.trade ?? b.resolved?.trade ?? '')) b.hidden = true;
-      saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
+      const tag = tradeNames(onlyTrades).join(', ');
+      saved.plan.title = `${saved.plan.title} – ${tag}`;
+      // Egen overskrift fra appen går foran Project-navnet, så fagene må med der også
+      if (saved.plan.layout.title !== undefined) saved.plan.layout.title = `${saved.plan.layout.title} – ${tag}`;
       const v = viewOf(saved);
       const layout = computeLayout(v.plan, v.opts, measure);
       const svg = renderPlan(layout);
@@ -909,7 +920,10 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     const kb = Math.max(1, Math.round(pdf.length / 1024));
     saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å redigere eller oppdatere planen.' : ' Klar til deling.'}`;
     saveStatus.className = 'ok small';
-    if (variant === 'arbeidsfil') editor.markSaved();
+    if (variant === 'arbeidsfil') {
+      editor.markSaved();
+      savedSettings = settingsNow();
+    }
   } catch (e) {
     if ((e as Error).name === 'AbortError') saveStatus.textContent = '';
     else {
@@ -940,6 +954,9 @@ $<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
 });
 // Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
 // Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.
+window.addEventListener('beforeunload', (e) => {
+  if (unsaved()) e.preventDefault();
+});
 async function openFromAddress() {
   const params = new URLSearchParams(location.hash.slice(1));
   const data = params.get('plan');
