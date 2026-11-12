@@ -270,6 +270,21 @@ export function bounds(it: Item) {
   };
 }
 
+/** Hører boksen til overskriftsboksen? Det som ser ut til å ligge inni, skal være med: minst halvparten
+    av selve boksen (uten callout) må ligge innenfor. Høyde og plass rundes av til hundredeler av en
+    tekstlinje, så en boks som er snappet til bunnen kan stikke litt ut; et krav om at alt skal ligge
+    helt innenfor slapp da boksen ut. Multi Lane-bokser går over flere lanes og er aldri med. */
+export function inHeaderBox(header: Item, o: Item): boolean {
+  if (o === header || (o.kind === 'box' && o.span)) return false;
+  const r = header.kind === 'box' ? { x0: header.x0, x1: header.x1, y0: header.y, y1: header.y + header.h } : bounds(header);
+  const q = o.kind === 'box' ? { x0: o.x0, x1: o.x1, y0: o.y, y1: o.y + o.h } : bounds(o);
+  const w = Math.min(q.x1, r.x1) - Math.max(q.x0, r.x0);
+  const h = Math.min(q.y1, r.y1) - Math.max(q.y0, r.y0);
+  if (w <= 0 || h <= 0) return false;
+  const area = Math.max(q.x1 - q.x0, 1e-6) * Math.max(q.y1 - q.y0, 1e-6);
+  return w * h >= area / 2 - 1e-9;
+}
+
 export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLElement, toggle: HTMLButtonElement, tools: HTMLElement): Editor {
   let active = false;
   let selected: string | null = null;
@@ -1722,11 +1737,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     let snap: ReturnType<typeof snapper> | null = null;
     const kidItems = () =>
       it.kind === 'box' && it.header && !it.span
-        ? L.items.filter((o) => {
-            if (o === it) return false;
-            const q = bounds(o);
-            return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
-          })
+        ? L.items.filter((o) => inHeaderBox(it, o))
         : [];
     const kidsOf = () => kidItems().map((o) => o.id);
     // Kanten som snapper: selve boksen, ikke callouten
@@ -2405,10 +2416,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             .filter((k) => k.id !== b.id)
             .map((k) => before.items.find((x) => x.id === k.id))
             .filter((o): o is Item => !!o)
-            .filter((o) => {
-              const q = bounds(o);
-              return q.x0 >= r.x0 - 1e-6 && q.x1 <= r.x1 + 1e-6 && q.y0 >= r.y0 - 1e-6 && q.y1 <= r.y1 + 1e-6;
-            })
+            .filter((o) => inHeaderBox(it, o))
             .map((o) => ({ id: o.id, dy: lines(bounds(o).y0 - r.y0, before.unit) }));
           groups.set(b.id, kids);
         }
