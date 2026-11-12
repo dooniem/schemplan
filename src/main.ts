@@ -19,6 +19,7 @@ import { placePopovers } from './popover';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
 import { FRONT_DEFAULT, resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
+import { hasBaseline } from './layout/progress';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
@@ -617,8 +618,18 @@ function syncStatus() {
   document.querySelectorAll<HTMLButtonElement>('[data-pf-against]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pfAgainst === f.against)));
   $<HTMLInputElement>('#pf-late').checked = f.late;
   $<HTMLInputElement>('#pf-dev').checked = f.deviation;
+  const anyBaseline = !!plan?.tasks.some(hasBaseline);
+  const blBtn = $<HTMLButtonElement>('[data-pf-against="baseline"]');
+  blBtn.disabled = !anyBaseline;
+  blBtn.title = anyBaseline ? 'Datoene i baseline fra Project' : 'Planen har ingen baseline fra Project';
   const anyProgress = !!plan?.tasks.some((t) => (Number(t.percentComplete) || 0) > 0);
-  $('#pf-help').textContent = plan && !anyProgress ? 'Ingen aktiviteter har % ferdig ennå, så alt som pågår vises som etter.' : '';
+  $('#pf-help').textContent = !plan
+    ? ''
+    : !anyProgress
+      ? 'Ingen aktiviteter har % ferdig ennå, så alt som pågår vises som etter.'
+      : f.against === 'baseline' && !anyBaseline
+        ? 'Planen har ingen baseline, så fronten måles mot planen slik den er nå.'
+        : '';
 }
 const setFront = (change: Partial<ProgressFront>) => setStatus({ front: { ...(statusRule().front ?? FRONT_DEFAULT), ...change } });
 $<HTMLInputElement>('#pf-on').addEventListener('change', (e) => setFront({ on: (e.target as HTMLInputElement).checked }));

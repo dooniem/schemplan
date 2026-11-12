@@ -186,6 +186,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needBool(t, 'summary', p);
       needBool(t, 'flag20', p);
       needNum(t, 'percentComplete', p);
+      if (t.baselineStart !== undefined) needDate(t, 'baselineStart', p, true);
+      if (t.baselineFinish !== undefined) needDate(t, 'baselineFinish', p, true);
       if (t.trade !== null && typeof t.trade !== 'string') err(`${p}.trade`, 'må være tekst eller null');
       if (typeof t.uid === 'number') {
         if (taskUids.has(t.uid)) err(`${p}.uid`, `aktivitet ${t.uid} finnes flere ganger`);

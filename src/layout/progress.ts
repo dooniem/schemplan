@@ -6,6 +6,10 @@
 // % ferdig er ment: 50 % av ti arbeidsdager er etter fem arbeidsdager, uansett helg.
 // En boks får punktet til den aktiviteten som ligger lengst bak. Et snitt av % ville gitt
 // feil punkt når aktivitetene i boksen har ulik lengde, selv om alle er i rute.
+//
+// Mot baseline regnes det samme, men med baseline-datoene: punktet viser hvor langt
+// arbeidet er kommet i forhold til der baseline sa det skulle være. En aktivitet uten
+// baseline regnes mot datoene slik de er nå.
 
 import type { PlanFile, Task } from '../format/types';
 import type { TimeAxis } from './calendar';
@@ -64,12 +68,23 @@ export interface FrontPoint {
 export interface FrontOptions {
   /** Ta også med bokser som skulle vært ferdige, men ikke er det. */
   late: boolean;
+  /** Mål mot datoene nå (standard) eller mot baseline. */
+  against?: 'plan' | 'baseline';
+}
+
+/** Har aktiviteten både start og slutt i baseline? */
+export const hasBaseline = (t: Task): boolean => !Number.isNaN(parseIso(t.baselineStart ?? '')) && !Number.isNaN(parseIso(t.baselineFinish ?? ''));
+
+/** Datoene fronten skal måles mot for aktiviteten. */
+function datesFor(task: Task, baseline: boolean): { start: string; finish: string } {
+  return baseline && hasBaseline(task) ? { start: task.baselineStart!, finish: task.baselineFinish! } : { start: task.start, finish: task.finish };
 }
 
 /** Hvor langt aktiviteten er kommet, i arbeidstid. null uten datoer. */
-function doneThrough(task: Task, clock: WorkClock): { w: number; started: boolean; done: boolean; tol: number } | null {
-  const s = parseIso(task.start);
-  const f = parseIso(task.finish);
+function doneThrough(task: Task, clock: WorkClock, baseline: boolean): { w: number; started: boolean; done: boolean; tol: number } | null {
+  const d = datesFor(task, baseline);
+  const s = parseIso(d.start);
+  const f = parseIso(d.finish);
   if (Number.isNaN(s) || Number.isNaN(f)) return null;
   const ws = clock.at(s);
   const span = clock.at(addDays(f, 1)) - ws;
@@ -85,19 +100,30 @@ export function frontPoints(file: PlanFile, status: StatusMoment, opts: FrontOpt
   const tasks = new Map(file.tasks.map((t) => [t.uid, t]));
   const boxes = file.lanes.filter((l) => l.shown && !l.hidden).flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && !b.header && b.spanTo === undefined && b.taskIds.length && b.resolved && !b.resolved.isMilestone));
   if (!boxes.length) return [];
-  const all = boxes.map((b) => b.resolved!);
-  const lo = Math.min(status.t, ...all.map((r) => parseIso(r.start)));
-  const hi = Math.max(status.t, ...all.map((r) => parseIso(r.finish)));
+  const baseline = opts.against === 'baseline';
+  const tasksOf = (b: (typeof boxes)[number]) => b.taskIds.map((id) => tasks.get(id)).filter((t): t is Task => !!t && !t.summary && !t.milestone);
+  // Boksens tidsrom: slik den står nå, eller slik baseline sa
+  const span = (b: (typeof boxes)[number]) => {
+    const r = b.resolved!;
+    if (!baseline) return { s: parseIso(r.start), f: parseIso(r.finish) };
+    const ds = tasksOf(b).map((t) => datesFor(t, true)).map((d) => ({ s: parseIso(d.start), f: parseIso(d.finish) })).filter((d) => !Number.isNaN(d.s) && !Number.isNaN(d.f));
+    if (!ds.length) return { s: parseIso(r.start), f: parseIso(r.finish) };
+    return { s: Math.min(...ds.map((d) => d.s)), f: Math.max(...ds.map((d) => d.f)) };
+  };
+  const spans = new Map(boxes.map((b) => [b.id, span(b)]));
+  const all = [...spans.values()];
+  const lo = Math.min(status.t, ...all.map((r) => r.s));
+  const hi = Math.max(status.t, ...all.map((r) => r.f));
   const clock = workClock(file, lo, hi);
   const now = clock.at(status.t);
   const out: FrontPoint[] = [];
   for (const b of boxes) {
-    const r = b.resolved!;
-    const bs = clock.at(parseIso(r.start));
-    const bf = clock.at(addDays(parseIso(r.finish), 1));
+    const r = spans.get(b.id)!;
+    const bs = clock.at(r.s);
+    const bf = clock.at(addDays(r.f, 1));
     const running = bs < now && now < bf;
-    const ts = b.taskIds.map((id) => tasks.get(id)).filter((t): t is Task => !!t && !t.summary && !t.milestone);
-    const prog = ts.map((t) => doneThrough(t, clock)).filter((p): p is NonNullable<typeof p> => !!p);
+    const ts = tasksOf(b);
+    const prog = ts.map((t) => doneThrough(t, clock, baseline)).filter((p): p is NonNullable<typeof p> => !!p);
     if (!prog.length) continue;
     const unfinished = prog.filter((p) => !p.done);
     const late = opts.late && bf <= now && unfinished.length > 0;
