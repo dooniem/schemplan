@@ -1,5 +1,6 @@
 // Datafanen: én rad per boks og milepæl, slik planen ser ut nå (med endringene fra appen).
 import type { Box, PlanFile } from '../format/types';
+import { boxTrade, tradeColors } from '../trades';
 
 export interface DataRow {
   id: string;
@@ -42,6 +43,7 @@ function changesOf(b: Box): string[] {
   if (b.manual) c.push('laget i appen');
   if (b.original && b.text !== b.original.text) c.push('tekst');
   if (b.original && b.rotation !== b.original.rotation) c.push('rotasjon');
+  if (b.trade !== undefined) c.push('fag');
   if (b.fill) c.push('farge');
   if (b.textColor) c.push('tekstfarge');
   if (b.callout && b.callout !== 'auto') c.push('callout');
@@ -61,8 +63,7 @@ function changesOf(b: Box): string[] {
 export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow[] {
   const names = new Map(plan.tasks.map((t) => [t.uid, t.name]));
   const laneName = new Map(plan.lanes.map((l) => [l.id, plainText(l.name)]));
-  const tc = plan.plan.layout.tradeColors ?? {};
-  const tradeFill = new Map(plan.colors.map((c) => [c.name, tc[c.name]?.fill ?? c.fill ?? '']));
+  const tradeFill = new Map(tradeColors(plan).map((c) => [c.name, c.fill ?? '']));
   const rows: DataRow[] = [];
   plan.lanes.forEach((l, li) => {
     if (!l.shown) return;
@@ -71,6 +72,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
       const r = b.resolved;
       const changes = changesOf(b);
       const ms = !!r?.isMilestone;
+      const trade = boxTrade(b);
       rows.push({
         id: b.id,
         lane: laneName.get(l.id) ?? '',
@@ -78,7 +80,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         text: plainText(b.text),
         start: r ? (ms ? r.finish : r.start) : '',
         finish: r?.finish ?? '',
-        trade: !r || r.trade === '(none)' ? '' : r.trade,
+        trade: !r || trade === '(none)' ? '' : (trade ?? ''),
         type: ms ? 'Milepæl' : b.spanTo !== undefined ? 'Multi Lane-boks' : b.header ? 'Overskriftsboks' : 'Boks',
         source: b.manual ? 'Appen' : 'Project',
         edited: changes.length > 0 || !!l.hidden,
@@ -88,7 +90,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         taskIds: b.taskIds.join(', '),
         taskNames: b.taskIds.map((id) => names.get(id) ?? '').filter(Boolean).join('; '),
-        fill: (b.fill ?? (r ? tradeFill.get(r.trade) : '') ?? '').toUpperCase(),
+        fill: (b.fill ?? (r && trade ? tradeFill.get(trade) : '') ?? '').toUpperCase(),
         ...periodOf(r, win),
       });
     }

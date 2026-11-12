@@ -122,6 +122,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(tc) || !Object.values(tc).every((v) => isObj(v) && hex(v.fill) && (v.text === undefined || hex(v.text))))
           err('plan.layout.tradeColors', 'må ha fill (og eventuelt text) som farge #RRGGBB for hvert fag');
       }
+      if (lay.appTrades !== undefined && !(Array.isArray(lay.appTrades) && lay.appTrades.every((v) => typeof v === 'string' && v.trim())))
+        err('plan.layout.appTrades', 'må være en liste med fagnavn');
       if (lay.criticalLine !== undefined) {
         const c = lay.criticalLine;
         if (!isObj(c) || !(typeof c.width === 'number' && c.width > 0 && c.width <= 10) || !(typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color)))
@@ -235,6 +237,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
+        if (b.trade !== undefined && !(typeof b.trade === 'string' && b.trade.trim())) err(`${bp}.trade`, 'må være et fagnavn');
         if (b.milestoneStyle !== undefined) {
           const m = b.milestoneStyle;
           const mp = `${bp}.milestoneStyle`;

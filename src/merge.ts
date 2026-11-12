@@ -15,6 +15,8 @@ export interface MergeReport {
   textChanged: string[];
   /** Bokser du hadde flyttet, men som Project nå har lagt i en annen lane. Project gjelder. */
   moveDropped: string[];
+  /** Bokser der Project har endret faget du hadde endret. Faget fra Project gjelder. */
+  tradeChanged: string[];
   /** Lanes der Project har endret navnet du hadde endret. Navnet fra Project gjelder. */
   laneNameChanged: string[];
   manualKept: number;
@@ -25,14 +27,14 @@ export interface MergeReport {
 /** Felt som bare settes i appen og følger boksen. */
 const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'spanEnd', 'textMiddle', 'bold', 'milestoneStyle', 'critical', 'textScale'] as const;
 /** Valg fra appen som ligger i plan.layout. */
-const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale'] as const;
+const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale'] as const;
 
 const label = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim() || '(uten tekst)';
 const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c).join(',') : '');
 
 export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; report: MergeReport } {
   const plan: PlanFile = structuredClone(fresh);
-  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], moveDropped: [], laneNameChanged: [], manualKept: 0, manualLanes: 0 };
+  const report: MergeReport = { kept: 0, newBoxes: [], goneBoxes: [], newLanes: [], goneLanes: [], keptLanes: [], textChanged: [], tradeChanged: [], moveDropped: [], laneNameChanged: [], manualKept: 0, manualLanes: 0 };
 
   for (const k of APP_LAYOUT) if (work.plan.layout[k] !== undefined) (plan.plan.layout as Record<string, unknown>)[k] = structuredClone(work.plan.layout[k]);
 
@@ -67,6 +69,14 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
       used.add(ob);
       report.kept++;
       for (const f of APP_FIELDS) if (ob[f] !== undefined) (fb as unknown as Record<string, unknown>)[f] = structuredClone(ob[f]);
+      // Fag valgt i appen gjelder så lenge Project ikke har endret faget selv
+      if (ob.trade !== undefined) {
+        if (fb.resolved && ob.resolved && fb.resolved.trade !== ob.resolved.trade) {
+          report.tradeChanged.push(label(fb.text));
+          delete fb.trade;
+        } else if (fb.resolved?.trade === ob.trade) delete fb.trade;
+        else fb.trade = ob.trade;
+      }
       // Tekst og rotasjon du har endret, gjelder så lenge Project ikke har endret dem
       if (ob.original) {
         const textOk = fb.text === ob.original.text;

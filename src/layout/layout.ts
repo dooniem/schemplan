@@ -10,6 +10,7 @@ import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
 import { statusLabel, type StatusMoment } from './status';
 import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
+import { boxTrade, tradeColors } from '../trades';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -415,8 +416,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const base = opts.textSizePt * PT_TO_MM * scale;
   const lh = base * LINE_HEIGHT;
   // Fagfarger fra appen går foran fargene fra Project
-  const tc = file.plan.layout.tradeColors ?? {};
-  const fileColors: TradeColor[] = file.colors.map((c) => (tc[c.name] ? { ...c, fill: tc[c.name].fill, text: tc[c.name].text ?? autoTextColor(tc[c.name].fill) } : c));
+  const fileColors: TradeColor[] = tradeColors(file);
   const colors = new Map<string, TradeColor>(fileColors.map((c) => [c.name, c]));
   const noneColor = colors.get('(none)') ?? { name: '(none)', fill: '#FFFAC8', border: '#000000', text: '#000000' };
 
@@ -859,7 +859,8 @@ function buildPieces(
     // regnes fortsatt i planens tekstlinjer (lh), så de ikke endres når teksten i boksen gjør det.
     const bs = base * clampScale(box.textScale);
     const blh = bs * LINE_HEIGHT;
-    const c = colors.get(r.trade) ?? noneColor;
+    const trade = boxTrade(box) ?? r.trade;
+    const c = colors.get(trade) ?? noneColor;
     // Farge valgt i appen går foran fagets farge
     const fill = box.fill ?? c.fill ?? '#FFFFFF';
     // Ny stil, eller egen farge: svart eller hvit tekst etter kontrast. Kant i mørkere utgave av fyllet.
@@ -870,7 +871,7 @@ function buildPieces(
     const item: BoxItem & { trade: string } = {
       kind: 'box',
       id: box.id,
-      trade: r.trade,
+      trade,
       x0: bx0,
       x1: bx1,
       y: 0,
