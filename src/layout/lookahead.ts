@@ -164,7 +164,7 @@ export function lookaheadExtras(file: PlanFile, window: LookaheadWindow, withOve
         if (r.finish >= after) coming.push({ date: r.finish, name: plainName(b.text) });
         continue;
       }
-      bars.push({ start: parseIso(r.start), end: addDays(parseIso(r.finish), 1), lane: i, trade: r.trade, fill: b.fill });
+      bars.push({ start: parseIso(r.start), end: addDays(parseIso(r.finish), 1), lane: i, trade: b.trade ?? r.trade, fill: b.fill });
     }
   });
   const endYear = isoWeek(addDays(window.end, -1)).year;

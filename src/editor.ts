@@ -8,6 +8,7 @@ import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type IconName } from './ctxmenu';
+import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -60,7 +61,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.bold || b.milestoneStyle || b.textScale);
+  return !!(b.trade !== undefined || b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.bold || b.milestoneStyle || b.textScale);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -70,6 +71,7 @@ export function resetBox(b: Box): void {
     b.rotation = b.original.rotation;
   }
   delete b.original;
+  delete b.trade;
   delete b.fill;
   delete b.textColor;
   delete b.callout;
@@ -279,6 +281,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let group: string[] = [];
   /** Valgt fag (klikk i legenden). */
   let selectedTrade: string | null = null;
+  /** Nytt fag: navnefeltet i panelet får fokus én gang. */
+  let focusTradeName = false;
   let past: PlanFile[] = [];
   let future: PlanFile[] = [];
   let dirty = false;
@@ -585,7 +589,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return sw;
   };
   /** Egen farge, og eventuelt en knapp tilbake til fargen den ellers ville hatt. */
-  const colorRow = (value: string, onPick: (fill: string) => void, back?: { text: string; disabled: boolean; onClick: () => void }) => {
+  type Back = { text: string; disabled: boolean; onClick: () => void; title?: string };
+  const colorRow = (value: string, onPick: (fill: string) => void, back?: Back | Back[]) => {
     const row = el('div', { class: 'row color-row' });
     const lab = el('label', { class: 'custom-color' });
     const inp = el('input', { type: 'color' }) as HTMLInputElement;
@@ -593,9 +598,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     inp.addEventListener('change', () => onPick(inp.value.toUpperCase()));
     lab.append(inp, 'Egen farge');
     row.append(lab);
-    if (back) {
-      const b = btn(back.text, null, back.onClick, undefined, 'button small');
-      b.disabled = back.disabled;
+    for (const x of back ? [back].flat() : []) {
+      const b = btn(x.text, null, x.onClick, x.title, 'button small');
+      b.disabled = x.disabled;
       row.append(b);
     }
     return row;
@@ -673,6 +678,54 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
   const fmtDate = (d: string) => d.split('-').reverse().join('.');
   const tradeName = (t: string) => (t === '(none)' ? 'Uten fag' : t);
+  /** Fargeruter med fagfargene og lanefargene i planen. */
+  const planSwatches = (plan: PlanFile): [string, string][] => [
+    ...tradeColors(plan).filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+    ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
+  ];
+  const NEW_TRADE = '\u0000nytt';
+  /**
+   * Nedtrekksliste med alle fag, «Uten fag» og «Nytt fag …» nederst.
+   * current null: boksene har ulike fag.
+   */
+  const tradeSelect = (plan: PlanFile, current: string | null, onPick: (name: string) => void, onNew: () => void) => {
+    // Seksjonen heter «Fag», så listen står alene uten eget navn foran
+    const wrap = el('div', { class: 'prop' });
+    const sel = el('select', { id: 'box-trade', 'aria-label': 'Fag' }) as HTMLSelectElement;
+    const opt = (value: string, text: string) => {
+      const o = el('option', { value }, text) as HTMLOptionElement;
+      sel.append(o);
+      return o;
+    };
+    if (current === null) opt('', 'Ulike fag').disabled = true;
+    // Fagene fra Project og fagene laget i appen i hver sin gruppe, så det er tydelig hvilke som følger Project
+    const groupOf = (label: string, names: string[]) => {
+      if (!names.length) return;
+      const og = el('optgroup', { label }) as HTMLOptGroupElement;
+      for (const n of names) og.append(el('option', { value: n }, n));
+      sel.append(og);
+    };
+    const list = tradeColors(plan).map((c) => c.name).filter((n) => n !== NO_TRADE);
+    groupOf('Fra Project', list.filter((n) => !isAppTrade(plan, n)));
+    groupOf('Laget i appen', list.filter((n) => isAppTrade(plan, n)));
+    opt(NO_TRADE, 'Uten fag');
+    opt(NEW_TRADE, 'Nytt fag …');
+    sel.value = current ?? '';
+    sel.addEventListener('change', () => {
+      if (sel.value === NEW_TRADE) onNew();
+      else onPick(sel.value);
+    });
+    wrap.append(sel);
+    return wrap;
+  };
+  /** Nytt fag til boksene (kan være ingen). Panelet viser faget, med navnefeltet klart til skriving. */
+  const createTrade = (ids: string[]) => {
+    let name = '';
+    commit((pl) => (name = addTrade(pl, ids)));
+    if (!name) return;
+    focusTradeName = true;
+    selectTrade(name);
+  };
 
   /** Overskrift og tekst øverst til høyre. Lagres i planen og beholdes ved oppdatering fra Project. */
   const changeHeader = (fn: (lay: PlanFile['plan']['layout']) => void, typing: boolean) => {
@@ -907,14 +960,32 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }));
     const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
 
+    if (plain.length) {
+      const sf = section('Fag');
+      const ids = plain.map((x) => x.id);
+      sf.append(
+        tradeSelect(plan, same((x) => boxTrade(x) ?? NO_TRADE), (t) => commit((pl) => setBoxTrade(pl, ids, t)), () => createTrade(ids)),
+      );
+      if (plain.some((x) => x.trade !== undefined && !x.manual))
+        sf.append(lockedRow('Noen har fag valgt i appen', 'Fag fra Project', 'Gir boksene faget de har i Project', () => all((x) => { if (!x.manual) delete x.trade; })));
+    }
+
     const sc = section('Farge');
     const cur = same((x) => (x.fill ?? '').toUpperCase());
+    const fromProject = plain.filter((x) => !x.manual);
     sc.append(
-      swatches(cur, [
-        ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-        ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
-      ], (f) => all((x) => (x.fill = f))),
-      colorRow(cur || '#FFFFFF', (f) => all((x) => (x.fill = f)), { text: 'Fagets farge', disabled: !plain.some((x) => x.fill), onClick: () => all((x) => delete x.fill) }),
+      swatches(cur, planSwatches(plan), (f) => all((x) => (x.fill = f))),
+      colorRow(cur || '#FFFFFF', (f) => all((x) => (x.fill = f)), [
+        { text: 'Fagets farge', title: 'Fjerner egen farge, så boksene får fargen til faget de har nå', disabled: !plain.some((x) => x.fill), onClick: () => all((x) => delete x.fill) },
+        ...(fromProject.length
+          ? [{
+              text: 'Fargen fra Project',
+              title: 'Fargen boksene har i Project, uansett fag og fagfarger valgt i appen',
+              disabled: fromProject.every((x) => currentFill(plan, x) === projectFill(plan, x)),
+              onClick: () => all((x) => setProjectColor(plan, x)),
+            }]
+          : []),
+      ]),
       segmented('Tekstfarge', same((x) => textColorKey(x.textColor)) ?? '', TEXT_COLORS, (v) =>
         all((x) => {
           if (v === 'auto') delete x.textColor;
@@ -984,7 +1055,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
   /** Vis eller skjul i forklaringen, og teksten som står der. */
-  const legendSection = (plan: PlanFile, key: string) => {
+  const legendSection = (plan: PlanFile, key: string, ownText = true) => {
     const item = plan.plan.layout.legendItems?.[key] ?? {};
     const s = section('I forklaringen');
     const inp = el('input', { type: 'text', id: 'legend-text', 'aria-label': 'Tekst i forklaringen', placeholder: legendName(key), value: item.text ?? '' }) as HTMLInputElement;
@@ -996,11 +1067,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
     const lab = el('label', { class: 'prop', for: 'legend-text' });
     lab.append(el('span', { class: 'prop-label' }, 'Tekst'), inp);
-    s.append(
-      switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })),
-      lab,
-      el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'),
-    );
+    s.append(switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })));
+    // Et fag laget i appen står med navnet sitt, som endres over, så det trenger ingen egen tekst
+    if (ownText || item.text)
+      s.append(lab, el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'));
     // Forklaringen har én felles størrelse, som lane-navnene
     if (layoutNow) {
       const base = layoutNow.legendBasePt;
@@ -1021,28 +1091,94 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   const buildTradePanel = (plan: PlanFile, trade: string) => {
-    const pc = plan.colors.find((c) => c.name === trade)!;
+    const app = isAppTrade(plan, trade);
     const own = plan.plan.layout.tradeColors?.[trade];
-    const fill = (own?.fill ?? pc.fill ?? '#FFFFFF').toUpperCase();
-    const count = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && !b.resolved.isMilestone).length, 0);
-    const own1 = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => b.resolved?.trade === trade && b.fill).length, 0);
-    panelHead(tradeName(trade), `Fag · ${count} ${count === 1 ? 'boks' : 'bokser'}`);
+    const fill = tradeFill(plan, trade);
+    const ids = plan.lanes.flatMap((l) => l.boxes.filter((b) => boxTrade(b) === trade && !b.resolved?.isMilestone && b.shown && !b.hidden).map((b) => b.id));
+    const count = tradeCount(plan, trade);
+    const own1 = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => boxTrade(b) === trade && b.fill).length, 0);
+    panelHead(tradeName(trade), `${app ? 'Fag laget i appen' : 'Fag'} · ${count} ${count === 1 ? 'boks' : 'bokser'}`);
     if (own1) panel.append(el('p', { class: 'panel-note' }, `${own1} av boksene har egen farge og endres ikke.`));
+
+    if (app) {
+      // Navnet på et fag fra appen kan endres. Boksene, fargen og forklaringen følger med.
+      const sn = section('Navn');
+      const inp = el('input', { type: 'text', id: 'trade-name', 'aria-label': 'Navn på faget', value: trade, spellcheck: 'true' }) as HTMLInputElement;
+      const msg = el('p', { class: 'hint field-error', role: 'alert' });
+      msg.hidden = true;
+      const save = () => {
+        const v = inp.value.trim();
+        if (v === trade) return;
+        const problem = tradeNameProblem(plan, trade, v);
+        if (problem) {
+          msg.textContent = problem;
+          msg.hidden = false;
+          inp.setAttribute('aria-invalid', 'true');
+          return;
+        }
+        commit((pl) => renameTrade(pl, trade, v));
+        selectTrade(v);
+      };
+      inp.addEventListener('input', () => {
+        msg.hidden = true;
+        inp.removeAttribute('aria-invalid');
+      });
+      inp.addEventListener('change', save);
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          inp.blur();
+        }
+        if (e.key === 'Escape') {
+          inp.value = trade;
+          msg.hidden = true;
+          inp.blur();
+        }
+      });
+      sn.append(inp, msg);
+      if (focusTradeName) {
+        focusTradeName = false;
+        requestAnimationFrame(() => {
+          inp.focus();
+          inp.select();
+        });
+      }
+    }
 
     const s = section('Farge for hele faget');
     const keepText = own?.text ? { text: own.text } : {};
     s.append(
       swatches(fill, [
-        ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
+        ...tradeColors(plan).filter((c) => c.fill && c.name !== trade).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
         ...LANE_COLORS.map((c): [string, string] => [c, 'Lys farge']),
       ], (f) => setTradeColor(trade, { fill: f, ...keepText })),
-      colorRow(fill, (f) => setTradeColor(trade, { fill: f, ...keepText }), { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
+      colorRow(fill, (f) => setTradeColor(trade, { fill: f, ...keepText }), app ? undefined : { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
       segmented('Tekstfarge', textColorKey(own?.text), TEXT_COLORS, (v) =>
         setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
       ),
-      el('p', { class: 'hint' }, 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
+      el('p', { class: 'hint' }, app
+        ? 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Faget følger med når du oppdaterer fra Project.'
+        : 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
     );
-    legendSection(plan, trade);
+
+    const sb = section('Bokser');
+    const pick = btn(`Velg boksene i faget`, null, () => setGroup(ids), 'Velger alle synlige bokser i faget, så du kan gi dem et annet fag eller endre dem samlet', 'button');
+    pick.disabled = !ids.length;
+    sb.append(pick);
+    sb.append(el('p', { class: 'hint' }, count
+      ? 'Da kan du gi dem et annet fag samlet.'
+      : 'Ingen bokser har faget ennå, så det står ikke i forklaringen. Velg bokser og velg faget under Fag i panelet.'));
+
+    legendSection(plan, trade, !app);
+
+    if (app) {
+      const foot = el('div', { class: 'panel-foot' });
+      foot.append(btn('Slett faget', 'trash', () => {
+        commit((pl) => deleteTrade(pl, trade));
+        select(null);
+      }, count ? `Boksene i faget får faget fra Project igjen (${count})` : 'Sletter faget', 'button push'));
+      panel.append(foot);
+    }
   };
 
   const buildPanel = () => {
@@ -1061,7 +1197,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       panelHead('Ferie', 'Forklaringen nederst');
       return legendSection(plan, FERIE_KEY);
     }
-    if (!b && selectedTrade && plan.colors.some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
+    if (!b && selectedTrade && tradeColors(plan).some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
       panel.append(el('h2', { class: 'panel-empty-title' }, 'Rediger'));
       panel.append(el('p', { class: 'panel-note' }, 'Klikk noe på arket for å endre det.'));
@@ -1079,7 +1215,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
         ]],
         ['Arket', [
-          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for å skjule det i forklaringen.',
+          'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for nytt fag, eller for å gi valgte bokser faget.',
           'Klikk overskriften for å endre den eller skrive en tekst øverst til høyre.',
         ]],
       ];
@@ -1088,6 +1224,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         const ul = el('ul', { class: 'tips' });
         tips.forEach((t) => ul.append(el('li', {}, t)));
         s.append(ul);
+        if (title === 'Arket') s.append(btn('Nytt fag', 'plus', () => createTrade([]), 'Lager et nytt fag. Navn og farge velger du i panelet.', 'button small'));
       }
       // Skjulte oppføringer står ikke i forklaringen, så de vises igjen herfra
       const hiddenLeg = Object.entries(plan.plan.layout.legendItems ?? {}).filter(([, v]) => v.hidden);
@@ -1109,7 +1246,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const ms = !!b.resolved?.isMilestone;
     const r = b.resolved;
     const when = r ? (ms || r.start === r.finish ? fmtDate(r.start) : `${fmtDate(r.start)} – ${fmtDate(r.finish)}`) : '';
-    const sub = b.manual ? 'Laget i appen, følger ikke Project' : `${when}${r?.trade && r.trade !== '(none)' ? `\n${r.trade}` : ''}`;
+    const sub = b.manual ? 'Laget i appen, følger ikke Project' : when;
     panelHead(ms ? 'Milepæl' : 'Boks', sub || undefined);
     if (b.manual && r) {
       // Boks laget i appen: datoene velges her. En milepæl har én dato.
@@ -1186,14 +1323,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       if (b.milestoneStyle) su.append(btn('Bruk utseendet fra Project', null, () => change((x) => delete x.milestoneStyle), undefined, 'linkish'));
     } else {
+      // Fag: valgt i appen går foran faget fra Project
+      const trade = boxTrade(b) ?? NO_TRADE;
+      const sg = section('Fag');
+      sg.append(tradeSelect(plan, trade, (t) => commit((pl) => setBoxTrade(pl, [b.id], t)), () => createTrade([b.id])));
+      if (b.trade !== undefined && !b.manual && r)
+        sg.append(lockedRow(`Project har «${tradeName(r.trade)}»`, 'Fag fra Project', 'Gir boksen faget den har i Project', () => change((x) => delete x.trade)));
+      if (tradeColors(plan).some((c) => c.name === trade))
+        sg.append(btn(`Endre faget «${tradeName(trade)}»`, null, () => selectTrade(trade), 'Farge og navn for hele faget, og teksten i forklaringen', 'linkish'));
+
       // Bakgrunnsfarge: alle fagfarger og lanefarger, pluss egen farge. Ingen farger fjernes.
       const sc = section('Farge');
+      const pf = projectFill(plan, b);
+      const nowFill = currentFill(plan, b);
       sc.append(
-        swatches((b.fill ?? '').toUpperCase(), [
-          ...plan.colors.filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-          ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
-        ], (f) => change((x) => (x.fill = f))),
-        colorRow(b.fill ?? '#FFFFFF', (f) => change((x) => (x.fill = f)), { text: 'Fagets farge', disabled: !b.fill, onClick: () => change((x) => delete x.fill) }),
+        swatches((b.fill ?? '').toUpperCase(), planSwatches(plan), (f) => change((x) => (x.fill = f))),
+        colorRow(nowFill, (f) => change((x) => (x.fill = f)), [
+          { text: 'Fagets farge', title: `Fjerner egen farge, så boksen får fargen til «${tradeName(trade)}»`, disabled: !b.fill, onClick: () => change((x) => delete x.fill) },
+          ...(pf ? [{ text: 'Fargen fra Project', title: 'Fargen boksen har i Project, uansett fag og fagfarger valgt i appen', disabled: nowFill === pf, onClick: () => change((x) => setProjectColor(plan, x)) }] : []),
+        ]),
         segmented('Tekstfarge', textColorKey(b.textColor), TEXT_COLORS, (v) =>
           change((x) => {
             if (v === 'auto') delete x.textColor;
@@ -1201,9 +1349,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           }),
         ),
       );
-      const trade = r?.trade;
-      if (trade && plan.colors.some((c) => c.name === trade))
-        sc.append(btn(`Endre fargen for hele faget «${tradeName(trade)}»`, null, () => selectTrade(trade), undefined, 'linkish'));
 
       const so = section('Callout');
       so.append(
@@ -1987,11 +2132,38 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       const key = legHit.getAttribute('data-trade') ?? legHit.getAttribute('data-legend')!;
       const isTrade = key !== FERIE_KEY;
+      // Valgte bokser (ikke milepæler) kan få faget herfra
+      const ids = (group.length ? group : selected ? [selected] : []).filter((id) => {
+        const x = findBox(plan, id);
+        return x && !x.resolved?.isMilestone;
+      });
+      const n = ids.length;
       ctx.open(e.clientX, e.clientY, legendName(key), [
+        ...(isTrade && n
+          ? [{
+              items: [{
+                label: n === 1 ? 'Gi valgt boks dette faget' : `Gi ${n} valgte bokser dette faget`,
+                icon: 'tag' as const,
+                hint: 'Boksene får fargen til faget, med mindre de har egen farge.',
+                disabled: ids.every((id) => boxTrade(findBox(plan, id)!) === key),
+                onSelect: () => commit((pl) => setBoxTrade(pl, ids, key)),
+              }],
+            }]
+          : []),
         {
           items: [
-            { label: 'Skjul i forklaringen', icon: 'hide', hint: 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
             { label: isTrade ? 'Endre tekst og farge' : 'Endre tekst', icon: 'pencil', kbd: 'Klikk', hint: 'Åpner oppføringen i panelet til høyre.', onSelect: () => selectTrade(key) },
+            { label: 'Skjul i forklaringen', icon: 'hide', hint: 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
+          ],
+        },
+        {
+          items: [
+            {
+              label: n ? 'Nytt fag til valgte' : 'Nytt fag',
+              icon: 'plus',
+              hint: n ? `Lager et nytt fag og gir det til ${n === 1 ? 'valgt boks' : `de ${n} valgte boksene`}. Navn og farge velger du i panelet.` : 'Lager et nytt fag. Navn og farge velger du i panelet, og bokser får faget fra boksens panel.',
+              onSelect: () => createTrade(ids),
+            },
           ],
         },
       ], 'Forklaring');

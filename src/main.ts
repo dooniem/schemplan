@@ -545,6 +545,7 @@ async function updateFrom(file: File): Promise<boolean> {
     ['Lanes borte fra Project:', report.goneLanes],
     ['Lanes borte fra Project, men beholdt fordi de har egne bokser:', report.keptLanes],
     ['Project har endret teksten du hadde redigert (teksten fra Project gjelder):', report.textChanged],
+    ['Project har endret faget du hadde endret (faget fra Project gjelder):', report.tradeChanged],
     ['Project har flyttet bokser du hadde flyttet (Project gjelder):', report.moveDropped],
     ['Project har endret navnet på lanes du hadde gitt nytt navn (navnet fra Project gjelder):', report.laneNameChanged],
   ]);
@@ -823,8 +824,8 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     let target = shown;
     if (onlyTrades.length) {
       const keep = new Set(onlyTrades);
-      const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.resolved?.trade ?? ''] as [string, string])));
-      if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.resolved?.trade ?? '')) b.hidden = true;
+      const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])));
+      if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.trade ?? b.resolved?.trade ?? '')) b.hidden = true;
       saved.plan.title = `${saved.plan.title} – ${tradeNames(onlyTrades).join(', ')}`;
       const v = viewOf(saved);
       const layout = computeLayout(v.plan, v.opts, measure);

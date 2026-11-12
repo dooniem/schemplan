@@ -340,7 +340,7 @@ export function createFocus(
       L = layout;
       const plan = getPlan();
       rows = new Map(plan ? planRows(plan).map((r) => [r.id, r]) : []);
-      tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.resolved?.trade ?? ''] as [string, string])) : []);
+      tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])) : []);
       hideTip();
       paint();
     },

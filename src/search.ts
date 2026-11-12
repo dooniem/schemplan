@@ -22,7 +22,7 @@ export function findMatches(plan: PlanFile, query: string): string[] {
     const lane = norm(l.name);
     for (const b of l.boxes) {
       if (!b.shown || b.hidden) continue;
-      const own = norm([b.text, ...b.taskIds.map((id) => names.get(id) ?? ''), b.resolved?.trade ?? ''].join(' '));
+      const own = norm([b.text, ...b.taskIds.map((id) => names.get(id) ?? ''), b.trade ?? b.resolved?.trade ?? ''].join(' '));
       if (words.every((w) => own.includes(w) || lane.includes(w)) && words.some((w) => own.includes(w))) out.push(b.id);
     }
   }

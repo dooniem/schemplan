@@ -65,6 +65,8 @@ export interface PlanSettings {
     logoScale?: number;
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
+    /** Fag laget i appen, i rekkefølgen de står i forklaringen etter fagene fra Project. Fargen står i `tradeColors`. */
+    appTrades?: string[];
     /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */
     criticalLine?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
     /** Utkikk: planen tegnes bare for noen uker. Lagres som regel, så perioden ruller videre. */
@@ -184,6 +186,8 @@ export interface Box {
   calloutSide?: 'auto' | 'left' | 'right';
   /** Det som tegnes. null = tegnes ikke. */
   resolved: ResolvedBox | null;
+  /** Fag valgt i appen (valgfritt). Går foran `resolved.trade` fra Project. */
+  trade?: string;
   /** Bakgrunnsfarge valgt i appen (valgfritt). Uten den brukes fagets farge. */
   fill?: HexColor;
   /** Tekstfarge valgt i appen (valgfritt). Uten den velges svart eller hvit etter kontrast når fill er satt. */

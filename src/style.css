@@ -380,6 +380,8 @@ details summary { cursor: pointer; font-size: 13px; }
 #panel select { width: 100%; min-width: 0; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 #panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .hint { font-size: 11.5px; line-height: 1.4; color: var(--muted); margin: 0; }
+.hint.field-error { color: var(--error); }
+#panel input[aria-invalid='true'] { border-color: var(--error); }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 5px; }
 .swatch { width: 22px; height: 22px; border: 1px solid rgb(0 0 0 / 0.2); border-radius: 5px; cursor: pointer; padding: 0; }
 .swatch:hover { transform: scale(1.08); }
@@ -387,7 +389,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .swatch { transition: transform 120ms ease-out; } }
 .row { display: flex; align-items: center; gap: 6px; }
-.color-row { justify-content: space-between; }
+.color-row { justify-content: space-between; flex-wrap: wrap; row-gap: 6px; }
+.color-row .custom-color { margin-right: auto; }
 .custom-color { display: inline-flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
 .custom-color input[type='color'] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: none; cursor: pointer; }
 .button.small { padding: 3px 8px; font-size: 12px; }
