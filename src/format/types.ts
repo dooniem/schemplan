@@ -194,6 +194,8 @@ export interface Box {
   callout?: 'auto' | 'on' | 'off';
   /** Hvilken side callouten står på (valgfritt). */
   calloutSide?: 'auto' | 'left' | 'right';
+  /** Egen største bredde på callouten, i cm på arket (valgfritt). Uten den gjelder planens bredde. */
+  calloutWidthCm?: number;
   /** Det som tegnes. null = tegnes ikke. */
   resolved: ResolvedBox | null;
   /** Fag valgt i appen (valgfritt). Går foran `resolved.trade` fra Project. */

@@ -48,6 +48,7 @@ function changesOf(b: Box): string[] {
   if (b.textColor) c.push('tekstfarge');
   if (b.callout && b.callout !== 'auto') c.push('callout');
   if (b.calloutSide && b.calloutSide !== 'auto') c.push('callout-side');
+  if (b.calloutWidthCm) c.push('callout-bredde');
   if (b.height) c.push('høyde');
   if (b.top !== undefined) c.push('plass i lanen');
   if (b.fromLane) c.push('flyttet');

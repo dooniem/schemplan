@@ -35,6 +35,12 @@ describe('oppdater fra Project', () => {
     expect(mergePlans(work, fresh).plan.plan.layout.calloutMaxWidthCm).toBe(2.5);
   });
 
+  it('egen callout-bredde på en boks følger med ved oppdatering', () => {
+    const work = testplan();
+    box(work, '1_1').calloutWidthCm = 4.5;
+    expect(box(mergePlans(work, testplan()).plan, '1_1').calloutWidthCm).toBe(4.5);
+  });
+
   it('finner boksen på aktivitetene selv om id-en er endret', () => {
     const work = testplan();
     box(work, '2_2').fill = '#ABCDEF';

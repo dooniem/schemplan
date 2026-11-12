@@ -62,7 +62,7 @@ function findBox(plan: PlanFile, id: string): Box | null {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.trade !== undefined || b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.bold || b.milestoneStyle || b.textScale);
+  return !!(b.trade !== undefined || b.fill || b.textColor || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.bold || b.milestoneStyle || b.textScale || b.calloutWidthCm);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -87,6 +87,7 @@ export function resetBox(b: Box): void {
   delete b.bold;
   delete b.milestoneStyle;
   delete b.textScale;
+  delete b.calloutWidthCm;
 }
 
 /** Lanen boksen ligger i nå. */
@@ -699,6 +700,43 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     return out;
   };
+  /**
+   * Største bredde på callouten, − / + i halve cm. Planens bredde er standard og et stopp på veien.
+   * Har de valgte boksene ulik bredde, står det «Ulike», og stegene går fra planens bredde.
+   */
+  const calloutWidthRows = (sel: Box[], planCm: number, set: (cm: number | undefined) => void): HTMLElement[] => {
+    const LO = 1;
+    const HI = 15;
+    const STEP = 0.5;
+    const fmt = (v: number) => `${v.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} cm`;
+    const own = sel.map((x) => x.calloutWidthCm);
+    const mixed = own.some((v) => v !== own[0]);
+    const cur = mixed ? planCm : (own[0] ?? planCm);
+    const setCm = (cm: number) => {
+      const v = Math.min(HI, Math.max(LO, Math.round(cm / STEP) * STEP));
+      set(Math.abs(v - planCm) < 1e-3 ? undefined : v);
+    };
+    const wrap = el('div', { class: 'prop prop-inline' });
+    wrap.title = 'Hvor bred callouten kan bli på arket før teksten brytes';
+    wrap.append(el('span', { class: 'prop-label' }, 'Bredde'));
+    const g = el('div', { class: 'group stepper', role: 'group', 'aria-label': 'Bredde på callout' });
+    const down = el('button', { type: 'button', 'aria-label': 'Smalere callout', title: 'Smalere callout' }, '−') as HTMLButtonElement;
+    const up = el('button', { type: 'button', 'aria-label': 'Bredere callout', title: 'Bredere callout' }, '+') as HTMLButtonElement;
+    const val = el('output', { class: 'step-val', 'aria-live': 'polite' }, mixed ? 'Ulike' : fmt(cur));
+    const downTo = Math.max(LO, Math.ceil(cur / STEP - 1e-3) * STEP - STEP);
+    const upTo = Math.min(HI, Math.floor(cur / STEP + 1e-3) * STEP + STEP);
+    down.disabled = !mixed && cur <= LO + 1e-3;
+    up.disabled = !mixed && cur >= HI - 1e-3;
+    // Planens bredde er et stopp, så boksen kan settes tilbake til den med knappene
+    down.addEventListener('click', () => setCm(mixed ? planCm - STEP : planCm < cur - 1e-3 && planCm > downTo + 1e-3 ? planCm : downTo));
+    up.addEventListener('click', () => setCm(mixed ? planCm + STEP : planCm > cur + 1e-3 && planCm < upTo - 1e-3 ? planCm : upTo));
+    g.append(down, val, up);
+    wrap.append(g);
+    const out: HTMLElement[] = [wrap];
+    if (own.some((v) => v !== undefined))
+      out.push(lockedRow(`${sel.length > 1 ? 'Noen har egen' : 'Egen'} bredde, planen har ${fmt(planCm)}`, 'Som planen', 'Samme callout-bredde som resten av planen', () => set(undefined)));
+    return out;
+  };
   /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
   const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
@@ -1044,6 +1082,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         all((x) => {
           if (v === 'auto') delete x.calloutSide;
           else x.calloutSide = v as 'left' | 'right';
+        })),
+      ...calloutWidthRows(plain, plan.plan.layout.calloutMaxWidthCm, (cm) =>
+        all((x) => {
+          if (cm === undefined) delete x.calloutWidthCm;
+          else x.calloutWidthCm = cm;
         })),
     );
 
@@ -1402,6 +1445,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           change((x) => {
             if (v === 'auto') delete x.calloutSide;
             else x.calloutSide = v;
+          }),
+        ),
+        ...calloutWidthRows([b], plan.plan.layout.calloutMaxWidthCm, (cm) =>
+          change((x) => {
+            if (cm === undefined) delete x.calloutWidthCm;
+            else x.calloutWidthCm = cm;
           }),
         ),
       );

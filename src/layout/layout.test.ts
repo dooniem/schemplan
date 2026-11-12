@@ -292,6 +292,16 @@ describe('brukerens callout-valg', () => {
     expect(it.kind === 'box' && it.callout).toBeNull();
     expect(it.kind === 'box' && it.text).toBeTruthy();
   });
+  it('egen callout-bredde i cm brytes smalere enn planens, og bredere når den er større', () => {
+    const text = 'Lang tekst som må brytes over flere linjer i callouten';
+    const std = withBox({ text, callout: 'on' });
+    const narrow = withBox({ text, callout: 'on', calloutWidthCm: 1.5 });
+    const wide = withBox({ text, callout: 'on', calloutWidthCm: 12 });
+    if (std.kind !== 'box' || !std.callout || narrow.kind !== 'box' || !narrow.callout || wide.kind !== 'box' || !wide.callout) throw new Error('mangler callout');
+    expect(narrow.callout.box.w).toBeLessThanOrEqual(15 + 1.5);
+    expect(narrow.callout.text.lines.length).toBeGreaterThan(std.callout.text.lines.length);
+    expect(wide.callout.text.lines.length).toBeLessThanOrEqual(std.callout.text.lines.length);
+  });
   it('callout på venstre side når brukeren velger det', () => {
     const it = withBox({ calloutSide: 'left' });
     expect(it.kind === 'box' && it.callout && it.callout.box.x < it.x0).toBe(true);
