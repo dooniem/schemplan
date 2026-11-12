@@ -56,6 +56,19 @@ describe('validatePlan', () => {
     expect(r.errors.some((e) => e.includes('ÅÅÅÅ-MM-DD'))).toBe(true);
   });
 
+  it('godtar baseline på planen og aktivitetene, og avviser feil datoer', () => {
+    const p = clone();
+    p.plan.baseline = { number: 2, name: 'Baseline2', saved: '2026-10-01' };
+    p.tasks[0].baselineStart = '2026-01-05';
+    p.tasks[0].baselineFinish = null;
+    expect(validatePlan(p).errors).toEqual([]);
+    p.tasks[0].baselineStart = '05.01.2026';
+    p.plan.baseline = { number: 2, name: 'Baseline2', saved: 'NA' };
+    const r = validatePlan(p);
+    expect(r.errors.some((e) => e.includes('baselineStart'))).toBe(true);
+    expect(r.errors.some((e) => e.includes('plan.baseline.saved'))).toBe(true);
+  });
+
   it('varsler om aktiviteter som mangler', () => {
     const p = clone();
     p.lanes[0].boxes[0].taskIds.push(9999);
