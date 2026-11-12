@@ -1989,9 +1989,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const startMove = (it: Item): Drag | null => {
     if (!layoutNow) return null;
     const r = bounds(it);
-    const home = laneAt(r.y0);
-    if (!home) return null;
     const L = layoutNow;
+    // Lanen boksen hører til. Et flagg øverst i lanen kan stikke litt over kanten, så toppen av
+    // tegningen kan ligge i lanen over (eller over den første lanen).
+    const plan0 = host.getPlan();
+    const own = plan0 ? laneOf(plan0, it.id)?.id : undefined;
+    const home = L.lanes.find((l) => l.id === own) ?? laneAt(r.y0);
+    if (!home) return null;
     const unit = L.unit;
     // Multi Lane-boks: i lanen tar den bare plass til teksten øverst, så det er den som flyttes innenfor lanen
     const span = it.kind === 'box' && !!it.span;
