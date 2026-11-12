@@ -188,6 +188,19 @@ export function removeBox(plan: PlanFile, id: string): void {
 // ---- Lanes ----
 /** Lysere farger til lanes, i tillegg til fargene planen alt bruker. */
 export const LANE_COLORS = ['#FFFFFF', '#DDDDDD', '#8DCDF8', '#BEE5B0', '#FCC781', '#D7B4F3', '#98DEDE', '#F8F1AE', '#D7CAB7', '#EA8183', '#CEE5ED', '#F6CDC7', '#FFC5D3'];
+/** Navn på lanefargene, i samme rekkefølge som LANE_COLORS. */
+const LANE_COLOR_NAMES = ['Hvit', 'Grå', 'Blå', 'Grønn', 'Oransje', 'Lilla', 'Turkis', 'Gul', 'Brun', 'Rød', 'Lyseblå', 'Melon', 'Rosa'];
+/** Lanefargene med navn. */
+export const LANE_PALETTE: [string, string][] = LANE_COLORS.map((c, i) => [c, LANE_COLOR_NAMES[i]]);
+
+/** Faste farger for bokser og fag, med navn. */
+export const BOX_PALETTE: [string, string][] = [
+  ['#E6194B', 'Rød'], ['#3CB44B', 'Grønn'], ['#FFE119', 'Gul'], ['#4363D8', 'Blå'], ['#F58231', 'Oransje'],
+  ['#911EB4', 'Lilla'], ['#42D4F4', 'Cyan'], ['#F032E6', 'Magenta'], ['#BFEF45', 'Lime'], ['#FABED4', 'Rosa'],
+  ['#469990', 'Blågrønn'], ['#DCBEFF', 'Lavendel'], ['#9A6324', 'Brun'], ['#FFFAC8', 'Beige'], ['#800000', 'Rødbrun'],
+  ['#AAFFC3', 'Mint'], ['#808000', 'Oliven'], ['#FFD8B1', 'Aprikos'], ['#000075', 'Marine'], ['#A9A9A9', 'Grå'],
+  ['#FFFFFF', 'Hvit'], ['#000000', 'Svart'],
+];
 
 /** Har brukeren endret lanen? */
 export function isLaneEdited(l: Lane): boolean {
@@ -679,13 +692,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const fmtDate = (d: string) => d.split('-').reverse().join('.');
   const tradeName = (t: string) => (t === '(none)' ? 'Uten fag' : t);
   /**
-   * Fargeruter for bokser: fagfargene, så de faste lyse fargene (de samme som i lane-panelet),
-   * så lanefargene i planen. De faste fargene står der selv om planen ikke bruker dem.
+   * Fargeruter for bokser: de faste boksfargene, så fagfargene i planen som ikke er blant dem.
+   * De faste fargene står der selv om planen ikke bruker dem.
    */
   const planSwatches = (plan: PlanFile): [string, string][] => [
+    ...BOX_PALETTE,
     ...tradeColors(plan).filter((c) => c.fill).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-    ...LANE_COLORS.map((c): [string, string] => [c, c === '#FFFFFF' ? 'Hvit' : 'Lys farge']),
-    ...plan.lanes.filter((l) => l.fill).map((l): [string, string] => [l.fill!, 'Lanefarge']),
   ];
   const NEW_TRADE = '\u0000nytt';
   /**
@@ -837,7 +849,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       });
     sc.append(
       swatches(now, [
-        ...LANE_COLORS.map((c): [string, string] => [c, c === '#FFFFFF' ? 'Hvit' : 'Lanefarge']),
+        ...LANE_PALETTE,
         ...plan.lanes.filter((x) => x.fill).map((x): [string, string] => [x.fill!, 'Brukt i planen']),
       ], setFill),
     );
@@ -1153,8 +1165,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const keepText = own?.text ? { text: own.text } : {};
     s.append(
       swatches(fill, [
+        ...BOX_PALETTE,
         ...tradeColors(plan).filter((c) => c.fill && c.name !== trade).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-        ...LANE_COLORS.map((c): [string, string] => [c, 'Lys farge']),
       ], (f) => setTradeColor(trade, { fill: f, ...keepText })),
       colorRow(fill, (f) => setTradeColor(trade, { fill: f, ...keepText }), app ? undefined : { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
       segmented('Tekstfarge', textColorKey(own?.text), TEXT_COLORS, (v) =>
@@ -1336,7 +1348,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (tradeColors(plan).some((c) => c.name === trade))
         sg.append(btn(`Endre faget «${tradeName(trade)}»`, null, () => selectTrade(trade), 'Farge og navn for hele faget, og teksten i forklaringen', 'linkish'));
 
-      // Bakgrunnsfarge: fagfarger, de faste lyse fargene og lanefarger, pluss egen farge. Ingen farger fjernes.
+      // Bakgrunnsfarge: de faste boksfargene og fagfargene i planen, pluss egen farge.
       const sc = section('Farge');
       const pf = projectFill(plan, b);
       const nowFill = currentFill(plan, b);
