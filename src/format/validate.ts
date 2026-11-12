@@ -95,7 +95,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
     if (!isObj(lay)) err('plan.layout', 'mangler');
     else {
       needEnum(lay, 'orientation', 'plan.layout', ['landscape', 'portrait']);
-      needEnum(lay, 'heightMode', 'plan.layout', ['fill', 'compact']);
+      needEnum(lay, 'heightMode', 'plan.layout', ['fill', 'compact', 'custom']);
+      if (lay.planArea !== undefined) {
+        const pa = lay.planArea;
+        const edgeOk = (e: unknown) => e === undefined || (Array.isArray(e) && e.length >= 2 && e.length <= 40 && e.every((q) => Array.isArray(q) && q.length === 2 && q.every((v) => typeof v === 'number' && v >= 0 && v <= 1)));
+        if (!isObj(pa) || !edgeOk(pa.top) || !edgeOk(pa.bottom)) err('plan.layout.planArea', 'må ha top og/eller bottom med 2–40 punkter [x, y] mellom 0 og 1');
+      }
       needNum(lay, 'textSize', 'plan.layout');
       needNum(lay, 'calloutMaxWidthCm', 'plan.layout');
       needNum(lay, 'excelWidthMultiplier', 'plan.layout');

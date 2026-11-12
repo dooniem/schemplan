@@ -79,10 +79,15 @@
         </div>
         <div class="set-row">
           <span class="set-label" id="lbl-lanes">Lanes</span>
-          <div class="group" role="group" aria-labelledby="lbl-lanes">
+          <div class="group group-tight" role="group" aria-labelledby="lbl-lanes">
             <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
             <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+            <button type="button" data-height="custom" aria-pressed="false" title="Som «Fyll arket», men du drar topp- og bunnkanten selv, for eksempel for å gi plass til et kart">Egendefinert</button>
           </div>
+        </div>
+        <div class="set-row set-note" id="area-note" hidden>
+          <span></span>
+          <p class="hint">Dra den stiplede topp- og bunnkanten. Dra et hvitt punkt for å lage et knekkpunkt. Lanes og bokser flyttes så alt får plass.</p>
         </div>
       </section>
 

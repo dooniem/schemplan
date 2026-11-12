@@ -218,7 +218,16 @@ function walk(c: Ctx, el: Element) {
     // Markeringer fra redigeringen hører ikke til planen
     if (tag === 'defs' || child.classList.contains('edit-overlay')) continue;
     if (tag === 'g') {
-      walk(c, child);
+      // Klipp til en mangekant (egendefinert planområde)
+      const cp = child.getAttribute('data-clip');
+      const v = cp ? cp.trim().split(/\s+/).map(Number) : [];
+      if (v.length >= 6 && v.every(Number.isFinite)) {
+        c.ops.push(pushGraphicsState(), moveTo(v[0], v[1]));
+        for (let k = 2; k + 1 < v.length; k += 2) c.ops.push(lineTo(v[k], v[k + 1]));
+        c.ops.push(closePath(), clip(), endPath());
+        walk(c, child);
+        c.ops.push(popGraphicsState());
+      } else walk(c, child);
       continue;
     }
     if (tag === 'text') {

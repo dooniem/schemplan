@@ -2,6 +2,7 @@ import type { Layout, TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
+import { isStraight } from '../layout/area';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -99,8 +100,20 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const labelBg = 0.75;
   const left = L.laneTitleX;
 
+  // Egendefinert planområde: striper, lanes, ferier, rutenett og milepælslinjer klippes til omrisset.
+  // data-clip leses av PDF-eksporten.
+  const area = L.area;
+  const clipAttrs: Record<string, string> = {};
+  if (area) {
+    const pts = area.polygon.map(([x, y]) => `${r(x)} ${r(y)}`).join(' ');
+    const cp = node('clipPath', { id: 'plan-area' }, defs);
+    node('polygon', { points: pts }, cp);
+    Object.assign(clipAttrs, { 'clip-path': 'url(#plan-area)', 'data-clip': pts });
+  }
+  const back = area ? node('g', { class: 'plan-area', ...clipAttrs }, svg) : svg;
+
   // Annenhver måned (eller uke) skyggelagt, lysere i annenhver lane
-  const bands = node('g', { class: 'bands' }, svg);
+  const bands = node('g', { class: 'bands' }, back);
   L.bands.forEach((b) => {
     const top = b.y0 ?? y0;
     const bottom = b.y1 ?? y1;
@@ -108,7 +121,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   });
 
   // Lanes: tittelcelle med lanefarge, tynne skillelinjer i planområdet
-  const lanesG = node('g', { class: 'lanes' }, svg);
+  const lanesG = node('g', { class: 'lanes' }, back);
   L.lanes.forEach((ln, i) => {
     node('rect', { x: left, y: ln.y0, width: x0 - left, height: ln.y1 - ln.y0, fill: ln.fill ?? '#FFFFFF', stroke: '#000000', 'stroke-width': 0.3 }, lanesG);
     if (i > 0) node('line', { x1: x0, x2: x1, y1: ln.y0, y2: ln.y0, stroke: GRID, 'stroke-width': 0.15 }, lanesG);
@@ -116,19 +129,26 @@ export function renderPlan(L: Layout): SVGSVGElement {
   });
 
   // Ferier: skravert
-  const hol = node('g', { class: 'holidays' }, svg);
+  const hol = node('g', { class: 'holidays' }, back);
   L.holidays.forEach((h) =>
     node('rect', { x: h.x0, y: y0, width: Math.max(0.3, h.x1 - h.x0), height: y1 - y0, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, hol),
   );
 
   // Rutenett: kraftig strek ved årsskifte
-  const grid = node('g', { class: 'grid' }, svg);
+  const grid = node('g', { class: 'grid' }, back);
   L.grid.forEach((g) => {
     if (g.strong) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: '#000000', 'stroke-width': 0.45 }, grid);
     else if (g.month && ny) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: GRID, 'stroke-width': 0.15 }, grid);
     // Excel-lik: prikket grå strek ved månedsskifte, som rammen Excel la rundt hver måned
     else if (g.month) node('line', { x1: g.x, x2: g.x, y1: y0, y2: y1, stroke: MONTH_DOT, 'stroke-width': 0.25, 'stroke-dasharray': '0.35 0.35' }, grid);
   });
+
+  // Omrisset der kantene er dratt inn, så planen ser avsluttet ut mot det ledige feltet
+  if (area) {
+    const edge = (pts: [number, number][]) => pts.map(([x, y], k) => `${k ? 'L' : 'M'}${r(x)} ${r(y)}`).join(' ');
+    const outline = node('g', { class: 'plan-outline' }, svg);
+    for (const e of [area.top, area.bottom]) if (!isStraight(e)) node('path', { d: edge(e), fill: 'none', stroke: '#000000', 'stroke-width': 0.3, 'stroke-linejoin': 'round' }, outline);
+  }
 
   // Kalender
   const cal = node('g', { class: 'calendar' }, svg);
@@ -160,7 +180,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   }
 
   // Milepælslinjer bak boksene
-  const vlines = node('g', { class: 'milestone-lines' }, svg);
+  const vlines = node('g', { class: 'milestone-lines' }, area ? node('g', clipAttrs, svg) : svg);
   L.items.forEach((it) => {
     if (it.kind === 'milestone' && it.verticalLine) node('line', { x1: it.x, x2: it.x, y1: y0, y2: y1, stroke: it.color, 'stroke-width': 0.5 }, vlines);
   });
