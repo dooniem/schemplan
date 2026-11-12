@@ -463,6 +463,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       inp?.select();
     }
   };
+  /** Ny lane rett over lanen: etter lanen foran den i rekkefølgen, eller først. */
+  const addLaneAbove = (id: string) => {
+    const lanes = host.getPlan()?.lanes ?? [];
+    const i = lanes.findIndex((l) => l.id === id);
+    addLane(i > 0 ? lanes[i - 1].id : null);
+  };
   const removeLaneById = (id: string) => {
     const plan = host.getPlan();
     // Siste synlige lane kan ikke skjules
@@ -2282,6 +2288,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         {
           items: [
             { label: 'Endre navn og farge', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner lanen i panelet til høyre.', onSelect: () => selectLane(ln.id) },
+            { label: 'Ny lane over', icon: 'laneAddAbove', hint: 'Lanen lages i appen og følger ikke Project.', onSelect: () => addLaneAbove(ln.id) },
             { label: 'Ny lane under', icon: 'laneAdd', hint: 'Lanen lages i appen og følger ikke Project.', onSelect: () => addLane(ln.id) },
           ],
         },
