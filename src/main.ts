@@ -681,6 +681,9 @@ function syncControls() {
   $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
   $<HTMLElement>('#settings').title = `${sheetName(opts.paper ?? 'A3', opts.orientation)}. Ark, visning, tekst og logo.`;
   $<HTMLInputElement>('#title-size').value = String(opts.titleSizePt ?? DEFAULT_TITLE_PT);
+  const cw = $<HTMLInputElement>('#callout-width');
+  if (document.activeElement !== cw) cw.value = String(plan?.plan.layout.calloutMaxWidthCm ?? 3);
+  cw.disabled = !plan;
   const logo = plan?.plan.layout.logo;
   $<HTMLButtonElement>('#logo-remove').disabled = !logo;
   const preview = $<HTMLImageElement>('#logo-preview');
@@ -752,6 +755,13 @@ $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
   const v = Number((e.target as HTMLInputElement).value.replace(',', '.'));
   if (v >= 4 && v <= 20) {
     opts.minTextPt = v;
+    draw();
+  }
+});
+$<HTMLInputElement>('#callout-width').addEventListener('input', (e) => {
+  const v = Number((e.target as HTMLInputElement).value.replace(',', '.'));
+  if (plan && v >= 1 && v <= 15) {
+    plan.plan.layout.calloutMaxWidthCm = v;
     draw();
   }
 });

@@ -841,7 +841,8 @@ function buildPieces(
   ny = false,
 ): Piece[] {
   const pieces: Piece[] = [];
-  const calloutMax = Math.max(15, file.plan.layout.calloutMaxWidthCm * 6);
+  // Bredden er i cm på arket
+  const calloutMax = Math.max(10, file.plan.layout.calloutMaxWidthCm * 10);
 
   for (const box of lane.boxes) {
     if (!box.shown || box.hidden || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
@@ -940,17 +941,20 @@ function buildPieces(
         };
         return { item: it, fx0: Math.min(bx0, cx), fx1: Math.max(bx1, cx + cw), h: Math.max(item.h, ch) };
       };
-      // Varianter: høyre eller venstre, vanlig bredde eller på én linje (inntil dobbel bredde)
+      // Varianter: høyre eller venstre, vanlig bredde eller på én linje (inntil dobbel bredde).
+      // Har boksen egen bredde, brukes bare den.
+      const ownMax = box.calloutWidthCm ? Math.max(10, box.calloutWidthCm * 10) : null;
+      const maxBase = ownMax ?? calloutMax;
       const alts: Variant[] = [];
       const sides = box.calloutSide === 'left' ? (['left'] as const) : box.calloutSide === 'right' ? (['right'] as const) : (['right', 'left'] as const);
       for (const side of sides)
-        for (const maxW of [calloutMax, calloutMax * 2]) {
+        for (const maxW of ownMax ? [ownMax] : [calloutMax, calloutMax * 2]) {
           const v = make(side, maxW);
           if (v.fx0 < axis.x0 - 1e-6 || v.fx1 > axis.x1 + 1e-6) continue;
-          if (maxW > calloutMax && alts.some((a) => a.h <= v.h + 1e-6 && a.fx1 - a.fx0 <= v.fx1 - v.fx0 + 1e-6)) continue;
+          if (maxW > maxBase && alts.some((a) => a.h <= v.h + 1e-6 && a.fx1 - a.fx0 <= v.fx1 - v.fx0 + 1e-6)) continue;
           alts.push(v);
         }
-      if (!alts.length) alts.push(make(sides.length === 1 ? sides[0] : bx1 + 2 + calloutMax <= axis.x1 ? 'right' : 'left', calloutMax));
+      if (!alts.length) alts.push(make(sides.length === 1 ? sides[0] : bx1 + 2 + maxBase <= axis.x1 ? 'right' : 'left', maxBase));
       pieces.push({ ...alts[0], alts, sortX: bx0, sortW: w });
     } else {
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });

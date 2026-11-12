@@ -240,6 +240,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         optPos(b, 'height', bp);
         if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
+        if (b.calloutWidthCm !== undefined && !(typeof b.calloutWidthCm === 'number' && b.calloutWidthCm >= 1 && b.calloutWidthCm <= 15)) err(`${bp}.calloutWidthCm`, 'må være et tall fra 1 til 15');
         for (const k of ['hidden', 'manual', 'header', 'critical', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
