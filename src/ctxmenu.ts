@@ -15,6 +15,7 @@ const ICONS = {
   height: 'M12 4v16 M8.5 7.5L12 4l3.5 3.5 M8.5 16.5L12 20l3.5-3.5',
   pin: 'M12 16v5 M8 3h8 M9 3v5l-3 5h12l-3-5V3',
   plus: 'M12 5v14 M5 12h14',
+  tag: 'M3.5 12.5V4h8.5l8.5 8.5-8 8z M8 8.5h.01',
   laneAdd: 'M4 5h16 M4 10h16 M12 14v7 M8.5 17.5h7',
   pencil: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
   fixed: 'M5 4h14 M5 20h14 M12 7.5v9',

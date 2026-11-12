@@ -698,11 +698,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return o;
     };
     if (current === null) opt('', 'Ulike fag').disabled = true;
-    const list = tradeColors(plan);
-    for (const c of list.filter((x) => x.name !== NO_TRADE)) opt(c.name, c.name);
+    // Fagene fra Project og fagene laget i appen i hver sin gruppe, så det er tydelig hvilke som følger Project
+    const groupOf = (label: string, names: string[]) => {
+      if (!names.length) return;
+      const og = el('optgroup', { label }) as HTMLOptGroupElement;
+      for (const n of names) og.append(el('option', { value: n }, n));
+      sel.append(og);
+    };
+    const list = tradeColors(plan).map((c) => c.name).filter((n) => n !== NO_TRADE);
+    groupOf('Fra Project', list.filter((n) => !isAppTrade(plan, n)));
+    groupOf('Laget i appen', list.filter((n) => isAppTrade(plan, n)));
     opt(NO_TRADE, 'Uten fag');
-    const sep = el('option', { disabled: '' }, '──────────') as HTMLOptionElement;
-    sel.append(sep);
     opt(NEW_TRADE, 'Nytt fag …');
     sel.value = current ?? '';
     sel.addEventListener('change', () => {
@@ -1049,7 +1055,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
   /** Vis eller skjul i forklaringen, og teksten som står der. */
-  const legendSection = (plan: PlanFile, key: string) => {
+  const legendSection = (plan: PlanFile, key: string, ownText = true) => {
     const item = plan.plan.layout.legendItems?.[key] ?? {};
     const s = section('I forklaringen');
     const inp = el('input', { type: 'text', id: 'legend-text', 'aria-label': 'Tekst i forklaringen', placeholder: legendName(key), value: item.text ?? '' }) as HTMLInputElement;
@@ -1061,11 +1067,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
     const lab = el('label', { class: 'prop', for: 'legend-text' });
     lab.append(el('span', { class: 'prop-label' }, 'Tekst'), inp);
-    s.append(
-      switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })),
-      lab,
-      el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'),
-    );
+    s.append(switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })));
+    // Et fag laget i appen står med navnet sitt, som endres over, så det trenger ingen egen tekst
+    if (ownText || item.text)
+      s.append(lab, el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'));
     // Forklaringen har én felles størrelse, som lane-navnene
     if (layoutNow) {
       const base = layoutNow.legendBasePt;
@@ -1161,10 +1166,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     pick.disabled = !ids.length;
     sb.append(pick);
     sb.append(el('p', { class: 'hint' }, count
-      ? 'Gi bokser et annet fag fra panelet når en eller flere bokser er valgt, eller høyreklikk et fag i forklaringen.'
-      : 'Ingen bokser har faget ennå, så det står ikke i forklaringen. Velg bokser og gi dem faget fra panelet, eller høyreklikk faget i forklaringen.'));
+      ? 'Da kan du gi dem et annet fag samlet.'
+      : 'Ingen bokser har faget ennå, så det står ikke i forklaringen. Velg bokser og velg faget under Fag i panelet.'));
 
-    legendSection(plan, trade);
+    legendSection(plan, trade, !app);
 
     if (app) {
       const foot = el('div', { class: 'panel-foot' });
@@ -2138,7 +2143,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           ? [{
               items: [{
                 label: n === 1 ? 'Gi valgt boks dette faget' : `Gi ${n} valgte bokser dette faget`,
-                icon: 'check' as const,
+                icon: 'tag' as const,
                 hint: 'Boksene får fargen til faget, med mindre de har egen farge.',
                 disabled: ids.every((id) => boxTrade(findBox(plan, id)!) === key),
                 onSelect: () => commit((pl) => setBoxTrade(pl, ids, key)),
