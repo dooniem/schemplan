@@ -1365,7 +1365,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ['Bilder', [
           'Høyreklikk hvor som helst på arket og velg «Sett inn bilde». Ctrl+V setter inn et bilde fra utklippstavlen, og du kan dra bildefiler inn på arket.',
           'Dra i hjørnene for å endre størrelsen og i den runde knotten for å rotere. Dobbeltklikk for å beskjære.',
-          'Høyreklikk en milepæl for å bruke et bilde som symbol. Bildet følger milepælen.',
+          'Høyreklikk en milepæl for å bruke et bilde som symbol. Bildet følger milepælen, og drar du i bildet, flyttes milepælen. Hold Alt for å flytte bare bildet.',
         ]],
       ];
       for (const [title, tips] of groups) {
@@ -2906,7 +2906,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       },
       {
         items: ms
-          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen.', onSelect: () => pinImage(id, false) }]
+          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) }]
           : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${fmtDate(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
       },
       {
