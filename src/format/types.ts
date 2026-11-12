@@ -225,6 +225,10 @@ export interface Box {
   spanTo?: string;
   /** Multi Lane-boks: bunnen står så langt ned i lanen `spanTo`, i tekstlinjer fra toppen. Uten går den til bunnen av lanen. */
   spanEnd?: number;
+  /** Plassen i lanen i Kompakt, i tekstlinjer fra toppen. Uten brukes `top`, uten tomrom over. Påvirker ikke «Fyll hele arket». */
+  compactTop?: number;
+  /** Multi Lane-boks i Kompakt: som `spanEnd`, men bare i Kompakt. Uten brukes `spanEnd`. */
+  compactSpanEnd?: number;
   /** Multi Lane-boks: teksten midt i boksen i stedet for øverst (valgfritt). */
   textMiddle?: boolean;
   /** Fet tekst i overskrifts- og Multi Lane-bokser (valgfritt). */

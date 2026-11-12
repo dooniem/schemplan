@@ -379,7 +379,7 @@ describe('høyde og plass valgt i appen', () => {
     const p = example();
     // 2_1 går over hele året og ligger øverst; flytt den ned under 2_2
     p.lanes[1].boxes[0].top = 3;
-    const L = computeLayout(p, opts(), approxMeasure);
+    const L = computeLayout(p, opts('fill'), approxMeasure);
     const lane = L.lanes.find((l) => l.id === '2')!;
     const b1 = box(L, '2_1');
     const b2 = box(L, '2_2');
@@ -397,13 +397,49 @@ describe('høyde og plass valgt i appen', () => {
     const p = example();
     const auto = computeLayout(p, opts(), approxMeasure).lanes[0];
     p.lanes[0].height = 20;
-    let L = computeLayout(p, opts(), approxMeasure);
+    let L = computeLayout(p, opts('fill'), approxMeasure);
     expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(20 * L.unit);
     expect(L.lanes[0].manual).toBe(true);
     expect(L.lanes[0].minH).toBeCloseTo(auto.y1 - auto.y0);
     p.lanes[0].height = 0.5;
-    L = computeLayout(p, opts(), approxMeasure);
+    L = computeLayout(p, opts('fill'), approxMeasure);
     expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(auto.y1 - auto.y0);
+  });
+
+  it('Kompakt: tomrommet over festede bokser tas bort, rekkefølgen beholdes', () => {
+    const p = example();
+    p.lanes[1].boxes[0].top = 30;
+    const fill = computeLayout(p, opts('fill'), approxMeasure);
+    const L = computeLayout(p, opts(), approxMeasure);
+    const lane = L.lanes.find((l) => l.id === '2')!;
+    const b1 = box(L, '2_1');
+    const b2 = box(L, '2_2');
+    // I «Fyll hele arket» står den der den er festet
+    expect(box(fill, '2_1').y - fill.lanes.find((l) => l.id === '2')!.top).toBeCloseTo(30 * fill.unit);
+    // I Kompakt rett under de andre boksene i lanen, som den lå under (den går over hele året)
+    expect(b2.y).toBeCloseTo(lane.top);
+    const others = L.items.filter((i) => i !== b1 && footprint(i).y0 >= lane.y0 && footprint(i).y0 < lane.y1);
+    expect(b1.y).toBeCloseTo(Math.max(...others.map((i) => footprint(i).y1)));
+    expect(lane.y1 - lane.top).toBeLessThan(30 * L.unit);
+  });
+
+  it('Kompakt: plass satt i Kompakt står fast og endrer ikke «Fyll hele arket»', () => {
+    const p = example();
+    p.lanes[1].boxes[0].top = 30;
+    p.lanes[1].boxes[0].compactTop = 6;
+    const L = computeLayout(p, opts(), approxMeasure);
+    expect(box(L, '2_1').y - L.lanes.find((l) => l.id === '2')!.top).toBeCloseTo(6 * L.unit);
+    const fill = computeLayout(p, opts('fill'), approxMeasure);
+    expect(box(fill, '2_1').y - fill.lanes.find((l) => l.id === '2')!.top).toBeCloseTo(30 * fill.unit);
+  });
+
+  it('Kompakt ser bort fra fast lanehøyde', () => {
+    const p = example();
+    const auto = computeLayout(p, opts(), approxMeasure).lanes[0];
+    p.lanes[0].height = 20;
+    const L = computeLayout(p, opts(), approxMeasure);
+    expect(L.lanes[0].y1 - L.lanes[0].y0).toBeCloseTo(auto.y1 - auto.y0);
+    expect(L.lanes[0].manual).toBe(false);
   });
 
   it('Fyll arket: ledig plass går bare til lanene med automatisk høyde', () => {
@@ -730,6 +766,20 @@ describe('Multi Lane-boks', () => {
     }
     // Tegnes først, bak alle andre bokser
     expect(L.items[0].id).toBe(box.id);
+  });
+  it('egen bunn i Kompakt gjelder bare Kompakt, ellers brukes bunnen fra «Fyll hele arket»', () => {
+    const { p, box, lane } = setup();
+    box.spanTo = lane.id;
+    const bottom = (mode: 'fill' | 'compact') => {
+      const L = computeLayout(p, { ...o, heightMode: mode }, approxMeasure);
+      const it = L.items.find((i) => i.id === box.id)!;
+      return it.kind === 'box' ? (it.y + it.h - L.lanes.find((l) => l.id === lane.id)!.top) / L.unit : NaN;
+    };
+    box.spanEnd = 2;
+    expect(bottom('compact')).toBeCloseTo(2);
+    box.compactSpanEnd = 1.5;
+    expect(bottom('compact')).toBeCloseTo(1.5);
+    expect(bottom('fill')).toBeCloseTo(2);
   });
   it('skjult eller ukjent lane gir boksens egen lane som bunn', () => {
     const { p, box, lane } = setup();
