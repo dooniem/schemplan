@@ -13,6 +13,9 @@ describe('støtte for diskusjon', () => {
   it('gir perioden et navn ut fra datoene', () => {
     expect(periodLabel('2028-03-01', '2028-03-31')).toBe('mars 2028');
     expect(periodLabel('2028-01-01', '2028-12-31')).toBe('2028');
+    // Uke 1 kan starte i desember året før, og uke 53 kan slutte i januar
+    expect(periodLabel('2025-12-29', '2026-01-04')).toMatch(/^uke 1 2026 /);
+    expect(periodLabel('2026-12-28', '2027-01-03')).toMatch(/^uke 53 2026 /);
     expect(periodLabel('2028-03-06', '2028-03-12')).toBe('uke 10 2028 (06.03–12.03)');
     expect(periodLabel('2028-03-01', '2028-04-30')).toBe('mars–april 2028');
     expect(periodLabel('2028-11-01', '2029-01-31')).toBe('november 2028–januar 2029');

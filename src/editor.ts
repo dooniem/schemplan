@@ -59,6 +59,20 @@ export interface Editor {
   focusBox(id: string): void;
 }
 
+/**
+ * Kopi av planen til angre-historikken. Tekst deles med originalen i stedet for å kopieres
+ * (tekst kan ikke endres i JavaScript), så store bilder ikke tar nytt minne for hvert steg.
+ */
+export function snapshotOf<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(snapshotOf) as T;
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = snapshotOf(x);
+    return out as T;
+  }
+  return v;
+}
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
@@ -210,8 +224,12 @@ export function removeBox(plan: PlanFile, id: string): void {
   const lane = laneOf(plan, id);
   const b = lane?.boxes.find((x) => x.id === id);
   if (!lane || !b) return;
-  if (b.manual) lane.boxes.splice(lane.boxes.indexOf(b), 1);
-  else b.hidden = true;
+  if (b.manual) {
+    lane.boxes.splice(lane.boxes.indexOf(b), 1);
+    // Et bilde brukt som symbol for milepælen hører til den og går samme vei
+    const images = plan.plan.layout.images;
+    if (images?.some((im) => im.milestone?.id === id)) plan.plan.layout.images = images.filter((im) => im.milestone?.id !== id);
+  } else b.hidden = true;
 }
 
 // ---- Lanes ----
@@ -394,7 +412,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan) return;
     // En ny endring godtar omplasseringen
     endArrange();
-    past.push(structuredClone(plan));
+    past.push(snapshotOf(plan));
     if (past.length > MAX_HISTORY) past.shift();
     future = [];
     dirty = true;
@@ -601,7 +619,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const prev = from.pop();
     if (!plan || !prev) return;
     endArrange();
-    to.push(structuredClone(plan));
+    to.push(snapshotOf(plan));
     host.setPlan(prev);
     dirty = true;
     typingSession = false;
@@ -3432,7 +3450,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     } else {
       // Ny boks der du høyreklikket, en måned lang (to uker i ukesvisning)
       const start = L.dateAt(Math.max(p.x, L.plot.x0));
-      const days = plan.plan.calendar.mode === 'week' ? 13 : 29;
+      // Lengden følger visningen som er valgt i appen (måned/uke), ikke bare den fra Project
+      const days = (layoutNow?.calendarMode ?? plan.plan.calendar.mode) === 'week' ? 13 : 29;
       const finishT = new Date(`${start}T00:00:00Z`);
       finishT.setUTCDate(finishT.getUTCDate() + days);
       const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];

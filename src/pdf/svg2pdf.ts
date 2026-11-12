@@ -143,20 +143,72 @@ function hatch(c: Ctx, x: number, y: number, w: number, h: number) {
   c.ops.push(popGraphicsState());
 }
 
-function drawPath(c: Ctx, d: string) {
-  const tok = d.match(/[MLCZmlcz]|-?\d*\.?\d+(?:e-?\d+)?/g) ?? [];
+type Seg = ['M' | 'L', number, number] | ['C', number, number, number, number, number, number] | ['Z'];
+
+/** Leser en SVG-sti (M, L, H, V, C, Z, store og små) til absolutte segmenter. */
+export function parsePath(d: string): Seg[] {
+  const tok = d.match(/[MLHVCZmlhvcz]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) ?? [];
+  const out: Seg[] = [];
   let i = 0;
   let cmd = '';
+  let x = 0;
+  let y = 0;
+  let sx = 0;
+  let sy = 0;
   const n = () => Number(tok[i++]);
   while (i < tok.length) {
-    if (/[MLCZ]/i.test(tok[i])) cmd = tok[i++];
-    if (cmd === 'M') {
-      c.ops.push(moveTo(n(), n()));
-      cmd = 'L';
-    } else if (cmd === 'L') c.ops.push(lineTo(n(), n()));
-    else if (cmd === 'C') c.ops.push(appendBezierCurve(n(), n(), n(), n(), n(), n()));
-    else if (cmd === 'Z' || cmd === 'z') c.ops.push(closePath());
-    else i++;
+    if (/^[a-z]$/i.test(tok[i])) cmd = tok[i++];
+    else if (!cmd) break;
+    const rel = cmd === cmd.toLowerCase();
+    const ox = rel ? x : 0;
+    const oy = rel ? y : 0;
+    switch (cmd.toUpperCase()) {
+      case 'M':
+        x = ox + n();
+        y = oy + n();
+        [sx, sy] = [x, y];
+        out.push(['M', x, y]);
+        cmd = rel ? 'l' : 'L'; // Flere tallpar etter M er linjer
+        break;
+      case 'L':
+        x = ox + n();
+        y = oy + n();
+        out.push(['L', x, y]);
+        break;
+      case 'H':
+        x = ox + n();
+        out.push(['L', x, y]);
+        break;
+      case 'V':
+        y = oy + n();
+        out.push(['L', x, y]);
+        break;
+      case 'C': {
+        const v = [n(), n(), n(), n(), n(), n()];
+        const seg: Seg = ['C', ox + v[0], oy + v[1], ox + v[2], oy + v[3], ox + v[4], oy + v[5]];
+        x = seg[5];
+        y = seg[6];
+        out.push(seg);
+        break;
+      }
+      case 'Z':
+        [x, y] = [sx, sy];
+        out.push(['Z']);
+        cmd = '';
+        break;
+      default:
+        i++;
+    }
+  }
+  return out;
+}
+
+function drawPath(c: Ctx, d: string) {
+  for (const s of parsePath(d)) {
+    if (s[0] === 'M') c.ops.push(moveTo(s[1], s[2]));
+    else if (s[0] === 'L') c.ops.push(lineTo(s[1], s[2]));
+    else if (s[0] === 'C') c.ops.push(appendBezierCurve(s[1], s[2], s[3], s[4], s[5], s[6]));
+    else c.ops.push(closePath());
   }
 }
 

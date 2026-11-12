@@ -201,6 +201,8 @@ export interface Layout {
   subtitle: TextBlock;
   plot: { x0: number; x1: number; y0: number; y1: number };
   laneTitleX: number;
+  /** Kalendervisningen som faktisk er tegnet. */
+  calendarMode: 'month' | 'week';
   calendarTop: CalendarRow[];
   calendarBottom: CalendarRow[];
   lanes: LaneLayout[];
@@ -977,6 +979,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     plot: { x0, x1, y0: plotTop, y1: plotBottom },
     area: edges ? { ...edges, polygon: areaPolygon(edges) } : null,
     laneTitleX,
+    calendarMode: axis.mode,
     calendarTop,
     calendarBottom,
     lanes: laneLayouts,

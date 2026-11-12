@@ -17,4 +17,9 @@ describe('filnavn fra planen', () => {
   it('tåler ugyldig %-koding', () => {
     expect(lastPart('a/b%zz.mpp')).toBe('b%zz.mpp');
   });
+  it('fjerner appens egne endelser for utkikk og fag', () => {
+    expect(fileTitle('Plan_arbeidsfil_utkikk-u45-47.pdf')).toBe('Plan');
+    expect(fileTitle('Plan_arbeidsfil_Betong_fremhevet.pdf')).toBe('Plan');
+    expect(fileTitle('Plan_utkikk-u45-47.pdf')).toBe('Plan');
+  });
 });

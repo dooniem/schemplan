@@ -42,6 +42,13 @@ export function rowsIn(rows: DataRow[], start: string, end: string): DataRow[] {
 }
 
 const MONTHS = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
+/** Året uka hører til: torsdagen i uka avgjør, som for ukenummeret. */
+function isoWeekYear(iso: string): number {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + 3);
+  return d.getUTCFullYear();
+}
+
 function isoWeek(iso: string): number {
   const d = new Date(`${iso}T00:00:00Z`);
   const day = (d.getUTCDay() + 6) % 7;
@@ -62,7 +69,7 @@ export function periodLabel(start: string, end: string): string {
     const m = (iso: string) => MONTHS[Number(iso.slice(5, 7)) - 1];
     return start.slice(0, 4) === end.slice(0, 4) ? `${m(start)}–${m(end)} ${end.slice(0, 4)}` : `${m(start)} ${start.slice(0, 4)}–${m(end)} ${end.slice(0, 4)}`;
   }
-  if (d === 7 && new Date(`${start}T00:00:00Z`).getUTCDay() === 1) return `uke ${isoWeek(start)} ${start.slice(0, 4)} (${norsk(start).slice(0, 5)}–${norsk(end).slice(0, 5)})`;
+  if (d === 7 && new Date(`${start}T00:00:00Z`).getUTCDay() === 1) return `uke ${isoWeek(start)} ${isoWeekYear(start)} (${norsk(start).slice(0, 5)}–${norsk(end).slice(0, 5)})`;
   return `${norsk(start)}–${norsk(end)}`;
 }
 

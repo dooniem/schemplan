@@ -113,7 +113,7 @@ export function applyLookahead(file: PlanFile, rule: Lookahead, today: string, s
   const anyVisible = file.lanes.some((l) => l.shown && !l.hidden && l.boxes.some(visible));
   const lanes = file.lanes.map((lane) => {
     const keepPins = lane.boxes.some((b) => (b.header || b.spanTo !== undefined) && visible(b));
-    const boxes = keepPins ? lane.boxes : lane.boxes.map((b) => (b.top === undefined ? b : (({ top: _t, ...rest }) => rest)(b)));
+    const boxes = keepPins ? lane.boxes : lane.boxes.map((b) => (b.top === undefined && b.compactTop === undefined ? b : (({ top: _t, compactTop: _c, ...rest }) => rest)(b)));
     const empty = !lane.boxes.some(visible);
     const { height: _h, ...rest } = lane;
     return { ...rest, boxes, hidden: lane.hidden || (rule.hideEmptyLanes && anyVisible && empty) || undefined };

@@ -16,7 +16,9 @@ export function lastPart(name: string): string {
 export function fileTitle(name: string, fallback = 'skjematisk-plan'): string {
   const t = lastPart(name)
     .replace(/\.(pdf|json|mpp|mpt|xml|xlsx?)$/i, '')
-    .replace(/_(arbeidsfil|kompakt)$/i, '')
+    // Endelsene appen selv legger på: _arbeidsfil/_kompakt, _utkikk-…, fagnavn og _fremhevet
+    .replace(/_(arbeidsfil|kompakt)(_.*)?$/i, '')
+    .replace(/_utkikk-[^_]*(_.*)?$/i, '')
     // Tegn som ikke er lov i filnavn på Windows
     .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-')
     .trim();
