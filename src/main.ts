@@ -530,7 +530,10 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = '';
-  if (!file) return;
+  if (file) await openFile(file);
+});
+
+async function openFile(file: File) {
   if (unsaved() && !confirm('Planen har endringer som ikke er lagret. Vil du åpne en annen plan likevel?')) return;
   const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
   if (!r) return;
@@ -538,6 +541,20 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   search.reset();
   focus.reset();
   showPlan(r.plan, file.name, r.warnings);
+}
+
+// Dra en planfil (.json eller .pdf) inn i vinduet for å åpne den. Bilder som slippes på arket
+// i redigering tas av redigeringen først.
+const planFileOf = (e: DragEvent) => Array.from(e.dataTransfer?.files ?? []).find((f) => /\.(json|pdf)$/i.test(f.name));
+window.addEventListener('dragover', (e) => {
+  if (e.defaultPrevented || !e.dataTransfer?.types.includes('Files')) return;
+  e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+  if (e.defaultPrevented) return;
+  e.preventDefault();
+  const file = planFileOf(e);
+  if (file) void openFile(file);
 });
 
 // Oppdater fra Project: en ny plan fra Project er åpen, og redigeringene hentes fra

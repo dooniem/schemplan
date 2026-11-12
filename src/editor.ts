@@ -219,6 +219,24 @@ export function newBox(plan: PlanFile, laneId: string, start: string, finish: st
   return b;
 }
 
+/** Ny milepæl laget i appen: rødt flagg med dato, på én dag. */
+export function newMilestone(plan: PlanFile, laneId: string, date: string): Box | null {
+  const lane = plan.lanes.find((l) => l.id === laneId);
+  if (!lane) return null;
+  const b: Box = {
+    id: newId(plan),
+    text: 'Ny milepæl',
+    taskIds: [],
+    rotation: 0,
+    milestone: { dateSource: 'scheduled', symbol: 'flag', verticalLine: false, color: 'red', rotateText: false, showDate: true },
+    shown: true,
+    manual: true,
+    resolved: { start: date, finish: date, isMilestone: true, trade: '(none)' },
+  };
+  lane.boxes.push(b);
+  return b;
+}
+
 /** Bokser laget i appen slettes. Bokser fra Project skjules, så de kan vises igjen. */
 export function removeBox(plan: PlanFile, id: string): void {
   const lane = laneOf(plan, id);
@@ -3467,6 +3485,19 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
                 let made: Box | null = null;
                 commit((pl) => {
                   made = newBox(pl, ln.id, start, finish);
+                  if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
+                });
+                if (made) select((made as Box).id);
+              },
+            },
+            {
+              label: `Ny milepæl ${fmtDate(start)}`,
+              icon: 'flag',
+              hint: 'Milepælen lages i appen og følger ikke Project.',
+              onSelect: () => {
+                let made: Box | null = null;
+                commit((pl) => {
+                  made = newMilestone(pl, ln.id, start);
                   if (made) made.top = lines(Math.max(0, p.y - ln.top), L.unit);
                 });
                 if (made) select((made as Box).id);
