@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
+import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane } from './editor';
 import { validatePlan } from './format/validate';
-import { computeLayout } from './layout/layout';
+import { computeLayout, type BoxItem } from './layout/layout';
 import { approxMeasure } from './layout/text';
 import { testplan } from './test/testplaner';
 
@@ -151,5 +151,26 @@ describe('kopier og lim inn', () => {
     const back = pasteBoxes(p, [{ box: structuredClone(src), lane: '1' }], null);
     expect(laneOf(p, back[0].id)!.id).toBe('1');
     expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
+});
+
+describe('bokser i en overskriftsboks', () => {
+  const box = (id: string, x0: number, x1: number, y: number, h: number, more: Partial<BoxItem> = {}): BoxItem => ({ kind: 'box', id, x0, x1, y, h, fill: '#fff', border: null, text: null, callout: null, arrowLeft: false, arrowRight: false, ...more });
+  const header = box('h', 10, 100, 10, 20, { header: true });
+
+  it('tar med en boks som stikker litt ut under etter avrunding', () => {
+    expect(inHeaderBox(header, box('a', 60, 80, 22, 8.03))).toBe(true);
+    expect(inHeaderBox(header, box('b', 20, 40, 15, 5))).toBe(true);
+  });
+
+  it('tar med en boks selv om callouten stikker ut', () => {
+    expect(inHeaderBox(header, box('c', 80, 99, 15, 5, { callout: { box: { x: 101, y: 0, w: 20, h: 4 }, text: { x: 0, y: 0, lines: [], size: 1, color: '#000', anchor: 'start' }, leader: [] } }))).toBe(true);
+  });
+
+  it('lar bokser som stort sett ligger utenfor, være', () => {
+    expect(inHeaderBox(header, box('d', 30, 60, 28, 8))).toBe(false);
+    expect(inHeaderBox(header, box('e', 0, 40, 40, 5))).toBe(false);
+    expect(inHeaderBox(header, box('f', 20, 40, 15, 40, { span: true }))).toBe(false);
+    expect(inHeaderBox(header, header)).toBe(false);
   });
 });
