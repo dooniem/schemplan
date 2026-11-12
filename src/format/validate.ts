@@ -257,6 +257,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
           }
         }
         if (b.top !== undefined && !(typeof b.top === 'number' && Number.isFinite(b.top) && b.top >= 0)) err(`${bp}.top`, 'må være et tall, 0 eller større');
+        if (b.compactTop !== undefined && !(typeof b.compactTop === 'number' && Number.isFinite(b.compactTop) && b.compactTop >= 0)) err(`${bp}.compactTop`, 'må være et tall, 0 eller større');
+        if (b.compactSpanEnd !== undefined && !(typeof b.compactSpanEnd === 'number' && Number.isFinite(b.compactSpanEnd) && b.compactSpanEnd >= 0)) err(`${bp}.compactSpanEnd`, 'må være et tall, 0 eller mer');
         for (const k of ['fill', 'textColor'] as const)
           if (b[k] !== undefined && !(typeof b[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b[k] as string))) err(`${bp}.${k}`, 'må være en farge som #RRGGBB');
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');

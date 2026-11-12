@@ -145,7 +145,7 @@ export interface LaneLayout {
   top: number;
   /** Laveste høyde lanen kan få uten at noe kuttes. */
   minH: number;
-  /** Høyden er valgt i appen. */
+  /** Høyden er valgt i appen (og gjelder: Kompakt ser bort fra den). */
   manual: boolean;
 }
 
@@ -204,6 +204,8 @@ export interface Layout {
   holidays: { x0: number; x1: number }[];
   items: Item[];
   legend: LegendEntry[];
+  /** Planen er så lav som innholdet (Kompakt), ikke fylt ut til arket. */
+  compact: boolean;
   /** Planen er høyere enn arket, selv etter krymping. */
   overflow: boolean;
   /** Teksten måtte krympes under valgt minimum for at alt skulle få plass. */
@@ -257,6 +259,8 @@ interface Piece extends Variant {
   lock?: number;
   /** Overskriftsboks: bare tekstfeltet øverst (mm) stenger for bokser med fast plass. */
   band?: number;
+  /** Plassert i Kompakt: flyttes ikke når tomrom tas bort. */
+  stay?: boolean;
 }
 
 /**
@@ -291,6 +295,30 @@ export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: numb
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
     inner.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + (p.band ?? v.h) });
     out[i] = { y: best.y, k: best.k };
+  }
+  return out;
+}
+
+/**
+ * Tar bort tomrom over brikkene uten å endre rekkefølgen. Ovenfra og ned flyttes hver brikke opp til
+ * den treffer en brikke den lå under. Brikker som overlappet (bokser inne i en overskriftsboks),
+ * beholder avstanden seg imellom. Ingen brikke flyttes nedover.
+ */
+export function closeGaps(pieces: { fx0: number; fx1: number; h: number }[], ys: number[], stay: boolean[] = [], gap = GAP): number[] {
+  const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b] || a - b);
+  const out = ys.slice();
+  const done: number[] = [];
+  for (const i of order) {
+    const p = pieces[i];
+    done.push(i);
+    if (stay[i]) continue;
+    let y = 0;
+    for (const j of done.slice(0, -1)) {
+      const q = pieces[j];
+      if (!(p.fx0 < q.fx1 - 1e-6 && q.fx0 < p.fx1 - 1e-6)) continue;
+      y = Math.max(y, ys[j] + q.h <= ys[i] + 1e-6 ? out[j] + q.h + gap : out[j] + (ys[i] - ys[j]));
+    }
+    out[i] = y;
   }
   return out;
 }
@@ -475,7 +503,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const bottomCal = opts.showBottomCalendar ?? file.plan.calendar.bottomCalendar;
 
   // ---- Bokser og milepæler per lane ----
-  const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny));
+  const compact = opts.heightMode === 'compact';
+  const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny, compact));
 
   // ---- Lane-titler og innholdshøyde ----
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, laneSize, measure, true));
@@ -508,15 +537,19 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     pieces.forEach((p, j) => {
       const v = (p.alts ?? [p])[placed[j].k];
       Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
-      setY(p.item, placed[j].y);
     });
-    const inner = pieces.reduce((m, p, j) => Math.max(m, placed[j].y + p.h), 0);
+    // Kompakt: festede bokser beholder rekkefølgen, men tomrommet over dem tas bort.
+    // Bokser plassert i Kompakt står der de er satt.
+    let ys = placed.map((q) => q.y);
+    if (compact && pieces.some((p) => p.lock !== undefined)) ys = closeGaps(pieces, ys, pieces.map((p) => !!p.stay));
+    pieces.forEach((p, j) => setY(p.item, ys[j]));
+    const inner = pieces.reduce((m, p, j) => Math.max(m, ys[j] + p.h), 0);
     return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
   });
-  // Lane med høyde valgt i appen: aldri lavere enn innholdet krever
+  // Lane med høyde valgt i appen: aldri lavere enn innholdet krever. Kompakt ser bort fra den.
   const minH = contentH.slice();
   lanes.forEach((l, i) => {
-    if (l.height) contentH[i] = Math.max(minH[i], l.height * lh);
+    if (l.height && !compact) contentH[i] = Math.max(minH[i], l.height * lh);
   });
 
   // ---- Legend ----
@@ -621,14 +654,15 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const natural = contentH.reduce((a, b) => a + b, 0);
   const overflow = natural > avail + 1e-6;
   // Ledig plass fordeles på lanene med automatisk høyde
-  const autoCount = lanes.filter((l) => !l.height).length;
+  const autoCount = lanes.filter((l) => !l.height || compact).length;
   const extra = opts.heightMode === 'fill' && !overflow && autoCount ? (avail - natural) / autoCount : 0;
 
   const laneLayouts: LaneLayout[] = [];
   let y = plotTop;
   const items: Item[] = [];
   lanes.forEach((lane, i) => {
-    const h = contentH[i] + (lane.height ? 0 : extra);
+    const fixed = !!lane.height && !compact;
+    const h = contentH[i] + (fixed ? 0 : extra);
     const y0 = y;
     lanePieces[i].forEach((p) => {
       offsetY(p.item, y0 + LANE_PAD);
@@ -642,7 +676,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       fill: lane.fill,
       top: y0 + LANE_PAD,
       minH: minH[i],
-      manual: !!lane.height,
+      manual: fixed,
       title: {
         x: laneTitleX + LANE_TITLE_W / 2,
         y: y0 + h / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
@@ -666,7 +700,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       let j = i;
       while (j + 1 < lanes.length && (fileIndex.get(lanes[j + 1].id) ?? Infinity) <= want) j++;
       // Egen bunn inne i lanen gjelder bare når boksen faktisk går til den lanen, og aldri under lanens bunn
-      const end = lanes[j].id === box?.spanTo && box.spanEnd !== undefined ? laneLayouts[j].top + box.spanEnd * lh : Infinity;
+      // Kompakt har egen bunn, ellers samme som «Fyll hele arket». Lanen blir aldri høyere av den.
+      const ownEnd = compact ? (box?.compactSpanEnd ?? box?.spanEnd) : box?.spanEnd;
+      const end = lanes[j].id === box?.spanTo && ownEnd !== undefined ? laneLayouts[j].top + ownEnd * lh : Infinity;
       const bottom = Math.min(end, laneLayouts[j].y1 - LANE_PAD);
       const textH = p.item.h;
       p.item.h = Math.max(p.item.h, bottom - p.item.y);
@@ -773,6 +809,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     legend,
     overflow,
     belowMin: false,
+    compact,
     style: ny ? 'ny' : 'excel',
     logo,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
@@ -839,6 +876,7 @@ function buildPieces(
   colors: Map<string, TradeColor>,
   noneColor: TradeColor,
   ny = false,
+  compact = false,
 ): Piece[] {
   const pieces: Piece[] = [];
   // Bredden er i cm på arket
@@ -966,7 +1004,9 @@ function buildPieces(
   for (const p of pieces) {
     const box = byId.get(p.item.id);
     if (!box) continue;
-    if (box.top !== undefined) p.lock = box.top * lh;
+    const top = compact ? (box.compactTop ?? box.top) : box.top;
+    if (top !== undefined) p.lock = top * lh;
+    if (compact && box.compactTop !== undefined) p.stay = true;
     if (p.item.kind !== 'box') continue;
     if (box.spanTo !== undefined) {
       // Multi Lane-boks: bare tekstfeltet øverst tar plass i lanen. Høyden settes når lanene er lagt ut.
