@@ -2,6 +2,7 @@ import type { Box, Lane, PlanFile, StatusLine, TradeColor } from '../format/type
 import { parseBoxText, splitLines } from '../format/text';
 import { isDrawable } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
+import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
@@ -15,7 +16,8 @@ import { boxTrade, tradeColors } from '../trades';
 
 export interface LayoutOptions {
   orientation: Orientation;
-  heightMode: 'fill' | 'compact';
+  /** custom: som fill, men med topp- og bunnkant valgt i appen (plan.layout.planArea). */
+  heightMode: 'fill' | 'compact' | 'custom';
   /** Skriftstørrelse i punkter på det ferdige A3-arket. */
   textSizePt: number;
   /** true: krymp teksten til planen får plass, men ikke under minTextPt. false: fast tekststørrelse. */
@@ -228,6 +230,8 @@ export interface Layout {
   unit: number;
   /** Utkikk: hele planen i miniatyr under planen. */
   overview: Overview | null;
+  /** Egendefinert planområde: kantene og omrisset i mm. Lanene, rutenettet og feriene klippes til omrisset. */
+  area: (AreaEdges & { polygon: Pt[] }) | null;
   /** Utkikk uten miniatyr: linjen med de neste milepælene står alene. */
   upcoming: TextBlock | null;
   /** Statuslinjen, eller null når den er av eller datoen er utenfor kalenderen. */
@@ -274,7 +278,11 @@ interface Piece extends Variant {
  * Som pack, men hver brikke kan ha flere varianter. Velger varianten som ender lavest i lanen,
  * og ved likt den med smalest fotavtrykk, så den sperrer minst for de neste brikkene.
  */
-export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[], gap = GAP): { y: number; k: number }[] {
+export function packVariants(
+  pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[],
+  gap = GAP,
+  limit?: (fx0: number, fx1: number) => [number, number],
+): { y: number; k: number; bad?: boolean }[] {
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
   // Overskriftsbokser: for bokser med fast plass er det bare tekstfeltet øverst som er opptatt
   const inner: { x0: number; x1: number; y0: number; y1: number }[] = [];
@@ -283,7 +291,7 @@ export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: numb
     const candidates = [from, ...overlapping.map((q) => q.y1 + gap)].filter((c) => c >= from - 1e-6).sort((a, b) => a - b);
     return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? from;
   };
-  const out: { y: number; k: number }[] = new Array(pieces.length);
+  const out: { y: number; k: number; bad?: boolean }[] = new Array(pieces.length);
   // Brikker med fast plass legges først, så de andre pakkes rundt dem
   const order = pieces.map((_, i) => i);
   // Overskriftsbokser først ved lik plass, så boksene inne i dem legges oppå
@@ -291,17 +299,21 @@ export function packVariants(pieces: { alts: { fx0: number; fx1: number; h: numb
   const free = order.filter((i) => pieces[i].lock === undefined);
   for (const i of [...locked, ...free]) {
     const p = pieces[i];
-    let best = { y: 0, k: 0, score: Infinity, w: Infinity };
+    let best = { y: 0, k: 0, score: Infinity, w: Infinity, bad: false };
     p.alts.forEach((v, k) => {
-      const y = lowest(v, p.lock ?? 0, p.lock !== undefined);
-      const score = y + v.h;
+      // Egendefinert planområde: brikken må ligge mellom kantene der den står
+      const [lo, hi] = limit ? limit(v.fx0, v.fx1) : [0, Infinity];
+      const y = lowest(v, Math.max(p.lock ?? 0, lo), p.lock !== undefined);
+      const bad = y + v.h > hi + 1e-6;
+      // En variant som går utenfor kanten velges bare når ingen andre får plass
+      const score = y + v.h + (bad ? 1e6 : 0);
       const w = v.fx1 - v.fx0;
-      if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w };
+      if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w, bad };
     });
     const v = p.alts[best.k];
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
     inner.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + (p.band ?? v.h) });
-    out[i] = { y: best.y, k: best.k };
+    out[i] = best.bad ? { y: best.y, k: best.k, bad: true } : { y: best.y, k: best.k };
   }
   return out;
 }
@@ -515,6 +527,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
 
   // ---- Lane-titler og innholdshøyde ----
   const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, laneSize, measure, true));
+  // Plasseringen uten egendefinert planområde, så lanene som ikke berøres av kantene slipper ny pakking
+  const basePlace: { k: number[]; ys: number[] }[] = [];
   const contentH = lanes.map((lane, i) => {
     if (arrange?.lanes.has(lane.id)) {
       // Boksene inne i en overskriftsboks som flyttes, følger den og pakkes ikke for seg
@@ -550,6 +564,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     let ys = placed.map((q) => q.y);
     if (compact && pieces.some((p) => p.lock !== undefined)) ys = closeGaps(pieces, ys, pieces.map((p) => !!p.stay));
     pieces.forEach((p, j) => setY(p.item, ys[j]));
+    basePlace[i] = { k: placed.map((q) => q.k), ys };
     const inner = pieces.reduce((m, p, j) => Math.max(m, ys[j] + p.h), 0);
     return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
   });
@@ -655,27 +670,169 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     return d >= axis.start && d < axis.end;
   })();
   const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
-  const plotTop = TOP_MARGIN + headerH + statusH + calH;
   const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
-  const avail = H - plotTop - fixedBottom;
+  const natTop = TOP_MARGIN + headerH + statusH + calH;
+  const natBottom = H - fixedBottom;
+  // Egendefinert: kantene dratt i appen. Kalenderen står over det høyeste punktet på toppkanten,
+  // og forklaringen står der den står, så det blir ledig plass mellom den og bunnkanten.
+  const custom = opts.heightMode === 'custom';
+  let edges: AreaEdges | null = null;
+  if (custom) {
+    const pa = file.plan.layout.planArea;
+    const left = MARGIN;
+    const top = edgeMm(pa?.top, W, H, left, x1, natTop, natTop, natBottom - MIN_AREA_H);
+    const topLow = Math.max(...top.map((q) => q[1]));
+    const bottom = edgeMm(pa?.bottom, W, H, left, x1, natBottom, Math.min(natBottom, topLow + MIN_AREA_H), natBottom);
+    edges = { top, bottom, minTop: natTop, maxBottom: natBottom, left, right: x1 };
+  }
+  const plotTop = edges ? Math.min(...edges.top.map((q) => q[1])) : natTop;
+  const avail = (edges ? Math.max(...edges.bottom.map((q) => q[1])) : natBottom) - plotTop;
   const natural = contentH.reduce((a, b) => a + b, 0);
-  const overflow = natural > avail + 1e-6;
+  let overflow = natural > avail + 1e-6;
   // Ledig plass fordeles på lanene med automatisk høyde
   const autoCount = lanes.filter((l) => !l.height || compact).length;
-  const extra = opts.heightMode === 'fill' && !overflow && autoCount ? (avail - natural) / autoCount : 0;
+  const even = opts.heightMode !== 'compact' && !overflow && autoCount ? (avail - natural) / autoCount : 0;
+  let extras = lanes.map((l) => (!l.height || compact ? even : 0));
+  /** Ny plassering for lanene som berøres av kantene (egendefinert planområde). */
+  const areaPlace = new Map<number, { k: number[]; ys: number[] }>();
+  if (edges && !overflow) {
+    const E = edges;
+    const titleX1 = x0;
+    // Plasserer bokser og titler lane for lane ovenfra, med tillegg i høyden per lane
+    const run = (add: number[], keep = false) => {
+      let y = plotTop;
+      let ok = true;
+      for (let i = 0; i < lanes.length; i++) {
+        const y0 = y;
+        const top = y0 + LANE_PAD;
+        const limit = (a: number, b: number): [number, number] => [Math.max(0, edgeRange(E.top, a, b, 'max') - top), edgeRange(E.bottom, a, b, 'min') - LANE_PAD - top];
+        const pieces = lanePieces[i];
+        const base0 = basePlace[i];
+        // Holder plasseringen uten kanter, brukes den
+        const fits = pieces.every((p, j) => {
+          const v = (p.alts ?? [p])[base0.k[j]];
+          const [lo, hi] = limit(v.fx0, v.fx1);
+          return base0.ys[j] >= lo - 1e-6 && base0.ys[j] + v.h <= hi + 1e-6;
+        });
+        let pl = base0;
+        if (!fits) {
+          const packAt = (order: number[]) => {
+            const r = packVariants(order.map((j) => ({ alts: pieces[j].alts ?? [pieces[j]], lock: pieces[j].lock, band: pieces[j].band })), GAP, limit);
+            const out = { k: new Array<number>(pieces.length), ys: new Array<number>(pieces.length), bad: false };
+            order.forEach((j, n) => {
+              out.k[j] = r[n].k;
+              out.ys[j] = r[n].y;
+              if (r[n].bad) out.bad = true;
+            });
+            return out;
+          };
+          const idx = pieces.map((_, j) => j);
+          let r = packAt(idx);
+          if (r.bad) {
+            // Bokser som kantene stenger for, får plass først, så de andre pakkes rundt dem
+            const free = Math.max(...E.bottom.map((q) => q[1])) - LANE_PAD - top;
+            const tight = (j: number) => {
+              const v = pieces[j].alts?.[0] ?? pieces[j];
+              const [lo, hi] = limit(v.fx0, v.fx1);
+              return lo > 1e-6 || hi < free - 1e-6;
+            };
+            const r2 = packAt([...idx.filter(tight), ...idx.filter((j) => !tight(j))]);
+            if (!r2.bad) r = r2;
+          }
+          if (r.bad) ok = false;
+          pl = r;
+          if (keep) areaPlace.set(i, r);
+        }
+        const inner = pieces.reduce((m, p, j) => Math.max(m, pl.ys[j] + (p.alts ?? [p])[pl.k[j]].h), 0);
+        // Lane-tittelen står i det synlige av lanen i tittelkolonnen
+        const tTop = Math.max(0, edgeRange(E.top, E.left, titleX1, 'max') - y0);
+        const need = Math.max(inner + 2 * LANE_PAD, tTop + titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
+        const h = Math.max(need, lanes[i].height ? lanes[i].height! * lh : 0) + add[i];
+        if (y0 + tTop + titleLines[i].length * laneLh + 2 * LANE_PAD > edgeRange(E.bottom, E.left, titleX1, 'min') + 1e-6) ok = false;
+        contentHAt[i] = need;
+        heightAt[i] = h;
+        y += h;
+      }
+      if (y - plotTop > avail + 1e-6) ok = false;
+      return { ok, used: y - plotTop };
+    };
+    const contentHAt: number[] = new Array(lanes.length).fill(0);
+    const heightAt: number[] = new Array(lanes.length).fill(0);
+    const zero = lanes.map(() => 0);
+    if (!run(zero).ok) overflow = true;
+    else {
+      // Ledig plass fylles så jevnt som mulig: alle lanene får like mye mer, til en lane til ikke tåler mer
+      // (en boks ville havnet utenfor kanten). Da får bare lanene under den resten, osv.
+      // Den nederste lanen tåler alltid mer, for den flytter ingen andre.
+      const add = zero.slice();
+      let cand = lanes.map((_, i) => i).filter((i) => !lanes[i].height);
+      if (!cand.length) cand = [lanes.length - 1];
+      for (let round = 0; round < lanes.length + 1 && cand.length; round++) {
+        const rest = avail - run(add).used;
+        if (rest < 0.05) break;
+        const withD = (d: number) => add.map((a, i) => (cand.includes(i) ? a + d : a));
+        let lo = 0;
+        let hi = rest / cand.length;
+        if (run(withD(hi)).ok) lo = hi;
+        else
+          for (let it = 0; it < 14; it++) {
+            const mid = (lo + hi) / 2;
+            if (run(withD(mid)).ok) lo = mid;
+            else hi = mid;
+          }
+        for (const i of cand) add[i] += lo;
+        if (avail - run(add).used < 0.05) break;
+        // Lanen lengst ned som ikke tåler mer: lanene over den tåler heller ikke mer
+        const eps = Math.max(0.05, (rest / cand.length) * 0.01);
+        let block = -1;
+        for (let n = cand.length - 1; n >= 0; n--) {
+          const t = add.slice();
+          t[cand[n]] += eps;
+          if (!run(t).ok) {
+            block = cand[n];
+            break;
+          }
+        }
+        if (block === -1) break;
+        cand = cand.filter((i) => i > block);
+      }
+      // Det som er igjen, går til den nederste lanen med automatisk høyde. Den flytter ingen andre.
+      const last = lanes.map((_, i) => i).filter((i) => !lanes[i].height).pop();
+      const left = avail - run(add).used;
+      if (last !== undefined && left > 1e-6) add[last] += left;
+      run(add, true);
+      // Lanene får høydene fra kjøringen: innhold med kantene, pluss tillegget
+      for (let i = 0; i < lanes.length; i++) contentH[i] = contentHAt[i];
+      extras = add;
+      for (let i = 0; i < lanes.length; i++) minH[i] = contentHAt[i];
+      lanes.forEach((l, i) => {
+        if (l.height) contentH[i] = Math.max(contentHAt[i], l.height * lh);
+      });
+    }
+  }
 
   const laneLayouts: LaneLayout[] = [];
   let y = plotTop;
   const items: Item[] = [];
   lanes.forEach((lane, i) => {
     const fixed = !!lane.height && !compact;
-    const h = contentH[i] + (fixed ? 0 : extra);
+    const h = contentH[i] + extras[i];
     const y0 = y;
+    const moved = areaPlace.get(i);
+    if (moved)
+      lanePieces[i].forEach((p, j) => {
+        const v = (p.alts ?? [p])[moved.k[j]];
+        Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
+        setY(p.item, moved.ys[j]);
+      });
     lanePieces[i].forEach((p) => {
       offsetY(p.item, y0 + LANE_PAD);
       items.push(p.item);
     });
     const tl = titleLines[i];
+    // Egendefinert: tittelen midt i den synlige delen av lanen i tittelkolonnen
+    const tTop = edges ? Math.max(y0, edgeRange(edges.top, edges.left, x0, 'max')) : y0;
+    const tBot = edges ? Math.max(tTop, Math.min(y0 + h, edgeRange(edges.bottom, edges.left, x0, 'min'))) : y0 + h;
     laneLayouts.push({
       id: lane.id,
       y0,
@@ -686,7 +843,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       manual: fixed,
       title: {
         x: laneTitleX + LANE_TITLE_W / 2,
-        y: y0 + h / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
+        y: (tTop + tBot) / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
         size: laneSize,
         color: '#000000',
@@ -724,7 +881,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Kalenderrader ----
   const calendarTop = calendarRows(axis, plotTop - calH, rowH, monthRowH, calSize, measure, false, rotateMonths, ny, weekFit);
   const calendarBottom = bottomCal ? calendarRows(axis, plotBottom, rowH, monthRowH, calSize, measure, true, rotateMonths, ny, weekFit) : [];
-  const ovTop = plotBottom + (bottomCal ? calH : 0) + 2;
+  // Egendefinert: forklaringen står fast nederst, så det blir ledig plass når bunnkanten dras opp
+  const ovTop = (edges ? Math.max(plotBottom, natBottom) : plotBottom) + (bottomCal ? calH : 0) + 2;
   let overview: Overview | null = null;
   const upcoming: TextBlock | null = la?.upcoming.length ? { x: x0, y: ovTop + legendSize, lines: [`Neste milepæler: ${la.upcoming.join('  ·  ')}`], size: legendSize, color: '#000000', anchor: 'start' } : null;
   if (la?.overview) {
@@ -817,6 +975,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     headerBottom: TOP_MARGIN + headerH,
     subtitle,
     plot: { x0, x1, y0: plotTop, y1: plotBottom },
+    area: edges ? { ...edges, polygon: areaPolygon(edges) } : null,
     laneTitleX,
     calendarTop,
     calendarBottom,

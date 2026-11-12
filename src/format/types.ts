@@ -37,7 +37,8 @@ export interface PlanSettings {
   };
   layout: {
     orientation: 'landscape' | 'portrait';
-    heightMode: 'fill' | 'compact';
+    /** custom: som fill, men med topp- og bunnkant valgt i appen (planArea). */
+    heightMode: 'fill' | 'compact' | 'custom';
     /** Skriftstørrelse i punkter. */
     textSize: number;
     calloutMaxWidthCm: number;
@@ -87,6 +88,8 @@ export interface PlanSettings {
     editedAt?: string;
     /** Bilder satt inn i appen, tegnet oppå planen i denne rekkefølgen. */
     images?: PlanImage[];
+    /** Egendefinert planområde: topp- og bunnkanten som punkter [x, y], andeler av arket fra venstre til høyre. */
+    planArea?: { top?: [number, number][]; bottom?: [number, number][] };
   };
   options: {
     legend: boolean;

@@ -12,6 +12,7 @@ import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from 
 import type { PlanImage } from './format/types';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
+import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
 
@@ -1435,6 +1436,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
           'Dra i nederste kant av en lane for å gi den fast høyde.',
           'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
+          'Lanes: Egendefinert i Innstillinger gir en stiplet topp- og bunnkant du kan dra, f.eks. for å gi plass til et kart. Dra et hvitt punkt for å lage et knekkpunkt.',
         ]],
         ['Arket', [
           'Klikk et fag i forklaringen nederst for å endre fargen på alle boksene i faget, eller teksten i forklaringen. Høyreklikk for nytt fag, eller for å gi valgte bokser faget.',
@@ -1794,6 +1796,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
+    areaOverlay(g);
     imageOverlay(g);
     svgNow.append(g);
   };
@@ -2408,7 +2411,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     let d: Drag | null = null;
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
     const imgG = t.closest('g.images > g[data-image]');
-    if (imgHandle) {
+    const areaT = t.closest('.area-pt, .area-mid, .area-edge');
+    if (areaT && !imgHandle) {
+      const edge = areaT.getAttribute('data-edge') as AreaEdge;
+      const i = Number(areaT.getAttribute('data-i'));
+      if (areaT.classList.contains('area-pt') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        deleteAreaPoint(edge, i);
+        suppressClick = true;
+        return;
+      }
+      d = startAreaDrag(edge, areaT.classList.contains('area-edge') ? 'edge' : areaT.classList.contains('area-mid') ? 'mid' : 'pt', i);
+    } else if (imgHandle) {
       // Ctrl-klikk på et punkt sletter det, som i Office
       if (imgHandle.classList.contains('img-pt') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -2815,6 +2829,155 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     changePlaced(id, (q) => ({ ...q, points: q.points!.filter((_, k) => k !== i) }));
   };
 
+  // ---- Egendefinert planområde ----
+  // Topp- og bunnkanten dras opp og ned. Punkter lager knekk, som punktbeskjæringen av bilder.
+  // Endepunktene står fast i hver side. Planen tegnes på nytt når du slipper.
+  type AreaEdge = 'top' | 'bottom';
+  let liveArea: { edge: AreaEdge; pts: AreaPt[] } | null = null;
+  const areaEdgeNow = (edge: AreaEdge): AreaPt[] => (liveArea?.edge === edge ? liveArea.pts : layoutNow?.area?.[edge] ?? []);
+  /** Lagrer kanten som andeler av arket. Den andre kanten beholdes som den er lagret. */
+  const storeArea = (edge: AreaEdge, pts: AreaPt[] | null) => {
+    const L = layoutNow;
+    if (!L) return;
+    const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
+    commit((pl) => {
+      const pa = { ...(pl.plan.layout.planArea ?? {}) };
+      if (pts) pa[edge] = pts.map(([x, y]) => [r5(x / L.width), r5(y / L.height)] as [number, number]);
+      else delete pa[edge];
+      if (pa.top || pa.bottom) pl.plan.layout.planArea = pa;
+      else delete pl.plan.layout.planArea;
+    });
+  };
+  /** Grensene for en kant: toppen går ikke over kalenderens plass, bunnen ikke under forklaringen. */
+  const areaBounds = (edge: AreaEdge): [number, number] => {
+    const A = layoutNow!.area!;
+    return edge === 'top'
+      ? [A.minTop, Math.min(...A.bottom.map((q) => q[1])) - MIN_AREA_H]
+      : [Math.max(...A.top.map((q) => q[1])) + MIN_AREA_H, A.maxBottom];
+  };
+  /** Snapping: x mot måneds-/ukeskillene og planens sider, y mot lanekantene. Alt slår det av. */
+  const snapArea = (v: number, targets: number[]) => {
+    if (snapOff) return v;
+    const tol = 6 * mmPerPx();
+    let best = v;
+    let dist = tol;
+    for (const t of targets)
+      if (Math.abs(t - v) < dist) {
+        dist = Math.abs(t - v);
+        best = t;
+      }
+    return best;
+  };
+  const areaXs = () => [layoutNow!.plot.x0, layoutNow!.plot.x1, ...layoutNow!.grid.map((g) => g.x)];
+  const areaYs = () => layoutNow!.lanes.flatMap((l) => [l.y0, l.y1]);
+
+  const startAreaDrag = (edge: AreaEdge, kind: 'edge' | 'pt' | 'mid', i: number): Drag | null => {
+    const A = layoutNow?.area;
+    if (!A) return null;
+    const pts0 = A[edge].map((q) => [q[0], q[1]] as AreaPt);
+    const [lo, hi] = areaBounds(edge);
+    let from: number | null = null;
+    let idx = kind === 'mid' ? i + 1 : i;
+    const live = (pts: AreaPt[]) => {
+      liveArea = { edge, pts };
+      overlay();
+    };
+    return {
+      startY: 0,
+      startClient: 0,
+      moved: false,
+      move() {},
+      moveXY(x, y) {
+        if (kind === 'edge') {
+          // Hele kanten flyttes, formen beholdes
+          from ??= y;
+          const ys = pts0.map((q) => q[1]);
+          let dy = y - from;
+          // Rett kant snapper mot lanekantene
+          if (ys.every((v) => Math.abs(v - ys[0]) < 1e-6)) dy = snapArea(ys[0] + dy, areaYs()) - ys[0];
+          dy = Math.min(hi - Math.max(...ys), Math.max(lo - Math.min(...ys), dy));
+          live(pts0.map(([px, py]) => [px, py + dy]));
+          return;
+        }
+        const pts = pts0.map((q) => [q[0], q[1]] as AreaPt);
+        if (kind === 'mid' && pts.length < 40) pts.splice(idx, 0, [x, y]);
+        else if (kind === 'mid') idx = i;
+        const last = pts.length - 1;
+        // Endepunktene står i sidene; de andre holder seg mellom naboene
+        const nx = idx === 0 ? pts[0][0] : idx === last ? pts[last][0] : Math.min(pts[idx + 1][0], Math.max(pts[idx - 1][0], snapArea(x, [...areaXs(), pts[idx - 1][0], pts[idx + 1][0]])));
+        const ny = Math.min(hi, Math.max(lo, snapArea(y, [...areaYs(), ...(idx > 0 ? [pts[idx - 1][1]] : []), ...(idx < last ? [pts[idx + 1][1]] : [])])));
+        pts[idx] = [nx, ny];
+        activeAreaPt = { edge, i: idx };
+        live(pts);
+      },
+      end() {
+        const pts = liveArea?.edge === edge ? liveArea.pts : null;
+        liveArea = null;
+        if (pts) storeArea(edge, pts);
+        else overlay();
+      },
+    };
+  };
+  let activeAreaPt: { edge: AreaEdge; i: number } | null = null;
+  const deleteAreaPoint = (edge: AreaEdge, i: number) => {
+    const pts = layoutNow?.area?.[edge];
+    if (!pts || i <= 0 || i >= pts.length - 1) return;
+    activeAreaPt = null;
+    storeArea(edge, pts.filter((_, k) => k !== i));
+  };
+  const areaMenu = (e: MouseEvent, edge: AreaEdge, i: number) => {
+    const pts = layoutNow?.area?.[edge] ?? [];
+    const name = edge === 'top' ? 'Toppkanten' : 'Bunnkanten';
+    const inner = i > 0 && i < pts.length - 1;
+    const stored = !!host.getPlan()?.plan.layout.planArea?.[edge];
+    const groups: CtxGroup[] = [];
+    if (i >= 0)
+      groups.push({
+        items: [{ label: 'Slett punkt', icon: 'trash', kbd: 'Ctrl+klikk', disabled: !inner, hint: inner ? 'Kanten går rett mellom punktene på hver side.' : 'Punktene i sidene kan ikke slettes, bare dras opp og ned.', onSelect: () => deleteAreaPoint(edge, i) }],
+      });
+    groups.push({
+      items: [
+        { label: 'Rett ut kanten', icon: 'undo', disabled: pts.length <= 2, hint: pts.length > 2 ? 'Fjerner knekkpunktene. Kanten blir rett der den står i venstre side.' : 'Kanten er rett.', onSelect: () => storeArea(edge, [[pts[0][0], pts[0][1]], [pts[pts.length - 1][0], pts[0][1]]]) },
+        { label: edge === 'top' ? 'Toppkanten tilbake under kalenderen' : 'Bunnkanten tilbake over forklaringen', icon: 'undo', disabled: !stored, hint: stored ? 'Kanten går tilbake dit den står i «Fyll arket».' : 'Kanten står der den står i «Fyll arket».', onSelect: () => storeArea(edge, null) },
+      ],
+    });
+    ctx.open(e.clientX, e.clientY, name, groups, 'Planområde');
+  };
+  /** Kantene med punkter i markeringslaget. Kommer ikke med i PDF. */
+  const areaOverlay = (g: SVGGElement) => {
+    const A = layoutNow?.area;
+    if (!A || criticalMode) return;
+    const k = mmPerPx();
+    const add = (tag: string, attrs: Record<string, string | number>, parent: Element = g) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, String(v));
+      parent.append(e);
+      return e;
+    };
+    for (const edge of ['top', 'bottom'] as const) {
+      const pts = areaEdgeNow(edge);
+      if (pts.length < 2) continue;
+      const line = pts.map(([x, y]) => `${x},${y}`).join(' ');
+      add('polyline', { points: line, fill: 'none', stroke: ACCENT, 'stroke-width': 2, 'stroke-dasharray': '6 4', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' });
+      const hit = add('polyline', { points: line, fill: 'none', stroke: 'transparent', 'stroke-width': 10, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'stroke', cursor: 'ns-resize', class: 'edit-handle area-edge', 'data-edge': edge });
+      add('title', {}, hit).textContent = `Dra ${edge === 'top' ? 'toppkanten' : 'bunnkanten'} opp eller ned. Høyreklikk for flere valg.`;
+      // Hvite punkter midt på hver del lager et nytt knekkpunkt når de dras
+      pts.forEach((q, i) => {
+        const n = pts[i + 1];
+        if (!n || Math.hypot(n[0] - q[0], n[1] - q[1]) < 24 * k) return;
+        const s = 7 * k;
+        const m = add('rect', { x: (q[0] + n[0]) / 2 - s / 2, y: (q[1] + n[1]) / 2 - s / 2, width: s, height: s, rx: s / 2, fill: '#FFFFFF', stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'all', cursor: 'copy', class: 'edit-handle area-mid', 'data-edge': edge, 'data-i': i });
+        add('title', {}, m).textContent = 'Dra for å lage et nytt punkt';
+      });
+      pts.forEach((q, i) => {
+        const s = 9 * k;
+        const on = activeAreaPt?.edge === edge && activeAreaPt.i === i;
+        const r = add('rect', { x: q[0] - s / 2, y: q[1] - s / 2, width: s, height: s, fill: on ? ACCENT : '#FFFFFF', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'all', cursor: i === 0 || i === pts.length - 1 ? 'ns-resize' : 'move', class: 'edit-handle area-pt', 'data-edge': edge, 'data-i': i });
+        add('title', {}, r).textContent = i === 0 || i === pts.length - 1 ? 'Dra opp eller ned' : 'Dra punktet. Ctrl+klikk sletter det.';
+      });
+    }
+  };
+
   /** Rammen, håndtakene og beskjæringen for valgt bilde. Tegnes i markeringslaget, kommer ikke med i PDF. */
   const imageOverlay = (g: SVGGElement) => {
     const p = selectedImage ? placedOf(selectedImage) : null;
@@ -3118,6 +3281,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const p = toMm(e.clientX, e.clientY);
     const L = layoutNow;
+    // Høyreklikk på kanten av planområdet eller et punkt på den
+    const areaT = (e.target as Element | null)?.closest?.('.area-pt, .area-mid, .area-edge');
+    if (plan && areaT && L.area) {
+      e.preventDefault();
+      areaMenu(e, areaT.getAttribute('data-edge') as AreaEdge, areaT.classList.contains('area-pt') ? Number(areaT.getAttribute('data-i')) : -1);
+      return;
+    }
     // Høyreklikk på et bilde eller et punkt i punktbeskjæringen
     const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid');
     if (plan && imgT) {

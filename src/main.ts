@@ -669,6 +669,7 @@ function syncControls() {
   syncStatus();
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
+  $<HTMLElement>('#area-note').hidden = opts.heightMode !== 'custom';
   document.querySelectorAll<HTMLButtonElement>('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === (opts.style ?? 'ny'))));
   const calMode = opts.calendarMode ?? plan?.plan.calendar.mode ?? 'month';
   document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cal === calMode)));
@@ -708,6 +709,9 @@ document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((btn) =>
     opts.heightMode = btn.dataset.height as LayoutOptions['heightMode'];
     syncControls();
     draw();
+    // Kantene dras i redigering, så den slås på
+    const edit = $<HTMLButtonElement>('#edit');
+    if (opts.heightMode === 'custom' && !editor.active && !edit.disabled) edit.click();
   }),
 );
 document.querySelectorAll<HTMLButtonElement>('[data-cal]').forEach((btn) =>
