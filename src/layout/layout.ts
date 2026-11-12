@@ -841,7 +841,8 @@ function buildPieces(
   ny = false,
 ): Piece[] {
   const pieces: Piece[] = [];
-  const calloutMax = Math.max(15, file.plan.layout.calloutMaxWidthCm * 6);
+  // Bredden er i cm på arket
+  const calloutMax = Math.max(10, file.plan.layout.calloutMaxWidthCm * 10);
 
   for (const box of lane.boxes) {
     if (!box.shown || box.hidden || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;

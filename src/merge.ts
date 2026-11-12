@@ -27,7 +27,7 @@ export interface MergeReport {
 /** Felt som bare settes i appen og følger boksen. */
 const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'spanEnd', 'textMiddle', 'bold', 'milestoneStyle', 'critical', 'textScale'] as const;
 /** Valg fra appen som ligger i plan.layout. */
-const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale'] as const;
+const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale', 'calloutMaxWidthCm'] as const;
 
 const label = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim() || '(uten tekst)';
 const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c).join(',') : '');

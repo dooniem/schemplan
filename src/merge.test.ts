@@ -27,6 +27,14 @@ describe('oppdater fra Project', () => {
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
 
+  it('callout-bredden fra arbeidsfilen gjelder, som de andre startverdiene', () => {
+    const work = testplan();
+    work.plan.layout.calloutMaxWidthCm = 2.5;
+    const fresh = testplan();
+    fresh.plan.layout.calloutMaxWidthCm = 4;
+    expect(mergePlans(work, fresh).plan.plan.layout.calloutMaxWidthCm).toBe(2.5);
+  });
+
   it('finner boksen på aktivitetene selv om id-en er endret', () => {
     const work = testplan();
     box(work, '2_2').fill = '#ABCDEF';
