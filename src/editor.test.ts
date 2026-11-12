@@ -80,6 +80,14 @@ describe('lanes i appen', () => {
     expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
   });
 
+  it('ny lane over den øverste kommer først', () => {
+    const p = testplan();
+    const top = p.lanes[0];
+    const l = newLane(p, null);
+    expect(p.lanes[0]).toBe(l);
+    expect(p.lanes[1]).toBe(top);
+  });
+
   it('lane fra Project skjules, og nytt navn og farge kan tilbakestilles', () => {
     const p = testplan();
     const l = p.lanes[1];
