@@ -420,6 +420,12 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
 }
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
+/** «Baseline2 (lagret 01.10.2026)», eller bare «baseline» når planen ikke sier hvilken. */
+const baselineLabel = (p: PlanFile | null | undefined): string => {
+  const bl = p?.plan.baseline;
+  if (!bl) return 'baseline';
+  return bl.saved ? `${bl.name} (lagret ${fmtDate(bl.saved)})` : bl.name;
+};
 
 /** Står «%PDF» i starten av filen? PDF-standarden tillater litt søppel foran, innenfor de første 1024 bytene. */
 function findPdfHeader(bytes: Uint8Array): boolean {
@@ -621,7 +627,7 @@ function syncStatus() {
   const anyBaseline = !!plan?.tasks.some(hasBaseline);
   const blBtn = $<HTMLButtonElement>('[data-pf-against="baseline"]');
   blBtn.disabled = !anyBaseline;
-  blBtn.title = anyBaseline ? 'Datoene i baseline fra Project' : 'Planen har ingen baseline fra Project';
+  blBtn.title = anyBaseline ? `Datoene i ${baselineLabel(plan)}` : 'Planen har ingen baseline fra Project';
   const anyProgress = !!plan?.tasks.some((t) => (Number(t.percentComplete) || 0) > 0);
   $('#pf-help').textContent = !plan
     ? ''
@@ -629,7 +635,9 @@ function syncStatus() {
       ? 'Ingen aktiviteter har % ferdig ennå, så alt som pågår vises som etter.'
       : f.against === 'baseline' && !anyBaseline
         ? 'Planen har ingen baseline, så fronten måles mot planen slik den er nå.'
-        : '';
+        : f.against === 'baseline'
+          ? `Måles mot ${baselineLabel(plan)}.`
+          : '';
 }
 const setFront = (change: Partial<ProgressFront>) => setStatus({ front: { ...(statusRule().front ?? FRONT_DEFAULT), ...change } });
 $<HTMLInputElement>('#pf-on').addEventListener('change', (e) => setFront({ on: (e.target as HTMLInputElement).checked }));

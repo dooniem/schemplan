@@ -75,6 +75,11 @@ export function validatePlan(input: string | unknown): ValidationResult {
   if (!isObj(plan)) err('plan', 'mangler');
   else {
     needStr(plan, 'title', 'plan');
+    if (plan.baseline !== undefined && plan.baseline !== null) {
+      const bl = plan.baseline;
+      if (!isObj(bl) || typeof bl.number !== 'number' || typeof bl.name !== 'string') err('plan.baseline', 'må ha number og name');
+      else needDate(bl, 'saved', 'plan.baseline', true);
+    }
     needNum(plan, 'schemNumber', 'plan');
     const cal = plan.calendar;
     if (!isObj(cal)) err('plan.calendar', 'mangler');

@@ -24,6 +24,8 @@ export interface PlanSettings {
   title: string;
   /** Statusdato fra Project. Mangler den, er det ingen statusdato. */
   statusDate?: IsoDate | null;
+  /** Baselinen som er sendt med aktivitetene. Mangler den, er ingen baseline sendt. */
+  baseline?: BaselineInfo | null;
   /** Hvilken av de fire skjematiske planene i .mpp-filen (1–4). */
   schemNumber: number;
   calendar: {
@@ -125,6 +127,14 @@ export interface StatusLine {
   label: boolean;
   /** Fremdriftsfronten langs statuslinjen. Mangler den, er fronten av. */
   front?: ProgressFront;
+}
+
+export interface BaselineInfo {
+  /** 0 = Baseline, 1–10 = Baseline1–Baseline10. */
+  number: number;
+  name: string;
+  /** Når baselinen ble lagret. */
+  saved: IsoDate | null;
 }
 
 export interface ProgressFront {
