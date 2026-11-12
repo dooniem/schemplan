@@ -8,10 +8,11 @@ import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
-import { createCtxMenu, icon, type CtxItem, type IconName } from './ctxmenu';
+import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
 import type { PlanImage } from './format/types';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
+import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
 
 type ImageMode = 'none' | 'crop' | 'points';
@@ -366,6 +367,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const criticalBtn = tools.querySelector<HTMLButtonElement>('#critical-mode');
   /** Kritisk linje: klikk på en boks tar den med i linjen eller ut av den. */
   let criticalMode = false;
+  /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
+  let followPick: { id: string; edge: Edge } | null = null;
+  const followBar = document.querySelector<HTMLElement>('#follow-bar');
 
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
@@ -380,6 +384,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
+    sheet.classList.toggle('follow-mode', active && !!followPick);
   };
 
   /** Tar vare på planen før en endring, så den kan angres. */
@@ -403,6 +408,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!opts.typing || !typingSession) snapshot();
     if (opts.typing) typingSession = true;
     fn(b);
+    applyFollows(plan!);
     // Under skriving tegnes planen litt etterpå, så store planer ikke henger etter tastetrykkene
     window.clearTimeout(redrawTimer);
     if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
@@ -432,6 +438,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     snapshot();
     typingSession = false;
     fn(plan);
+    applyFollows(plan);
     host.redraw();
     buildPanel();
     syncTools();
@@ -1071,6 +1078,77 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
+  // ---- Følg datoene til en annen boks ----
+  const edgeWord = (edge: Edge) => (edge === 'start' ? 'startdatoen' : 'sluttdatoen');
+  const boxName = (b: Box | null | undefined) => (b ? `«${plain(b.text) || (b.resolved?.isMilestone ? 'Milepæl' : 'Boks')}»` : 'boksen');
+  /** Starter valget av boksen som `id` skal følge. Neste klikk på en boks lager koblingen. */
+  const startFollowPick = (id: string, edge: Edge) => {
+    const plan = host.getPlan();
+    if (!plan || !followBar) return;
+    if (criticalMode) setCriticalMode(false);
+    followPick = { id, edge };
+    selected = id;
+    group = [];
+    followBar.querySelector('.follow-text')!.textContent = `Klikk boksen ${boxName(findBox(plan, id))} skal følge ${edgeWord(edge)} til.`;
+    followBar.hidden = false;
+    buildPanel();
+    overlay();
+    syncTools();
+  };
+  const endFollowPick = () => {
+    if (!followPick) return;
+    followPick = null;
+    if (followBar) followBar.hidden = true;
+    overlay();
+    syncTools();
+  };
+  /** Klikk på en boks mens du velger: lager koblingen, eller sier hvorfor den ikke går. */
+  const pickFollowTarget = (target: string | null) => {
+    const plan = host.getPlan();
+    if (!plan || !followPick || !target || !followBar) return;
+    const { id, edge } = followPick;
+    if (!canFollow(plan, id, target)) {
+      const t = findBox(plan, target);
+      followBar.querySelector('.follow-text')!.textContent =
+        target === id ? 'Boksen kan ikke følge seg selv. Klikk en annen boks.' : !t?.resolved ? 'Den boksen har ingen datoer. Klikk en annen boks.' : `${boxName(t)} følger allerede denne boksen. Klikk en annen boks.`;
+      return;
+    }
+    followPick = null;
+    followBar.hidden = true;
+    selected = id;
+    commit((pl) => setFollow(pl, id, target, edge));
+  };
+  /** Bytter mellom start og slutt på samme boks. */
+  const setFollowEdge = (id: string, edge: Edge) => {
+    const b = findBox(host.getPlan()!, id);
+    const target = b?.follows?.box;
+    if (!target) return startFollowPick(id, edge);
+    commit((pl) => setFollow(pl, id, target, edge));
+  };
+  /** Høyreklikk på en egen boks: følg start eller slutt på en annen boks. */
+  const followGroup = (plan: PlanFile, b: Box): CtxGroup => {
+    const f = b.follows;
+    const t = f ? findBox(plan, f.box) : null;
+    const item = (edge: Edge): CtxItem => ({
+      label: edge === 'start' ? 'Følg startdatoen til …' : 'Følg sluttdatoen til …',
+      icon: 'link',
+      checked: f?.edge === edge ? true : undefined,
+      hint:
+        f?.edge === edge
+          ? `Følger ${edgeWord(edge)} til ${boxName(t)}. Velg igjen for å bytte boks.`
+          : 'Klikk så boksen den skal følge. Når den boksen flytter seg, også ved oppdatering fra Project, flyttes denne like mange dager.',
+      onSelect: () => startFollowPick(b.id, edge),
+    });
+    return {
+      items: [
+        item('start'),
+        item('finish'),
+        ...(f ? [{ label: 'Slutt å følge', icon: 'unlink' as const, hint: 'Boksen blir stående med datoene den har nå.', onSelect: () => stopFollowing(b.id) }] : []),
+      ],
+    };
+  };
+  const stopFollowing = (id: string) => commit((pl) => delete findBox(pl, id)!.follows);
+
   const setCriticalMode = (on: boolean) => {
     criticalMode = on;
     selected = null;
@@ -1396,7 +1474,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const ms = !!b.resolved?.isMilestone;
     const r = b.resolved;
     const when = r ? (ms || r.start === r.finish ? fmtDate(r.start) : `${fmtDate(r.start)} – ${fmtDate(r.finish)}`) : '';
-    const sub = b.manual ? 'Laget i appen, følger ikke Project' : when;
+    const sub = b.manual ? (b.follows ? `Laget i appen, følger ${boxName(findBox(plan, b.follows.box))}` : 'Laget i appen, følger ikke Project') : when;
     panelHead(ms ? 'Milepæl' : 'Boks', sub || undefined);
     if (b.manual && r) {
       // Boks laget i appen: datoene velges her. En milepæl har én dato.
@@ -1428,6 +1506,34 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         mk('finish', 'Til');
       }
       sd.append(row);
+      // Følg en annen boks: velg start eller slutt, og klikk så boksen
+      const f = b.follows;
+      const picking = followPick?.id === b.id ? followPick.edge : null;
+      sd.append(
+        segmented<'none' | Edge>('Følger', picking ?? f?.edge ?? 'none', [['none', 'Ingen'], ['start', 'Start'], ['finish', 'Slutt']], (v) => {
+          if (v === 'none') {
+            endFollowPick();
+            if (f) stopFollowing(b.id);
+            else buildPanel();
+          } else if (f) setFollowEdge(b.id, v);
+          else startFollowPick(b.id, v);
+        }),
+      );
+      if (picking) sd.append(el('p', { class: 'hint' }, `Klikk boksen den skal følge ${edgeWord(picking)} til. Esc avbryter.`));
+      else if (f) {
+        const t = findBox(plan, f.box);
+        sd.append(el('p', { class: 'hint' }, `Flyttes like mange dager som ${edgeWord(f.edge)} til ${boxName(t)} flytter seg, også ved oppdatering fra Project.`));
+        const acts = el('div', { class: 'row follow-acts' });
+        acts.append(btn('Vis boksen', null, () => select(f.box), undefined, 'linkish'), btn('Velg en annen boks', null, () => startFollowPick(b.id, f.edge), undefined, 'linkish'));
+        sd.append(acts);
+      } else sd.append(el('p', { class: 'hint' }, 'Velg Start eller Slutt, og klikk så boksen den skal følge.'));
+    } else if (r) {
+      // Egne bokser som følger denne boksen
+      const fs = followersOf(plan, b.id);
+      if (fs.length) {
+        const sf = section('Følges av');
+        for (const x of fs) sf.append(lockedRow(`${boxName(x)}, ${edgeWord(x.follows!.edge)}`, 'Vis', 'Velg boksen', () => select(x.id)));
+      }
     }
 
     const st = section('Tekst');
@@ -1602,9 +1708,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     g.setAttribute('class', 'edit-overlay edit-marks');
     g.setAttribute('pointer-events', 'none');
     const plan = host.getPlan();
+    // Valgt egen boks: boksen den følger, stiplet. Valgt boks som følges: de som følger den.
+    const selBox = plan && selected ? findBox(plan, selected) : null;
+    const linked = new Set<string>(selBox?.follows ? [selBox.follows.box] : []);
+    if (plan && selBox) for (const x of followersOf(plan, selBox.id)) linked.add(x.id);
     for (const it of layoutNow.items) {
       const b = plan ? findBox(plan, it.id) : null;
       const r = bounds(it);
+      if (linked.has(it.id) && it.id !== selected) {
+        const rect = document.createElementNS(NS, 'rect');
+        const pad = 0.6;
+        for (const [k, v] of Object.entries({ x: r.x0 - pad, y: r.y0 - pad, width: r.x1 - r.x0 + 2 * pad, height: r.y1 - r.y0 + 2 * pad, fill: 'none', stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1.2 0.8', rx: 0.6 }))
+          rect.setAttribute(k, String(v));
+        g.append(rect);
+      }
       if (it.id === selected || group.includes(it.id)) {
         const rect = document.createElementNS(NS, 'rect');
         const pad = 0.6;
@@ -2034,6 +2151,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   const select = (id: string | null) => {
+    if (followPick && id !== followPick.id) endFollowPick();
     selected = id;
     group = [];
     selectedLane = null;
@@ -2232,6 +2350,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Bilder velges når knappen trykkes ned
     if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid')) return;
     const g = itemOf(e);
+    if (followPick) return pickFollowTarget(boxAt(e));
     if (criticalMode) {
       const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
@@ -2280,7 +2399,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.select();
   });
   sheet.addEventListener('pointerdown', (e) => {
-    if (!active || e.button !== 0 || !layoutNow || criticalMode) return;
+    if (!active || e.button !== 0 || !layoutNow || criticalMode || followPick) return;
     const t = e.target as Element;
     let d: Drag | null = null;
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
@@ -3111,6 +3230,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const msIds = ms ? (group.includes(id) ? group.filter((x) => findBox(plan, x)?.resolved?.isMilestone) : [id]) : [];
       ctx.open(e.clientX, e.clientY, plain(box.text) || (ms ? 'Milepæl' : 'Boks'), [
         ...(ms ? [milestoneImageGroup(plan, msIds)] : []),
+        ...(box.manual ? [followGroup(plan, box)] : []),
         {
           items: ms
             ? []
@@ -3192,6 +3312,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     active = !active;
     if (!active) {
       endArrange();
+      endFollowPick();
       criticalMode = false;
       selected = null;
       selectedLane = null;
@@ -3390,6 +3511,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   });
   document.querySelector('#arrange-tight')?.addEventListener('click', () => arrange('tight'));
   document.querySelector('#arrange-chrono')?.addEventListener('click', () => arrange('chrono'));
+  followBar?.querySelector('#follow-cancel')?.addEventListener('click', () => endFollowPick());
   arrangeBar?.querySelector('#arrange-keep')?.addEventListener('click', () => endArrange());
   arrangeBar?.querySelector('#arrange-undo')?.addEventListener('click', () => undo());
 
@@ -3400,6 +3522,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const mod = e.ctrlKey || e.metaKey;
     if (e.key === 'Escape') {
       if (inField) t.blur();
+      else if (followPick) endFollowPick();
       else if (criticalMode) setCriticalMode(false);
       else if (selectedImage && imageMode !== 'none') setImageMode(imageMode);
       else select(null);
@@ -3487,6 +3610,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     },
     reset() {
       endArrange();
+      endFollowPick();
       past = [];
       future = [];
       dirty = false;
@@ -3513,6 +3637,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       select(id);
     },
     replacePlan(p) {
+      endFollowPick();
       snapshot();
       host.setPlan(p);
       selected = null;

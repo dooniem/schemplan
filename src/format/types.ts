@@ -247,6 +247,11 @@ export interface Box {
   hidden?: boolean;
   /** Boksen er laget i appen (ny eller kopi), ikke hentet fra Project. Datoene står i `resolved`. */
   manual?: boolean;
+  /**
+   * Bare bokser laget i appen: datoene følger start- eller sluttdatoen til en annen boks (valgfritt).
+   * `at` er datoen den andre boksen hadde sist, så flyttes boksen like mange dager som den andre har flyttet seg.
+   */
+  follows?: BoxFollow;
   /** Lanen boksen lå i før den ble flyttet i appen (valgfritt). */
   fromLane?: string;
   /** Overskriftsboks (valgfritt): teksten står øverst, og andre bokser kan ligge inne i den. */
@@ -272,6 +277,13 @@ export interface Box {
   critical?: boolean;
   /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
   textScale?: number;
+}
+
+export interface BoxFollow {
+  /** Id-en til boksen det følges etter. */
+  box: string;
+  edge: 'start' | 'finish';
+  at: IsoDate;
 }
 
 export interface MilestoneStyle {
