@@ -1,7 +1,7 @@
 // «Størst mulig tekst»: større tekst i boksene og lane-titlene uten at planens tekst krymper
 // eller planen blir høyere. fitTextIntoLaneSpace lar boksene bli høyere der det er ledig plass;
 // fitTextToBoxes bruker bare plassen inne i boksene slik de står, og gir lane-titlene én felles størrelse.
-import { snapshotOf } from '../editmodel';
+import { findBox, inHeaderBox, snapshotOf } from '../editmodel';
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
 import { computeLayout, defaultLaneTitleScale, layoutAtScale, laneTitleScaleOf, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
@@ -178,6 +178,35 @@ function growOnce(input: PlanFile, opts: LayoutOptions, measure: Measure, scope:
   const minHOf = (L: Layout) => new Map(L.lanes.map((l) => [l.id, l.minH]));
   let laneMinH = minHOf(start);
 
+  // Overskriftsboksene blir høyere når boksene inni dem vokser, så ingen faller ut nederst.
+  // Avstanden fra den nederste boksen inni til bunnen av overskriftsboksen beholdes.
+  const headers = start.items
+    .filter((h): h is BoxItem => h.kind === 'box' && !!h.header && !h.span)
+    .map((h) => {
+      const kids = start.items.filter((o) => o.kind === 'box' && inHeaderBox(h, o));
+      const bottom = Math.max(...kids.map((o) => (o as BoxItem).y + (o as BoxItem).h));
+      return { id: h.id, box: findBox(plan, h.id), kids: new Set(kids.map((o) => o.id)), gap: Math.max(0, h.y + h.h - bottom) };
+    })
+    .filter((g) => g.box && g.kids.size);
+  const fitHeaders = (): Layout => {
+    let L = at(plan);
+    for (let round = 0; round < 4; round++) {
+      let changed = false;
+      const byId = new Map(L.items.filter((i): i is BoxItem => i.kind === 'box').map((i) => [i.id, i]));
+      for (const g of headers) {
+        const h = byId.get(g.id);
+        if (!h) continue;
+        const need = Math.max(...[...g.kids].map((id) => byId.get(id)).filter((o): o is BoxItem => !!o).map((o) => o.y + o.h)) + g.gap;
+        if (need <= h.y + h.h + EPS) continue;
+        g.box!.height = Math.ceil(((need - h.y) / L.unit) * 100) / 100;
+        changed = true;
+      }
+      if (!changed) break;
+      L = at(plan);
+    }
+    return L;
+  };
+
   // Boksene som kan få større tekst, per lane, med bredden de har nå
   type Target = { box: Box; lane: string; w: number; pt: number; start: number; done: boolean };
   const perLane: Target[][] = [];
@@ -215,7 +244,8 @@ function growOnce(input: PlanFile, opts: LayoutOptions, measure: Measure, scope:
           t.box.textScale = scaleOf(pt);
         }
         if (!tried.length) continue;
-        const L = at(plan);
+        const heights = headers.map((g) => g.box!.height);
+        const L = fitHeaders();
         const mh = minHOf(L);
         const callout = new Set(L.items.filter((i) => i.kind === 'box' && !!i.callout).map((i) => i.id));
         const grew = (t: Target) => (mh.get(t.lane) ?? 0) > (laneMinH.get(t.lane) ?? 0) + EPS;
@@ -232,8 +262,15 @@ function growOnce(input: PlanFile, opts: LayoutOptions, measure: Measure, scope:
           else t.box.textScale = old;
           t.done = true;
         }
-        if (fits) laneMinH = mh;
-        else if (tried.some(({ t }) => !undo(t))) laneMinH = minHOf(at(plan));
+        if (!tried.some(({ t }) => undo(t))) laneMinH = mh;
+        else {
+          // Overskriftsboksene får høyden de hadde, og tilpasses bare boksene som beholdt den nye teksten
+          headers.forEach((g, i) => {
+            if (heights[i] === undefined) delete g.box!.height;
+            else g.box!.height = heights[i];
+          });
+          if (tried.some(({ t }) => !undo(t))) laneMinH = minHOf(fitHeaders());
+        }
       }
     }
     const all = perLane.flat();
