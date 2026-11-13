@@ -44,6 +44,8 @@ export interface EditorHost {
   arrange(p: PlanFile, laneIds: string[], how: ArrangeOptions): ArrangeResult;
   /** Størst mulig tekst i boksene (og lane-titlene) uten at planen endrer seg ellers. */
   fitText(p: PlanFile, scope: FitTextScope): FitTextResult;
+  /** Planen slik den tegnes nå, for en annen versjon av planen. */
+  layoutOf(p: PlanFile): Layout;
   /** Overskriftens størrelse i punkter (et valg i appen, som i Innstillinger). */
   setTitleSize(pt: number): void;
   /** Valgene i Innstillinger som ikke ligger i planen, så de kan angres sammen med den. */
@@ -838,11 +840,24 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     );
     // Lane-titlene har én felles størrelse, så korte navn ikke blir større enn lange
     if (layoutNow) {
+      const planPtNow = layoutNow.textSizePt;
       sn.append(
         ...sizeStepper(plan.plan.layout.laneTitleScale, layoutNow.textSizePt, (s) =>
           commit((pl) => {
-            if (s === undefined) delete pl.plan.layout.laneTitleScale;
-            else pl.plan.layout.laneTitleScale = s;
+            if (s === undefined) {
+              delete pl.plan.layout.laneTitleScale;
+              return;
+            }
+            // Størrelsen lagres i forhold til planens tekst. Når navnene blir mindre, kan planens tekst
+            // vokse (og omvendt), så forholdet justeres til navnene får størrelsen som ble valgt.
+            const target = s * planPtNow;
+            let pt = planPtNow;
+            for (let i = 0; i < 6; i++) {
+              pl.plan.layout.laneTitleScale = Math.round(Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, target / pt)) * 10000) / 10000;
+              const next = host.layoutOf(pl).textSizePt;
+              if (Math.abs(next - pt) < 1e-6) break;
+              pt = next;
+            }
           }), {
           note: 'Egen størrelse for alle lanes',
           def: defaultLaneTitleScale(layoutNow.textSizePt),
