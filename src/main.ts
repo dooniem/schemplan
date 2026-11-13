@@ -66,6 +66,8 @@ let shown: { layout: ReturnType<typeof computeLayout>; svg: SVGSVGElement } | nu
 const fontsReady = Promise.all(['400 10px Carlito', '700 10px Carlito'].map((f) => document.fonts.load(f))).catch(() => []);
 // Innstillinger som lagres i arbeidsfilen, slik de var sist planen ble åpnet eller lagret
 let savedSettings = '';
+/** Linjen om endringer fra Project er besvart (eller valgt i menyen) for planen som er åpen. */
+let changesBarDone = false;
 // Bilder endres bare gjennom redigeringen (som har egen «ulagret»), og logoen telles på lengden,
 // så sammenligningen er billig nok til å gjøres ved hver tegning.
 const settingsNow = () =>
@@ -532,6 +534,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   const info = $('#file-info');
   info.replaceChildren();
   plan = p;
+  changesBarDone = false;
   applyLayout(p);
   baseName = fileTitle(name);
   savedSettings = settingsNow();
@@ -745,6 +748,7 @@ function syncControls() {
   $<HTMLInputElement>('#rev-number').value = rev?.number ?? '';
   $<HTMLInputElement>('#rev-text').value = rev?.text ?? '';
   const nChanges = Object.keys(plan?.plan.layout.changes ?? {}).length;
+  syncChangesBar();
   const showChanges = $<HTMLInputElement>('#show-changes');
   showChanges.disabled = !nChanges;
   showChanges.checked = !!nChanges && !!plan?.plan.layout.showChanges;
@@ -881,7 +885,35 @@ $<HTMLInputElement>('#show-today').addEventListener('change', (e) => {
 $<HTMLInputElement>('#show-changes').addEventListener('change', (e) => {
   if (!plan) return;
   plan.plan.layout.showChanges = (e.target as HTMLInputElement).checked;
+  // Valgt i menyen: linjen nederst trengs ikke lenger
+  changesBarDone = true;
+  syncControls();
   draw();
+});
+// Linjen nederst etter oppdatering fra Project: sier at endringene vises, og lar deg skjule dem
+// uten å lete i menyen. Den vises én gang per plan som åpnes, til du velger.
+function syncChangesBar() {
+  const changes = Object.values(plan?.plan.layout.changes ?? {});
+  const changesBar = $<HTMLElement>('#changes-bar');
+  const show = !!plan && !!plan.plan.layout.showChanges && changes.length > 0 && !changesBarDone;
+  changesBar.hidden = !show;
+  if (!show) return;
+  const nNew = changes.filter((c) => c.kind === 'new').length;
+  const nMoved = changes.length - nNew;
+  const parts = [nNew ? `<b>${nNew}</b> ${nNew === 1 ? 'ny boks' : 'nye bokser'}` : '', nMoved ? `<b>${nMoved}</b> med nye datoer` : ''].filter(Boolean);
+  changesBar.querySelector('.changes-text')!.innerHTML = `Viser endringer siden forrige oppdatering: ${parts.join(' og ')}.`;
+}
+$<HTMLButtonElement>('#changes-hide').addEventListener('click', () => {
+  if (!plan) return;
+  editor.record();
+  plan.plan.layout.showChanges = false;
+  changesBarDone = true;
+  syncControls();
+  draw();
+});
+$<HTMLButtonElement>('#changes-keep').addEventListener('click', () => {
+  changesBarDone = true;
+  syncChangesBar();
 });
 $<HTMLInputElement>('#show-legend').addEventListener('change', (e) => {
   opts.showLegend = (e.target as HTMLInputElement).checked;
