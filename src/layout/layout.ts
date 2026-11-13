@@ -319,7 +319,8 @@ interface Piece extends Variant {
  * og ved likt den med smalest fotavtrykk, så den sperrer minst for de neste brikkene.
  */
 export function packVariants(
-  pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[],
+  /** bx: selve boksen i bredden, uten callout. Brukes til å se hvilke bokser som står inne i en overskriftsboks. */
+  pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number; bx?: [number, number] }[],
   gap = GAP,
   limit?: (fx0: number, fx1: number) => [number, number],
 ): { y: number; k: number; bad?: boolean; h?: number }[] {
@@ -378,7 +379,10 @@ export function packVariants(
       for (const j of locked) {
         if (j === i) continue;
         const w = pieces[j].alts[out[j].k];
-        if (w.fx0 < v.fx0 - 1e-6 || w.fx1 > v.fx1 + 1e-6 || lockAt[j]! < y0 - 1e-6 || lockAt[j]! >= y0 + h0 - 1e-6) continue;
+        // Boksen selv må stå innenfor; en callout kan gjerne stikke ut på siden
+        const [k0, k1] = pieces[j].bx ?? [w.fx0, w.fx1];
+        const [h0x, h1x] = pieces[i].bx ?? [v.fx0, v.fx1];
+        if (k0 < h0x - 1e-6 || k1 > h1x + 1e-6 || lockAt[j]! < y0 - 1e-6 || lockAt[j]! >= y0 + h0 - 1e-6) continue;
         bottom = Math.max(bottom, out[j].y + (out[j].h ?? w.h));
       }
       const need = bottom + PAD_Y - out[i].y;
@@ -388,6 +392,9 @@ export function packVariants(
     }
   }
 }
+
+/** Boksen i bredden, uten callout (milepæler: hele brikken). */
+const boxX = (p: Piece): [number, number] | undefined => (p.item.kind === 'box' ? [p.item.x0, p.item.x1] : undefined);
 
 /**
  * Egendefinert planområde: en brikke med fast plass som går under bunnkanten, løftes så underkanten
@@ -676,7 +683,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       lanePieces[i] = [...work, ...kids];
     }
     const pieces = lanePieces[i];
-    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
+    const placed = packVariants(pieces.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band, bx: boxX(p) })));
     pieces.forEach((p, j) => {
       const v = (p.alts ?? [p])[placed[j].k];
       Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
@@ -851,7 +858,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         let pl = base0;
         if (!fits) {
           const packAt = (order: number[]) => {
-            const r = packVariants(order.map((j) => ({ alts: pieces[j].alts ?? [pieces[j]], lock: pieces[j].lock, band: pieces[j].band })), GAP, limit);
+            const r = packVariants(order.map((j) => ({ alts: pieces[j].alts ?? [pieces[j]], lock: pieces[j].lock, band: pieces[j].band, bx: boxX(pieces[j]) })), GAP, limit);
             const out = { k: new Array<number>(pieces.length), ys: new Array<number>(pieces.length), bad: false };
             order.forEach((j, n) => {
               out.k[j] = r[n].k;
