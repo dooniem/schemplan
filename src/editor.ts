@@ -10,7 +10,7 @@ import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
 import type { PlanImage, PlanNote } from './format/types';
-import { NOTE_DEFAULT, PX_PER_MM, renderNote } from './note';
+import { NOTE_DEFAULT, NOTE_MAX_PT, NOTE_MIN_PT, PX_PER_MM, renderNote, shownPt } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
@@ -2512,7 +2512,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const storePlaced = (plan: PlanFile, p: PlacedImage) => {
     const im = findImage(plan, p.id);
-    if (im && layoutNow) storeImage(im, p, layoutNow.width, layoutNow.height, anchorOf(im));
+    if (!im || !layoutNow) return;
+    storeImage(im, p, layoutNow.width, layoutNow.height, anchorOf(im));
+    // Dras en fritekst større eller mindre, blir skriftstørrelsen det den ser ut som
+    fitNote(im, layoutNow.width);
   };
   const imageId = () => `img${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const changeImage = (id: string, fn: (im: PlanImage, plan: PlanFile) => void) =>
@@ -2653,7 +2656,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const c = at ?? lastPointer ?? visibleCenter() ?? { x: W / 2, y: H / 2 };
     let id = '';
     commit((pl) => {
-      const im: PlanImage = { id: imageId(), data: r.data, px: r.px, x: c.x / W, y: c.y / H, w: r.mm[0] / W, h: r.mm[1] / W, rotation: 0, note };
+      const im: PlanImage = { id: imageId(), data: r.data, px: r.px, x: c.x / W, y: c.y / H, w: r.px[0] / PX_PER_MM / W, h: r.px[1] / PX_PER_MM / W, rotation: 0, note };
       (pl.plan.layout.images ??= []).push(im);
       id = im.id;
     });
@@ -2663,7 +2666,26 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.focus();
     ta?.select();
   };
-  /** Endrer friteksten og tegner bildet på nytt. Størrelsen du har dratt den til, beholdes i forhold til teksten. */
+  /**
+   * Tegner friteksten på nytt i størrelsen den har på arket, så skriftstørrelsen og det du ser alltid
+   * stemmer. Midten blir stående. Endrer ingenting når den allerede stemmer, så flytting ikke lager nye bilder.
+   */
+  const fitNote = (im: PlanImage, W: number, change: Partial<PlanNote> = {}) => {
+    if (!im.note) return;
+    const sizePt = change.sizePt ?? shownPt(im.note, im.px, im.w, W);
+    const note = { ...im.note, ...change, sizePt };
+    const w = im.px[0] / PX_PER_MM / W;
+    const same = !Object.keys(change).length && sizePt === im.note.sizePt;
+    if (same && Math.abs(im.w - w) < 1e-9) return;
+    // Bare litt ved siden av (avrunding): rett størrelsen uten å tegne på nytt
+    if (same) {
+      Object.assign(im, { w, h: im.px[1] / PX_PER_MM / W });
+      return;
+    }
+    const r = renderNote(note);
+    Object.assign(im, { note, data: r.data, px: r.px, w: r.px[0] / PX_PER_MM / W, h: r.px[1] / PX_PER_MM / W });
+  };
+  /** Endrer friteksten og tegner bildet på nytt. */
   const setNote = (id: string, change: Partial<PlanNote>, typing = false) => {
     const plan = host.getPlan();
     const L = layoutNow;
@@ -2671,10 +2693,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !L || !im?.note) return;
     if (!typing || !typingSession) snapshot();
     if (typing) typingSession = true;
-    const note = { ...im.note, ...change };
-    const k = (im.w * L.width) / (im.px[0] / PX_PER_MM);
-    const r = renderNote(note);
-    Object.assign(im, { note, data: r.data, px: r.px, w: (r.mm[0] * k) / L.width, h: (r.mm[1] * k) / L.width });
+    fitNote(im, L.width, change);
     window.clearTimeout(redrawTimer);
     if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
     else {
@@ -2828,7 +2847,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const x0 = frameCenter(p0).x;
     const h = t.getAttribute('data-h') as Handle | null;
     if (t.classList.contains('img-rot')) return imageDrag(id, (p, q) => keepX(rotateTo(p, q, shiftNow), x0));
-    if (t.classList.contains('img-size') && h) return imageDrag(id, (p, q) => keepX(resizeBy(p, h, q, shiftNow), x0));
+    if (t.classList.contains('img-size') && h) {
+      const plan = host.getPlan();
+      const im = plan ? findImage(plan, id) : null;
+      const note = im?.note;
+      if (!note || !im) return imageDrag(id, (p, q) => keepX(resizeBy(p, h, q, shiftNow), x0));
+      // Fritekst beholder formen, og feltet viser skriftstørrelsen den får
+      const field = document.getElementById('note-size') as HTMLInputElement | null;
+      const W = layoutNow?.width ?? 1;
+      return imageDrag(id, (p, q) => {
+        const r = keepX(resizeBy(p, h, q, false), x0);
+        if (field) field.value = String(shownPt(note, im.px, r.w / W, W));
+        return r;
+      });
+    }
     if (t.classList.contains('img-crop') && h) return imageDrag(id, (p, q) => ({ ...p, crop: cropTo(p, h, q) }));
     const i = Number(t.getAttribute('data-i'));
     if (t.classList.contains('img-pt') && p0.points) {
@@ -3094,7 +3126,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (im?.date && anchor)
       add('line', { x1: anchor.x, y1: layoutNow.plot.y0, x2: anchor.x, y2: layoutNow.plot.y1, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
     const f = frameUv(p.crop, p.points);
-    for (const h of HANDLES) {
+    // Fritekst skaleres bare i hjørnene, så teksten ikke strekkes
+    for (const h of im?.note ? HANDLES.filter((x) => x.length === 2) : HANDLES) {
       const [hu, hv] = handleAt(h);
       const q = at(f[0] + hu * (f[2] - f[0]), f[1] + hv * (f[3] - f[1]));
       square(q, 9 * k, { class: 'edit-handle img-size', 'data-h': h, fill: '#FFFFFF', stroke: ACCENT, cursor: cursorFor(h, p.rotation) });
@@ -3133,11 +3166,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const n = im.note;
       sn.append(textField('note-text', 'Tekst', n.text, '3', (v) => setNote(im.id, { text: v }, true)));
       const row = el('div', { class: 'row dates' });
-      row.append(numField('Størrelse, pt', n.sizePt, 1, (v) => v >= 4 && v <= 200 && setNote(im.id, { sizePt: v })));
+      // Viser størrelsen teksten har på arket, også i eldre filer der den er dratt uten å tegnes på nytt
+      const pt = layoutNow ? shownPt(n, im.px, im.w, layoutNow.width) : n.sizePt;
+      row.append(numField('Størrelse, pt', pt, 1, (v) => v >= NOTE_MIN_PT && v <= NOTE_MAX_PT && setNote(im.id, { sizePt: v }), 'note-size'));
       sn.append(row);
       sn.append(switchRow('Fet', !!n.bold, (v) => setNote(im.id, { bold: v })));
       sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
-      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
+      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
     }
     const ss = section('Størrelse og rotasjon');
     if (p) {
@@ -3161,7 +3196,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       rl.setAttribute('aria-label', 'Roter 90° mot klokken');
       rr.setAttribute('aria-label', 'Roter 90° med klokken');
       row.append(rl, rr, ...(im.note ? [] : [natBtn]));
-      ss.append(fields, row, el('p', { class: 'hint' }, 'Dra i hjørnene for å endre størrelsen; Shift gir fri form. Dra i den runde knotten for å rotere; Shift gir trinn på 15°.'));
+      ss.append(fields, row, el('p', { class: 'hint' }, im.note ? 'Dra i den runde knotten for å rotere; Shift gir trinn på 15°.' : 'Dra i hjørnene for å endre størrelsen; Shift gir fri form. Dra i den runde knotten for å rotere; Shift gir trinn på 15°.'));
     }
 
     // Fritekst beskjæres ikke
@@ -3215,16 +3250,29 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
 
     const foot = el('div', { class: 'panel-foot' });
-    const reset = btn('Tilbakestill', 'undo', () => {
-      imageMode = 'none';
-      const q = placedOf(im.id);
-      if (!q) return;
-      changePlaced(im.id, (x) => keepX(resetSize({ ...x, rotation: 0, crop: FULL, points: null }, im.px, layoutNow!.width, layoutNow!.height), frameCenter(x).x));
-    }, 'Opprinnelig størrelse, uten rotasjon og beskjæring', 'button push');
-    reset.disabled = !!p && !im.crop && !im.points && !im.rotation && (() => {
-      const n = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
-      return Math.abs(p.w - n.w) < 0.05 && Math.abs(p.h - n.h) < 0.05;
-    })();
+    const reset = im.note
+      ? btn('Tilbakestill', 'undo', () => {
+          const L = layoutNow;
+          if (!L) return;
+          commit((pl) => {
+            const x = findImage(pl, im.id);
+            if (!x) return;
+            x.rotation = 0;
+            fitNote(x, L.width, { sizePt: NOTE_DEFAULT.sizePt });
+          });
+        }, `Standard skriftstørrelse (${NOTE_DEFAULT.sizePt} pt), uten rotasjon. Teksten og midten blir stående.`, 'button push')
+      : btn('Tilbakestill', 'undo', () => {
+          imageMode = 'none';
+          const q = placedOf(im.id);
+          if (!q) return;
+          changePlaced(im.id, (x) => keepX(resetSize({ ...x, rotation: 0, crop: FULL, points: null }, im.px, layoutNow!.width, layoutNow!.height), frameCenter(x).x));
+        }, 'Opprinnelig størrelse, uten rotasjon og beskjæring', 'button push');
+    reset.disabled = im.note
+      ? !im.rotation && !!layoutNow && shownPt(im.note, im.px, im.w, layoutNow.width) === NOTE_DEFAULT.sizePt
+      : !!p && !im.crop && !im.points && !im.rotation && (() => {
+          const n = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
+          return Math.abs(p.w - n.w) < 0.05 && Math.abs(p.h - n.h) < 0.05;
+        })();
     foot.append(
       btn('Dupliser', 'copy', () => duplicateImage(im.id), 'Lag en kopi (Ctrl+D)'),
       btn('Slett', 'trash', () => removeImage(im.id), 'Slett bildet (Delete)'),
@@ -3254,7 +3302,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       },
       {
         items: [
-          { label: 'Opprinnelig størrelse', icon: 'resize', disabled: Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05, hint: 'Bildets egen størrelse og form. Rotasjon og beskjæring beholdes.', onSelect: () => changePlaced(id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), x0)) },
+...(im.note
+            ? [{ label: 'Standard skriftstørrelse', icon: 'resize' as const, disabled: shownPt(im.note, im.px, im.w, layoutNow!.width) === NOTE_DEFAULT.sizePt, hint: `${NOTE_DEFAULT.sizePt} pt, med midten på samme sted.`, onSelect: () => setNote(id, { sizePt: NOTE_DEFAULT.sizePt }) }]
+            : [{ label: 'Opprinnelig størrelse', icon: 'resize' as const, disabled: Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05, hint: 'Bildets egen størrelse og form. Rotasjon og beskjæring beholdes.', onSelect: () => changePlaced(id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), x0)) }]),
           { label: 'Roter 90° med klokken', icon: 'rotate', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, 90), x0)) },
           { label: 'Roter 90° mot klokken', icon: 'rotateLeft', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -90), x0)) },
           { label: 'Rett opp', icon: 'undo', disabled: !im.rotation, hint: im.rotation ? 'Fjerner rotasjonen.' : 'Bildet er ikke rotert.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -q.rotation), x0)) },
