@@ -44,6 +44,9 @@ export interface EditorHost {
   fitText(p: PlanFile, scope: FitTextScope): FitTextResult;
   /** Overskriftens størrelse i punkter (et valg i appen, som i Innstillinger). */
   setTitleSize(pt: number): void;
+  /** Valgene i Innstillinger som ikke ligger i planen, så de kan angres sammen med den. */
+  getSettings(): unknown;
+  setSettings(s: unknown): void;
 }
 
 export interface Editor {
@@ -61,6 +64,11 @@ export interface Editor {
   markSaved(): void;
   /** Slår på redigering og velger boksen (f.eks. fra datafanen). */
   focusBox(id: string): void;
+  /**
+   * Tar vare på planen og innstillingene før en endring utenfor redigeringen, så den kan angres.
+   * Samme nøkkel flere ganger på rad (skriving i ett felt) blir ett angre-steg.
+   */
+  record(key?: string): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string) => {
@@ -89,8 +97,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selectedTrade: string | null = null;
   /** Nytt fag: navnefeltet i panelet får fokus én gang. */
   let focusTradeName = false;
-  let past: PlanFile[] = [];
-  let future: PlanFile[] = [];
+  /** Angre-historikken: planen og innstillingene slik de var før hver endring. */
+  type Step = { plan: PlanFile; settings: unknown };
+  let past: Step[] = [];
+  let future: Step[] = [];
+  /** Feltet i Innstillinger som sist ble endret, så skriving der blir ett angre-steg. */
+  let recordKey: string | null = null;
   let dirty = false;
   /** Skriving i tekstfeltet samles til ett angre-steg per økt i feltet. */
   let typingSession = false;
@@ -136,9 +148,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan) return;
     // En ny endring godtar omplasseringen
     endArrange();
-    past.push(snapshotOf(plan));
+    past.push({ plan: snapshotOf(plan), settings: host.getSettings() });
     if (past.length > MAX_HISTORY) past.shift();
     future = [];
+    recordKey = null;
     dirty = true;
     // Datoen nederst på planen blir dagen den sist ble endret
     plan.plan.layout.editedAt = todayIso();
@@ -338,15 +351,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     overlay();
   };
 
-  const restore = (from: PlanFile[], to: PlanFile[]) => {
+  const restore = (from: Step[], to: Step[]) => {
     const plan = host.getPlan();
-    const prev = from.pop();
-    if (!plan || !prev) return;
+    const step = from.pop();
+    if (!plan || !step) return;
     endArrange();
-    to.push(snapshotOf(plan));
+    to.push({ plan: snapshotOf(plan), settings: host.getSettings() });
+    const prev = step.plan;
     host.setPlan(prev);
+    host.setSettings(step.settings);
     dirty = true;
     typingSession = false;
+    recordKey = null;
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
     group = group.filter((id) => findBox(prev, id));
@@ -638,6 +654,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const titlePt = layoutNow.title.size / PT_TO_MM;
       s1.append(
         ...sizeStepper(Math.abs(titlePt - DEFAULT_TITLE_PT) < 1e-3 ? undefined : titlePt / DEFAULT_TITLE_PT, DEFAULT_TITLE_PT, (s) => {
+          snapshot();
           host.setTitleSize(s === undefined ? DEFAULT_TITLE_PT : Math.round(DEFAULT_TITLE_PT * s * 2) / 2);
           buildPanel();
         }, { std: `standard er ${DEFAULT_TITLE_PT} pt`, resetLabel: 'Standard', resetTitle: `Standardstørrelsen, ${DEFAULT_TITLE_PT} pt` }),
@@ -3541,10 +3558,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   arrangeBar?.querySelector('#arrange-undo')?.addEventListener('click', () => undo());
 
   document.addEventListener('keydown', (e) => {
-    if (!active) return;
     const t = e.target as HTMLElement;
     const inField = t.matches?.('input, textarea, select');
     const mod = e.ctrlKey || e.metaKey;
+    // Utenfor redigering angrer Ctrl+Z også, f.eks. en innstilling eller en oppdatering fra Project
+    if (!active) {
+      const k = e.key.toLowerCase();
+      if (!mod || inField || e.altKey || !host.getPlan() || (k !== 'z' && k !== 'y')) return;
+      e.preventDefault();
+      if (k === 'z' && !e.shiftKey) undo();
+      else redo();
+      return;
+    }
     if (e.key === 'Escape') {
       if (inField) t.blur();
       else if (followPick) endFollowPick();
@@ -3679,6 +3704,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     focusBox(id) {
       if (!active) toggle.click();
       select(id);
+    },
+    record(key) {
+      if (key && key === recordKey) return;
+      snapshot();
+      recordKey = key ?? null;
+      typingSession = false;
+      syncTools();
     },
     replacePlan(p) {
       endFollowPick();

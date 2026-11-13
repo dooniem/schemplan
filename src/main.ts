@@ -98,6 +98,13 @@ const editor = createEditor(
       syncControls();
       draw();
     },
+    getSettings: () => ({ ...opts }),
+    setSettings: (saved) => {
+      for (const k of Object.keys(opts)) delete (opts as unknown as Record<string, unknown>)[k];
+      Object.assign(opts, saved);
+      syncControls();
+      syncLookahead();
+    },
   },
   host,
   $<HTMLElement>('#panel'),
@@ -424,6 +431,7 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
     const b = el('button', `${sheetName(a.paper, a.orientation)} (${pt(a.textSizePt)} pt)`, 'button') as HTMLButtonElement;
     b.type = 'button';
     b.addEventListener('click', () => {
+      editor.record();
       opts.paper = a.paper;
       opts.orientation = a.orientation;
       syncControls();
@@ -811,6 +819,36 @@ document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((btn) =>
     draw();
   }),
 );
+// Endringer i Innstillinger og utkikken kan angres med Ctrl+Z, som endringer i redigeringen. Lytterne fanger
+// hendelsen før knappene og feltene selv, så planen og valgene huskes slik de var før endringen.
+for (const menu of [$<HTMLElement>('#menu-sheet'), $<HTMLElement>('#menu-lookahead')]) {
+  menu.addEventListener(
+    'click',
+    (e) => {
+      const b = (e.target as Element).closest('button');
+      // En knapp som allerede er valgt, endrer ingenting
+      if (plan && b && !b.disabled && (b.getAttribute('aria-pressed') === 'false' || b.id === 'logo-remove')) editor.record();
+    },
+    true,
+  );
+  menu.addEventListener(
+    'change',
+    (e) => {
+      const t = e.target as HTMLInputElement;
+      if (plan && (t.type === 'checkbox' || t.type === 'date' || t.type === 'file')) editor.record();
+    },
+    true,
+  );
+  // Skriving i ett felt blir ett angre-steg
+  menu.addEventListener(
+    'input',
+    (e) => {
+      const t = e.target as HTMLInputElement;
+      if (plan && (t.type === 'text' || t.type === 'number')) editor.record(t.id);
+    },
+    true,
+  );
+}
 // Revisjon: skrus av og på uten at nummer og tekst glemmes
 function setRevision(change: Partial<{ on: boolean; number: string; text: string }>) {
   if (!plan) return;
