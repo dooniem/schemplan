@@ -2,7 +2,8 @@
 // (år, måned eller uke) som fremheves ved klikk i kalenderen. Ingenting av dette kommer med i PDF-en.
 import type { PlanFile } from './format/types';
 import type { Item, Layout } from './layout/layout';
-import { bounds } from './editor';
+import { bounds } from './editmodel';
+import { formatLong, isoWeek, parseIso } from './layout/dates';
 import { planRows, type DataRow } from './data/rows';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -26,7 +27,6 @@ export interface Period {
   label: string;
 }
 
-const norsk = (iso: string) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
 const DAY = 86400000;
 const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY) + 1;
 
@@ -42,21 +42,6 @@ export function rowsIn(rows: DataRow[], start: string, end: string): DataRow[] {
 }
 
 const MONTHS = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
-/** Året uka hører til: torsdagen i uka avgjør, som for ukenummeret. */
-function isoWeekYear(iso: string): number {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + 3);
-  return d.getUTCFullYear();
-}
-
-function isoWeek(iso: string): number {
-  const d = new Date(`${iso}T00:00:00Z`);
-  const day = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - day + 3);
-  const firstThu = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  return 1 + Math.round(((d.getTime() - firstThu.getTime()) / DAY - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
-}
-
 /** Navnet på perioden, ut fra hvor lang den er. */
 export function periodLabel(start: string, end: string): string {
   const d = days(start, end);
@@ -69,8 +54,8 @@ export function periodLabel(start: string, end: string): string {
     const m = (iso: string) => MONTHS[Number(iso.slice(5, 7)) - 1];
     return start.slice(0, 4) === end.slice(0, 4) ? `${m(start)}–${m(end)} ${end.slice(0, 4)}` : `${m(start)} ${start.slice(0, 4)}–${m(end)} ${end.slice(0, 4)}`;
   }
-  if (d === 7 && new Date(`${start}T00:00:00Z`).getUTCDay() === 1) return `uke ${isoWeek(start)} ${isoWeekYear(start)} (${norsk(start).slice(0, 5)}–${norsk(end).slice(0, 5)})`;
-  return `${norsk(start)}–${norsk(end)}`;
+  if (d === 7 && new Date(`${start}T00:00:00Z`).getUTCDay() === 1) return `uke ${isoWeek(parseIso(start)).week} ${isoWeek(parseIso(start)).year} (${formatLong(start).slice(0, 5)}–${formatLong(end).slice(0, 5)})`;
+  return `${formatLong(start)}–${formatLong(end)}`;
 }
 
 export function createFocus(
@@ -109,10 +94,10 @@ export function createFocus(
       dd.textContent = v;
       dl.append(dt, dd);
     };
-    if (r.type === 'Milepæl') add('Dato', norsk(r.finish));
+    if (r.type === 'Milepæl') add('Dato', formatLong(r.finish));
     else {
-      add('Start', norsk(r.start));
-      add('Slutt', norsk(r.finish));
+      add('Start', formatLong(r.start));
+      add('Slutt', formatLong(r.finish));
       if (r.start) add('Varighet', duration(r.start, r.finish));
     }
     if (r.progress) add('Ferdig', r.progress);

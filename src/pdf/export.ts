@@ -6,6 +6,7 @@ import type { PlanFile } from '../format/types';
 import type { Layout } from '../layout/layout';
 import regularUrl from '../assets/fonts/carlito-regular.ttf?inline';
 import boldUrl from '../assets/fonts/carlito-bold.ttf?inline';
+import { plainText } from '../format/text';
 import { drawSvg, MM_TO_PT } from './svg2pdf';
 import { ATTACHMENT_NAME } from './read';
 
@@ -37,7 +38,7 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
   await drawImages(doc, page, L);
 
   // Samme tittel som overskriften på arket: egen overskrift fra appen går foran navnet fra Project
-  doc.setTitle((plan.plan.layout.title ?? plan.plan.title).replace(/\s*\|\s*/g, ' ').trim() || plan.plan.title, { showInWindowTitleBar: true });
+  doc.setTitle(plainText(plan.plan.layout.title ?? plan.plan.title) || plan.plan.title, { showInWindowTitleBar: true });
   if (variant === 'arbeidsfil') {
     doc.setCreator(`Skjematisk plan v${appVersion}`);
     doc.setSubject('Arbeidsfil med innebygd plan. Internt dokument.');

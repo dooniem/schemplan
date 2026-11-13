@@ -4,6 +4,7 @@
 // tegningen pakker boksene på nytt ut fra den.
 
 import type { Lookahead, PlanFile } from '../format/types';
+import { plainText } from '../format/text';
 import { addDays, isoWeek, parseIso, toIso, weekday } from './dates';
 
 export const LOOKAHEAD_DEFAULT: Lookahead = { on: false, from: null, prevWeek: false, length: { weeks: 3 }, hideEmptyLanes: true };
@@ -161,7 +162,7 @@ export function lookaheadExtras(file: PlanFile, window: LookaheadWindow, withOve
       const r = b.resolved;
       if (!b.shown || b.hidden || !r) continue;
       if (r.isMilestone) {
-        if (r.finish >= after) coming.push({ date: r.finish, name: plainName(b.text) });
+        if (r.finish >= after) coming.push({ date: r.finish, name: plainText(b.text) });
         continue;
       }
       bars.push({ start: parseIso(r.start), end: addDays(parseIso(r.finish), 1), lane: i, trade: b.trade ?? r.trade, fill: b.fill });
@@ -190,7 +191,6 @@ export function lookaheadExtras(file: PlanFile, window: LookaheadWindow, withOve
 }
 
 /** Teksten i en boks på én linje: linjeskift og streker blir mellomrom, tvunget callout fjernes. */
-const plainName = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
 
 /** Leser regelen fra en fil. Gir null om den ikke har riktig form. */
 export function readLookahead(v: unknown): Lookahead | null {

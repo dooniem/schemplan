@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, newMilestone, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane, snapshotOf } from './editor';
+import { copyBox, inHeaderBox, pasteBoxes, isEdited, isLaneEdited, keepLaneOriginal, laneOf, moveBox, moveLane, newBox, newLane, newMilestone, removeBox, removeLane, resetBox, resetBoxInPlan, resetLane, snapshotOf } from './editmodel';
 import { validatePlan } from './format/validate';
 import { computeLayout, type BoxItem } from './layout/layout';
 import { approxMeasure } from './layout/text';

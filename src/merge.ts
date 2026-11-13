@@ -1,6 +1,7 @@
 // Oppdater fra Project: fletter en fersk plan inn i en arbeidsfil.
 // Datoer, tekst, fag og lanes kommer fra Project. Det brukeren har endret i appen blir stående.
 import type { Box, BoxChange, BoxFollow, Lane, PlanFile } from './format/types';
+import { plainText } from './format/text';
 import { applyFollows } from './links';
 
 export interface MergeReport {
@@ -34,7 +35,7 @@ const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'to
 /** Valg fra appen som ligger i plan.layout. */
 const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'calendarMode', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'editedAt', 'logoScale', 'calloutMaxWidthCm', 'images', 'planArea', 'showChanges', 'todayLine', 'revision', 'showProgress', 'showBaseline'] as const;
 
-const label = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').trim() || '(uten tekst)';
+const label = (s: string) => plainText(s) || '(uten tekst)';
 const key = (b: Box) => (b.taskIds.length ? [...b.taskIds].sort((a, c) => a - c).join(',') : '');
 
 export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; report: MergeReport } {

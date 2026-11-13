@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergePlans } from './merge';
-import { copyBox, keepLaneOriginal, moveBox, moveLane, newBox, newLane } from './editor';
+import { copyBox, keepLaneOriginal, moveBox, moveLane, newBox, newLane } from './editmodel';
 import { testplan } from './test/testplaner';
 import { validatePlan } from './format/validate';
 

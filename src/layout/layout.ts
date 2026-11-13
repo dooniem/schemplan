@@ -5,7 +5,7 @@ import { placeImage, type PlacedImage } from './image';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { addDays, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
+import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
@@ -1654,11 +1654,6 @@ export function footerLine(file: PlanFile): string {
   const date = formatLong(planDate(file));
   if (!rev?.on || !rev.number.trim()) return date;
   return `Rev. ${rev.number.trim()}${rev.text?.trim() ? ` – ${rev.text.trim()}` : ''}  ·  ${date}`;
-}
-
-function formatLong(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y}`;
 }
 
 /** Rammer rundt bokser og milepæler som er nye eller har nye datoer, og hvor de sto før. */

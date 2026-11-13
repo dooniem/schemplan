@@ -12,6 +12,7 @@ import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
 import { createSearch } from './search';
+import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
@@ -431,12 +432,11 @@ function showSuggestions(better: ReturnType<typeof fitAlternatives>, tight: bool
   }
 }
 
-const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
 /** «Baseline2 (lagret 01.10.2026)», eller bare «baseline» når planen ikke sier hvilken. */
 const baselineLabel = (p: PlanFile | null | undefined): string => {
   const bl = p?.plan.baseline;
   if (!bl) return 'baseline';
-  return bl.saved ? `${bl.name} (lagret ${fmtDate(bl.saved)})` : bl.name;
+  return bl.saved ? `${bl.name} (lagret ${formatLong(bl.saved)})` : bl.name;
 };
 
 /** Står «%PDF» i starten av filen? PDF-standarden tillater litt søppel foran, innenfor de første 1024 bytene. */
@@ -525,7 +525,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   workHandle = null;
   const s = summarize(p);
   const line = `${name}${s.anonymized ? ' (anonymisert)' : ''}: ${s.lanes} lanes, ${s.boxes} bokser, ${s.milestones} milepæler, ` +
-    `${fmtDate(s.start)} til ${fmtDate(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
+    `${formatLong(s.start)} til ${formatLong(s.end)} i ${s.mode === 'week' ? 'uker' : 'måneder'}.`;
   info.append(el('p', line, 'ok small'));
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));

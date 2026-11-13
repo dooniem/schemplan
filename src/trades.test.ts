@@ -4,7 +4,7 @@ import { mergePlans } from './merge';
 import { planRows } from './data/rows';
 import { testplan } from './test/testplaner';
 import { validatePlan } from './format/validate';
-import { isEdited, resetBox } from './editor';
+import { isEdited, resetBox } from './editmodel';
 
 type Plan = ReturnType<typeof testplan>;
 const box = (p: Plan, id: string) => p.lanes.flatMap((l) => l.boxes).find((b) => b.id === id)!;
