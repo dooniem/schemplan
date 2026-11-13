@@ -3734,7 +3734,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const res = reset ? null : host.fitText(plan, scope);
     const next = res ? res.plan : resetTextSizes(plan, scope);
     if (samePlanApartFromImages(next, plan)) {
-      showArrangeBar(reset ? 'Teksten har allerede standard størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
+      showArrangeBar(reset ? 'Teksten har allerede standard størrelse.' : 'Fant ikke plass til større tekst uten at planens tekst krymper. Gjør planen mindre tett, eller boksene bredere, først.', false);
       return;
     }
     snapshot();
