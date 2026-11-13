@@ -97,6 +97,10 @@ const editor = createEditor(
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
     fitText: (p, scope) => fitTextIntoLaneSpace(p, viewOf(p).opts, measure, scope),
+    layoutOf: (p) => {
+      const v = viewOf(p);
+      return computeLayout(v.plan, v.opts, measure);
+    },
     setTitleSize: (pt) => {
       opts.titleSizePt = pt;
       syncControls();
