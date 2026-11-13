@@ -18,6 +18,7 @@ import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
+import { boxTrade } from './trades';
 import { FRONT_DEFAULT, resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
 import { hasBaseline } from './layout/progress';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
@@ -529,7 +530,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#copy-png', '#edit', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#save-per-trade', '#copy-png', '#edit', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
   draw();
 }
 
@@ -904,8 +905,10 @@ const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : 
 type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
 // Samme nedtoning som på skjermen
 const DIM_OPACITY = 0.15;
-async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false) {
-  if (!plan || !shown) return;
+/** Lager PDF-en (hele planen, eller bare valgte fag) og filnavnet den foreslås lagret som. */
+async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Uint8Array; name: string }> {
+  if (!plan || !shown) throw new Error('Ingen plan er åpen');
+  const sh = shown;
   const onlyTrades = pick?.trades ?? [];
   const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
   // Utkikken får perioden i filnavnet, så den ikke forveksles med hele planen
@@ -926,6 +929,37 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     showBottomCalendar: opts.showBottomCalendar ?? plan.plan.calendar.bottomCalendar,
     calendarMode: opts.calendarMode ?? plan.plan.calendar.mode,
   });
+  const { exportPdf } = await import('./pdf/export');
+  // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
+  let target = sh;
+  if (onlyTrades.length) {
+    const keep = new Set(onlyTrades);
+    const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])));
+    if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.trade ?? b.resolved?.trade ?? '')) b.hidden = true;
+    const tag = tradeNames(onlyTrades).join(', ');
+    saved.plan.title = `${saved.plan.title} – ${tag}`;
+    // Egen overskrift fra appen går foran Project-navnet, så fagene må med der også
+    if (saved.plan.layout.title !== undefined) saved.plan.layout.title = `${saved.plan.layout.title} – ${tag}`;
+    const v = viewOf(saved);
+    const layout = computeLayout(v.plan, v.opts, measure);
+    const svg = renderPlan(layout);
+    // Nedtonet: alt står på samme plass som på skjermen, men de andre fagene blir svake
+    if (pick?.mode === 'nedtonet') {
+      svg.querySelectorAll('g.items > g[data-id]').forEach((g) => {
+        if (!keep.has(tradeOf.get(g.getAttribute('data-id')!) ?? '')) g.setAttribute('opacity', String(DIM_OPACITY));
+      });
+      svg.querySelectorAll('g[data-trade]').forEach((g) => {
+        if (!keep.has(g.getAttribute('data-trade')!)) g.setAttribute('opacity', String(DIM_OPACITY));
+      });
+    }
+    target = { layout, svg };
+  }
+  const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
+  return { pdf, name };
+}
+
+async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false) {
+  if (!plan || !shown) return;
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';
   saveStatus.className = 'muted small';
@@ -933,32 +967,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     // PDF-en lages før Lagre som-dialogen. Dialogen tømmer filen du velger med en gang, så feiler
     // noe etterpå, står du igjen med en tom arbeidsfil. Nå er PDF-en ferdig før filen røres.
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
-    const { exportPdf } = await import('./pdf/export');
-    // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
-    let target = shown;
-    if (onlyTrades.length) {
-      const keep = new Set(onlyTrades);
-      const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])));
-      if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.trade ?? b.resolved?.trade ?? '')) b.hidden = true;
-      const tag = tradeNames(onlyTrades).join(', ');
-      saved.plan.title = `${saved.plan.title} – ${tag}`;
-      // Egen overskrift fra appen går foran Project-navnet, så fagene må med der også
-      if (saved.plan.layout.title !== undefined) saved.plan.layout.title = `${saved.plan.layout.title} – ${tag}`;
-      const v = viewOf(saved);
-      const layout = computeLayout(v.plan, v.opts, measure);
-      const svg = renderPlan(layout);
-      // Nedtonet: alt står på samme plass som på skjermen, men de andre fagene blir svake
-      if (pick?.mode === 'nedtonet') {
-        svg.querySelectorAll('g.items > g[data-id]').forEach((g) => {
-          if (!keep.has(tradeOf.get(g.getAttribute('data-id')!) ?? '')) g.setAttribute('opacity', String(DIM_OPACITY));
-        });
-        svg.querySelectorAll('g[data-trade]').forEach((g) => {
-          if (!keep.has(g.getAttribute('data-trade')!)) g.setAttribute('opacity', String(DIM_OPACITY));
-        });
-      }
-      target = { layout, svg };
-    }
-    const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
+    const { pdf, name } = await makePdf(variant, pick);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
     const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
     let handle: FileSystemFileHandle | null = again && variant === 'arbeidsfil' ? workHandle : null;
@@ -1021,6 +1030,32 @@ function syncUnsaved() {
   b.classList.toggle('unsaved', u);
   b.title = u ? 'Planen har endringer som ikke er lagret' : '';
 }
+// Én delings-PDF per fag, samlet i en zip-fil så det blir én lagring
+$<HTMLButtonElement>('#save-per-trade').addEventListener('click', async (e) => {
+  if (!plan || !shown) return;
+  const btn = e.currentTarget as HTMLButtonElement;
+  const trades = [...new Set(plan.lanes.filter((l) => l.shown && !l.hidden).flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && b.resolved).map((b) => boxTrade(b) ?? '(none)')))].sort((a, b) => a.localeCompare(b, 'nb'));
+  btn.disabled = true;
+  try {
+    const { zip } = await import('./data/xlsx');
+    const files: { name: string; data: Uint8Array }[] = [];
+    for (const [i, t] of trades.entries()) {
+      saveStatus.textContent = `Lager PDF ${i + 1} av ${trades.length} …`;
+      saveStatus.className = 'muted small';
+      const { pdf, name } = await makePdf('deling', { trades: [t], mode: 'bare' });
+      files.push({ name, data: pdf });
+    }
+    const name = await saveFile(`${baseName}_per-fag.zip`, new Blob([zip(files) as BlobPart], { type: 'application/zip' }), 'Zip-fil', 'application/zip', '.zip');
+    saveStatus.textContent = name ? `Lagret ${name} med ${files.length} PDF-er.` : '';
+    saveStatus.className = 'ok small';
+  } catch (err) {
+    saveStatus.textContent = `PDF-ene ble ikke lagret: ${(err as Error).message}`;
+    saveStatus.className = 'error small';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Bilde av arket til utklippstavlen. Uten tilgang til utklippstavlen lastes bildet ned i stedet.
 $<HTMLButtonElement>('#copy-png').addEventListener('click', async (e) => {
   if (!shown) return;
