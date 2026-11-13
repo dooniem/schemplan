@@ -3,6 +3,7 @@ import { computeLayout, LANE_TITLE_DEFAULT, type BoxItem, type LayoutOptions } f
 import { fitTextIntoLaneSpace, fitTextToBoxes, resetTextSizes } from './fittext';
 import { approxMeasure, PT_TO_MM } from './text';
 import { validatePlan } from '../format/validate';
+import { inHeaderBox } from '../editmodel';
 import { testplan } from '../test/testplaner';
 
 const opts: LayoutOptions = { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: true };
@@ -97,6 +98,27 @@ describe('størst mulig tekst med ledig plass i lanene', () => {
     expect(all.find((b) => b.id === '1_3')!.textScale).toBeUndefined();
     const L = computeLayout(r.plan, fill, approxMeasure);
     for (const b of all) if (b.textScale) expect(box(L, b.id).callout).toBeNull();
+  });
+
+  it('overskriftsboksen blir høyere, så boksene inni den ikke faller ut', () => {
+    const p = testplan();
+    // 2_1 er overskriftsboks med 2_2 og 2_3 under hverandre inni, akkurat høy nok
+    const [head, a, b] = p.lanes[1].boxes;
+    Object.assign(head, { header: true, text: 'Bro', top: 0, height: 3.8 });
+    a.top = 1.2;
+    b.top = 2.4;
+    const L1 = computeLayout(p, fill, approxMeasure);
+    const inside = L1.items.filter((o) => inHeaderBox(box(L1, '2_1'), o)).map((o) => o.id);
+    expect(inside).toEqual(expect.arrayContaining(['2_2', '2_3']));
+    const r = fitTextIntoLaneSpace(p, fill, approxMeasure, { laneTitles: false });
+    expect(r.plan.lanes[1].boxes[1].textScale).toBeGreaterThan(1);
+    const L2 = computeLayout(r.plan, fill, approxMeasure);
+    const h = box(L2, '2_1');
+    for (const id of inside) {
+      const k = box(L2, id);
+      expect(k.y + k.h).toBeLessThanOrEqual(h.y + h.h + 1e-6);
+    }
+    expect(h.h).toBeGreaterThan(box(L1, '2_1').h);
   });
 
   it('gjelder bare valgte bokser, og gjør aldri planen høyere', () => {
