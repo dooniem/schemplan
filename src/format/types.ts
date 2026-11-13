@@ -239,6 +239,8 @@ export interface Lane {
   original?: { name: string; fill: HexColor | null };
   /** Rekkefølgen boksene pakkes i, valgt med «Omplasser» (boks-id-er, valgfritt). Uten den: tidligst først. */
   order?: string[];
+  /** Lanen er slått sammen med denne lanen i appen (valgfritt). Bare lanes fra Project; de skjules. Nye bokser fra Project i lanen flyttes dit. */
+  mergedInto?: string;
 }
 
 export type Rotation = 0 | 90 | -90;

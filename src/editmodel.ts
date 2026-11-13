@@ -15,6 +15,7 @@ export function snapshotOf<T>(v: T): T {
 }
 import type { Box, Lane, PlanFile } from './format/types';
 import type { Item } from './layout/layout';
+import { homeLane } from './lanemerge';
 
 /**
  * Er planene like, sett bort fra bilder og logo? Omplasser og tekststørrelse endrer aldri bildene,
@@ -98,7 +99,9 @@ export function resetBoxInPlan(plan: PlanFile, id: string): void {
   const b = findBox(plan, id);
   if (!b) return;
   resetBox(b);
-  if (b.fromLane) moveBox(plan, id, b.fromLane);
+  // Er lanen slått sammen med en annen, hører boksen hjemme der
+  const home = b.fromLane ? homeLane(plan, b.fromLane) : null;
+  if (home) moveBox(plan, id, home.id);
 }
 
 export const newId = (plan: PlanFile) => {
@@ -248,6 +251,7 @@ export function resetLane(l: Lane): void {
   delete l.height;
   delete l.hidden;
   delete l.order;
+  delete l.mergedInto;
 }
 
 /** Ny lane laget i appen, rett etter lanen med id `afterId` (eller først). */
@@ -277,7 +281,10 @@ export function removeLane(plan: PlanFile, id: string): void {
     lane.hidden = true;
     return;
   }
-  for (const b of [...lane.boxes]) if (!b.manual && b.fromLane) moveBox(plan, b.id, b.fromLane);
+  for (const b of [...lane.boxes]) {
+    const home = !b.manual && b.fromLane ? homeLane(plan, b.fromLane) : null;
+    if (home) moveBox(plan, b.id, home.id);
+  }
   plan.lanes.splice(plan.lanes.indexOf(lane), 1);
 }
 
