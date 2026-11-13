@@ -1,6 +1,6 @@
 import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { parseBoxText, splitLines } from '../format/text';
-import { isDrawable } from '../format/validate';
+import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
@@ -1113,7 +1113,7 @@ function buildPieces(
   const calloutMax = Math.max(10, file.plan.layout.calloutMaxWidthCm * 10);
 
   for (const box of lane.boxes) {
-    if (!box.shown || box.hidden || !box.resolved || !isDrawable(box.resolved, { ...file, plan: { ...file.plan, calendar: { ...file.plan.calendar, mode: 'month' } } })) continue;
+    if (!box.shown || box.hidden || !box.resolved || !inCalendar(box.resolved, file)) continue;
     const r = box.resolved;
     const { lines: rawLines, forcedCallout } = parseBoxText(box.text);
     const s = parseIso(r.start);

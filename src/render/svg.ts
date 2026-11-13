@@ -6,6 +6,8 @@ import { isStraight } from '../layout/area';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
+/** Hvor langt spissen på en boks som fortsetter utenfor kalenderen går inn i boksen, i mm. */
+const ARROW_MM = 1.6;
 const NS = 'http://www.w3.org/2000/svg';
 const GRID = '#C8C8C8';
 const MONTH_DOT = '#ADADAF';
@@ -202,17 +204,19 @@ export function renderPlan(L: Layout): SVGSVGElement {
         node('rect', { x: cb.x, y: cb.y, width: cb.w, height: cb.h, fill: '#FFFFFF', 'fill-opacity': ny ? 0.6 : 0.75 }, g);
         text(it.callout.text, g);
       }
-      node('rect', {
-        x: it.x0,
-        y: it.y,
-        width: it.x1 - it.x0,
-        height: it.h,
-        fill: it.fill,
-        stroke: it.border ?? 'none',
-        'stroke-width': it.border ? 0.25 : 0,
-      }, g);
-      if (it.arrowLeft) node('path', { d: `M${it.x0} ${it.y} l-1.6 ${it.h / 2} l1.6 ${it.h / 2} z`, fill: it.fill, stroke: it.border ?? 'none', 'stroke-width': 0.2 }, g);
-      if (it.arrowRight) node('path', { d: `M${it.x1} ${it.y} l1.6 ${it.h / 2} l-1.6 ${it.h / 2} z`, fill: it.fill, stroke: it.border ?? 'none', 'stroke-width': 0.2 }, g);
+      // Boksen fortsetter utenfor kalenderen: spissen står innenfor kanten, så den ikke går inn i
+      // lane-kolonnen eller ut av arket. Spissen er aldri mer enn en tredjedel av boksen.
+      const tip = Math.min(ARROW_MM, (it.x1 - it.x0) / 3);
+      const xl = it.arrowLeft ? it.x0 + tip : it.x0;
+      const xr = it.arrowRight ? it.x1 - tip : it.x1;
+      if (!it.arrowLeft && !it.arrowRight) {
+        node('rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: it.fill, stroke: it.border ?? 'none', 'stroke-width': it.border ? 0.25 : 0 }, g);
+      } else {
+        const mid = it.y + it.h / 2;
+        const bottom = it.y + it.h;
+        const d = `M${xl} ${it.y} L${xr} ${it.y} ${it.arrowRight ? `L${it.x1} ${mid} ` : ''}L${xr} ${bottom} L${xl} ${bottom} ${it.arrowLeft ? `L${it.x0} ${mid} ` : ''}Z`;
+        node('path', { d, fill: it.fill, stroke: it.border ?? 'none', 'stroke-width': it.border ? 0.25 : 0 }, g);
+      }
       if (it.text) text(it.text, g);
       if (it.callout) {
         // Leder og strek tegnes oppå boksen, slik Excel-callouten gjør

@@ -369,7 +369,6 @@ export function summarize(plan: PlanFile) {
     end: plan.plan.calendar.end,
     lanes: plan.lanes.length,
     boxes: boxes.length,
-    drawable: boxes.filter((b) => b.shown && isDrawable(b.resolved, plan)).length,
     milestones: boxes.filter((b) => b.resolved?.isMilestone).length,
     tasks: plan.tasks.length,
     holidays: plan.holidays.length,
@@ -377,11 +376,9 @@ export function summarize(plan: PlanFile) {
   };
 }
 
-/** Om Excel ville tegnet boksen: innenfor kalenderen, og helt innenfor i ukesvisning. */
-export function isDrawable(r: PlanFile['lanes'][number]['boxes'][number]['resolved'], plan: PlanFile): boolean {
+/** Ligger boksen (helt eller delvis) innenfor kalenderen? Det som går utenfor, tegnes med pil. */
+export function inCalendar(r: PlanFile['lanes'][number]['boxes'][number]['resolved'], plan: PlanFile): boolean {
   if (!r) return false;
-  const { start, end, mode } = plan.plan.calendar;
-  if (r.finish < start || r.start > end) return false;
-  if (mode === 'week' && (r.start < start || r.finish > end)) return false;
-  return true;
+  const { start, end } = plan.plan.calendar;
+  return r.finish >= start && r.start <= end;
 }

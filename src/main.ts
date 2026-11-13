@@ -99,6 +99,10 @@ const editor = createEditor(
       draw();
     },
     getSettings: () => ({ ...opts }),
+    notify: (message) => {
+      saveStatus.textContent = message;
+      saveStatus.className = 'error small';
+    },
     setSettings: (saved) => {
       for (const k of Object.keys(opts)) delete (opts as unknown as Record<string, unknown>)[k];
       Object.assign(opts, saved);
