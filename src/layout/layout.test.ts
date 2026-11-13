@@ -2,7 +2,7 @@ import { testform, testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
 import { buildTimeAxis } from './calendar';
 import { parseIso, isoWeek } from './dates';
-import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, pack, packVariants, planDate, tightestOrder, type Item } from './layout';
+import { applyOrder, arrangeLanes, computeLayout, fitAlternatives, footerLine, pack, packVariants, planDate, tightestOrder, type Item } from './layout';
 import { approxMeasure, LINE_HEIGHT, PT_TO_MM } from './text';
 import { validatePlan } from '../format/validate';
 
@@ -672,6 +672,20 @@ describe('datoen nederst til høyre', () => {
     expect(planDate(p)).toBe('2026-11-12');
     p.plan.layout.editedAt = '10.11.2026';
     expect(validatePlan(p).errors.length).toBeGreaterThan(0);
+  });
+  it('viser revisjonsteksten også når Rev.-nummeret er tomt', () => {
+    const p = testplan();
+    const date = footerLine(p);
+    p.plan.layout.revision = { on: true, number: 'B', text: 'Ny fase' };
+    expect(footerLine(p)).toBe(`Rev. B – Ny fase  ·  ${date}`);
+    p.plan.layout.revision = { on: true, number: ' ', text: 'Utkast til møte' };
+    expect(footerLine(p)).toBe(`Utkast til møte  ·  ${date}`);
+    p.plan.layout.revision = { on: true, number: 'C' };
+    expect(footerLine(p)).toBe(`Rev. C  ·  ${date}`);
+    p.plan.layout.revision = { on: true, number: '', text: '  ' };
+    expect(footerLine(p)).toBe(date);
+    p.plan.layout.revision = { on: false, number: 'B', text: 'Ny fase' };
+    expect(footerLine(p)).toBe(date);
   });
 });
 
