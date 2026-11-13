@@ -50,7 +50,9 @@ function weekLabel(start: number, end: number): string {
 function weekTag(start: number, end: number): string {
   const a = isoWeek(start);
   const b = isoWeek(addDays(end, -1));
-  return a.week === b.week && a.year === b.year ? `u${a.week}` : `u${a.week}-${b.week}`;
+  // To sifre (u03), så knappen ikke endrer bredde når uka går fra ett til to sifre
+  const ww = (w: number) => String(w).padStart(2, '0');
+  return a.week === b.week && a.year === b.year ? `u${ww(a.week)}` : `u${ww(a.week)}-${ww(b.week)}`;
 }
 /** «de første 8 ukene», «den første uken» */
 const firstLast = (which: 'første' | 'siste', n: number) => (n === 1 ? `den ${which} uken` : `de ${which} ${n} ukene`);
