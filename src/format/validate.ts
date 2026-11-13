@@ -102,19 +102,20 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(pa) || !edgeOk(pa.top) || !edgeOk(pa.bottom)) err('plan.layout.planArea', 'må ha top og/eller bottom med 2–40 punkter [x, y] mellom 0 og 1');
       }
       needNum(lay, 'textSize', 'plan.layout');
+      if (typeof lay.textSize === 'number' && lay.textSize <= 0) err('plan.layout.textSize', 'må være større enn 0');
       needNum(lay, 'calloutMaxWidthCm', 'plan.layout');
       needNum(lay, 'excelWidthMultiplier', 'plan.layout');
       if (lay.paper !== undefined) needEnum(lay, 'paper', 'plan.layout', ['A4', 'A3', 'A2', 'A1']);
       if (lay.style !== undefined) needEnum(lay, 'style', 'plan.layout', ['excel', 'ny']);
       if (lay.fitToSheet !== undefined) needBool(lay, 'fitToSheet', 'plan.layout');
-      if (lay.minTextSize !== undefined) needNum(lay, 'minTextSize', 'plan.layout');
+      if (lay.minTextSize !== undefined) optPos(lay, 'minTextSize', 'plan.layout');
       if (lay.titleSize !== undefined) optPos(lay, 'titleSize', 'plan.layout');
       if (lay.legendItems !== undefined) {
         const li = lay.legendItems;
         if (!isObj(li) || !Object.values(li).every((v) => isObj(v) && (v.hidden === undefined || typeof v.hidden === 'boolean') && (v.text === undefined || typeof v.text === 'string')))
           err('plan.layout.legendItems', 'må ha hidden (true/false) og/eller text (tekst) for hver oppføring');
       }
-      if (lay.editedAt !== undefined && (typeof lay.editedAt !== 'string' || !ISO_DATE.test(lay.editedAt))) err('plan.layout.editedAt', 'må være en dato som YYYY-MM-DD');
+      if (lay.editedAt !== undefined && !isIsoDate(lay.editedAt)) err('plan.layout.editedAt', 'må være en dato som YYYY-MM-DD');
       for (const k of ['laneTitleScale', 'headerRightScale', 'legendScale', 'logoScale'] as const)
         if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
@@ -130,7 +131,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       }
       if (lay.changes !== undefined) {
         const ch = lay.changes;
-        const dateOk = (v: unknown) => v === undefined || (typeof v === 'string' && ISO_DATE.test(v));
+        const dateOk = (v: unknown) => v === undefined || isIsoDate(v);
         if (!isObj(ch) || !Object.values(ch).every((v) => isObj(v) && (v.kind === 'new' || v.kind === 'moved') && dateOk(v.start) && dateOk(v.finish)))
           err('plan.layout.changes', 'må ha kind (new/moved) og eventuelt start og finish (YYYY-MM-DD) for hver boks');
       }
@@ -155,7 +156,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
             fin(i.x) && fin(i.y) && fin(i.w) && (i.w as number) > 0 && fin(i.h) && (i.h as number) > 0 && fin(i.rotation) &&
             (i.crop === undefined || (Array.isArray(i.crop) && i.crop.length === 4 && i.crop.every(uv))) &&
             (i.points === undefined || (Array.isArray(i.points) && i.points.length >= 3 && i.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(uv)))) &&
-            (i.date === undefined || (isObj(i.date) && typeof (i.date as Obj).day === 'string' && ISO_DATE.test((i.date as Obj).day as string) && fin((i.date as Obj).dx))) &&
+            (i.date === undefined || (isObj(i.date) && isIsoDate((i.date as Obj).day) && fin((i.date as Obj).dx))) &&
             (i.milestone === undefined || (isObj(i.milestone) && typeof (i.milestone as Obj).id === 'string' && fin((i.milestone as Obj).dx) && fin((i.milestone as Obj).dy))) &&
             (i.note === undefined || (isObj(i.note) && typeof (i.note as Obj).text === 'string' && fin((i.note as Obj).sizePt) && ((i.note as Obj).sizePt as number) > 0))
           );
@@ -214,6 +215,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (!isObj(h)) return err(p, 'må være et objekt');
       needDate(h, 'start', p);
       needDate(h, 'end', p);
+      if (isIsoDate(h.start) && isIsoDate(h.end) && h.start > h.end) err(p, 'start er etter slutt');
     });
 
   // ---- aktiviteter ----
@@ -246,7 +248,6 @@ export function validatePlan(input: string | unknown): ValidationResult {
   const boxIds = new Set<string>();
   const calStart = isObj(plan) && isObj(plan.calendar) ? plan.calendar.start : undefined;
   const calEnd = isObj(plan) && isObj(plan.calendar) ? plan.calendar.end : undefined;
-  const weekMode = isObj(plan) && isObj(plan.calendar) && plan.calendar.mode === 'week';
 
   if (!Array.isArray(data.lanes)) err('lanes', 'må være en liste');
   else
@@ -288,7 +289,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
         if (b.follows !== undefined) {
           const f = b.follows;
-          if (!isObj(f) || typeof f.box !== 'string' || (f.edge !== 'start' && f.edge !== 'finish') || typeof f.at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(f.at))
+          if (!isObj(f) || typeof f.box !== 'string' || (f.edge !== 'start' && f.edge !== 'finish') || !isIsoDate(f.at))
             err(`${bp}.follows`, 'må ha boks-id, start eller finish og en dato');
         }
         if (b.trade !== undefined && !(typeof b.trade === 'string' && b.trade.trim())) err(`${bp}.trade`, 'må være et fagnavn');
@@ -335,6 +336,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         } else {
           needDate(r, 'start', `${bp}.resolved`);
           needDate(r, 'finish', `${bp}.resolved`);
+          if (isIsoDate(r.start) && isIsoDate(r.finish) && r.start > r.finish) err(`${bp}.resolved`, 'start er etter slutt');
           needBool(r, 'isMilestone', `${bp}.resolved`);
           needStr(r, 'trade', `${bp}.resolved`);
           if (typeof r.trade === 'string' && tradeNames.size > 0 && !tradeNames.has(r.trade)) {
@@ -343,9 +345,6 @@ export function validatePlan(input: string | unknown): ValidationResult {
           if (isIsoDate(r.start) && isIsoDate(r.finish) && isIsoDate(calStart) && isIsoDate(calEnd)) {
             if (r.finish < calStart || r.start > calEnd) {
               warnings.push(`${label} ligger helt utenfor kalenderen (${r.start} til ${r.finish}).`);
-            } else if (weekMode && (r.start < calStart || r.finish > calEnd)) {
-              // Excel hopper over slike bokser i ukesvisning uten å si fra
-              warnings.push(`${label} går utenfor kalenderen i ukesvisning (${r.start} til ${r.finish}). Excel tegner den ikke.`);
             }
           }
         }
