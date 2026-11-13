@@ -121,6 +121,11 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showChanges !== undefined) needBool(lay, 'showChanges', 'plan.layout');
       if (lay.todayLine !== undefined) needBool(lay, 'todayLine', 'plan.layout');
+      if (lay.revision !== undefined) {
+        const rv = lay.revision;
+        if (!isObj(rv) || typeof rv.on !== 'boolean' || typeof rv.number !== 'string' || (rv.text !== undefined && typeof rv.text !== 'string'))
+          err('plan.layout.revision', 'må ha on (true/false), number (tekst) og eventuelt text (tekst)');
+      }
       if (lay.changes !== undefined) {
         const ch = lay.changes;
         const dateOk = (v: unknown) => v === undefined || (typeof v === 'string' && ISO_DATE.test(v));
