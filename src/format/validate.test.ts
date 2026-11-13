@@ -2,6 +2,7 @@ import { testplan } from '../test/testplaner';
 import { describe, expect, it } from 'vitest';
 import { summarize, validatePlan } from './validate';
 import { parseBoxText } from './text';
+import type { PlanFile } from './types';
 
 const example = JSON.stringify(testplan());
 const clone = () => JSON.parse(example);
@@ -27,12 +28,31 @@ describe('validatePlan', () => {
     expect(r.warnings.some((w) => w.includes('helt utenfor kalenderen'))).toBe(true);
   });
 
-  it('varsler om boks som Excel hopper over i ukesvisning', () => {
+  it('varsler ikke om boks som går delvis utenfor kalenderen i ukesvisning (den tegnes med pil)', () => {
     const p = clone();
     p.plan.calendar.mode = 'week';
     p.plan.calendar.start = '2026-03-02';
     const r = validatePlan(p);
-    expect(r.warnings.some((w) => w.includes('Excel tegner den ikke'))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('ukesvisning'))).toBe(false);
+  });
+
+  it('avviser umulige datoer og start etter slutt', () => {
+    const box = () => {
+      const p = clone();
+      return { p, b: (p as PlanFile).lanes.flatMap((l) => l.boxes).find((x) => x.resolved)! };
+    };
+    let t = box();
+    t.b.resolved!.start = '2030-01-01';
+    expect(validatePlan(t.p).errors.some((e) => e.includes('start er etter slutt'))).toBe(true);
+    t = box();
+    t.b.follows = { box: 'x', edge: 'finish', at: '2026-13-45' };
+    expect(validatePlan(t.p).plan).toBeNull();
+    const h = clone();
+    h.holidays = [{ start: '2026-08-01', end: '2026-07-01' }];
+    expect(validatePlan(h).plan).toBeNull();
+    const z = clone();
+    z.plan.layout.textSize = 0;
+    expect(validatePlan(z).plan).toBeNull();
   });
 
   it('avviser feil filtype og ugyldig JSON', () => {

@@ -12,6 +12,7 @@ import { renderPlan } from './render/svg';
 import { canvasMeasure } from './render/measure';
 import { createViewer } from './viewer';
 import { createSearch } from './search';
+import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
@@ -567,16 +568,26 @@ window.addEventListener('drop', (e) => {
 
 // Oppdater fra Project: en ny plan fra Project er åpen, og redigeringene hentes fra
 // arbeidsfilen (.pdf) brukeren velger. Redigeringene i arbeidsfilen beholdes.
-async function updateFrom(file: File): Promise<boolean> {
-  if (!plan) return false;
+/** 'ok' når planen er oppdatert, 'avbrutt' når brukeren angret seg, 'feil' når filen ikke er en arbeidsfil. */
+async function updateFrom(file: File): Promise<'ok' | 'avbrutt' | 'feil'> {
+  if (!plan) return 'feil';
   const current = plan;
   const bytes = new Uint8Array(await file.arrayBuffer());
   // Som ved vanlig åpning tåles noen byte foran PDF-hodet
-  if (!String.fromCharCode(...bytes.subarray(0, 1024)).includes('%PDF')) return false;
+  if (!String.fromCharCode(...bytes.subarray(0, 1024)).includes('%PDF')) return 'feil';
   const r = await readPlan(bytes, file.name);
-  if (!r) return false;
+  if (!r) return 'feil';
   const { mergePlans, summarizeMerge } = await import('./merge');
   const { plan: merged, report } = mergePlans(r.plan, current);
+  // Annet prosjektnavn, eller ingen bokser kjent igjen: trolig arbeidsfilen til en annen plan
+  const otherTitle = r.plan.plan.title.trim() !== current.plan.title.trim();
+  const noneKept = report.kept === 0 && report.goneBoxes.length > 0;
+  if (otherTitle || noneKept) {
+    const why = otherTitle
+      ? `${file.name} er laget fra «${plainText(r.plan.plan.title)}», men planen fra Project heter «${plainText(current.plan.title)}».`
+      : `Ingen av boksene i ${file.name} finnes i planen fra Project, så ${report.goneBoxes.length} bokser ville blitt borte.`;
+    if (!confirm(`${why} Er dette arbeidsfilen til en annen plan?\n\nVil du oppdatere likevel?`)) return 'avbrutt';
+  }
   editor.replacePlan(merged);
   const note = details(summarizeMerge(report), [
     ['Nye bokser:', report.newBoxes],
@@ -593,7 +604,7 @@ async function updateFrom(file: File): Promise<boolean> {
   ]);
   note.classList.add('small');
   showPlan(merged, file.name, r.warnings, note);
-  return true;
+  return 'ok';
 }
 
 // Åpnet med «Oppdater i Web»: be om arbeidsfilen med en gang.
@@ -610,11 +621,12 @@ $<HTMLInputElement>('#update-pick').addEventListener('change', async (e) => {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
-  if (await updateFrom(file)) {
+  const result = await updateFrom(file);
+  if (result === 'ok') {
     updateDialog.close();
     return;
   }
-  updateError.textContent = `${file.name} er ikke en arbeidsfil fra appen. Velg PDF-en du lagret med «Lagre arbeidsfil».`;
+  updateError.textContent = result === 'avbrutt' ? 'Planen er ikke oppdatert. Velg arbeidsfilen som hører til denne planen.' : `${file.name} er ikke en arbeidsfil fra appen. Velg PDF-en du lagret med «Lagre arbeidsfil».`;
   updateError.hidden = false;
 });
 
