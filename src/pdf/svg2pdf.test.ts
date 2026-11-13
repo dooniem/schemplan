@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePath } from './svg2pdf';
+import { parsePath, safeText } from './svg2pdf';
 
 describe('parsePath', () => {
   it('gjør relative linjer om til absolutte (pil på avkuttet boks)', () => {
@@ -28,5 +28,14 @@ describe('parsePath', () => {
       ['L', 3, 1],
       ['L', 3, 3],
     ]);
+  });
+});
+
+describe('tegn skriften ikke har', () => {
+  it('blir «?», legges i listen, og usynlige styretegn droppes', () => {
+    const has = (cp: number) => cp < 0x2000;
+    const missing = new Set<string>();
+    expect(safeText('Ferdig ✅ uke 3️', has, missing)).toBe('Ferdig ? uke 3');
+    expect([...missing]).toEqual(['✅']);
   });
 });

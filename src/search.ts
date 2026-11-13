@@ -47,7 +47,17 @@ export interface Search {
 export function createSearch(input: HTMLInputElement, count: HTMLElement, getPlan: () => PlanFile | null): Search {
   let svg: SVGSVGElement | null = null;
   let hits: string[] = [];
+  /** Treff som ikke er tegnet (utenfor utkikken eller et skjult fag), og som Enter derfor hopper over. */
+  let outside = 0;
   let current = -1;
+
+  /** Bare treff som står i tegningen, kan vises og hoppes til. */
+  const find = () => {
+    const plan = getPlan();
+    const all = plan ? findMatches(plan, input.value) : [];
+    hits = svg ? all.filter((id) => svg!.querySelector(`g.items > g[data-id="${CSS.escape(id)}"]`)) : all;
+    outside = all.length - hits.length;
+  };
 
   const paint = () => {
     svg?.querySelector('g.search-hits')?.remove();
@@ -55,8 +65,10 @@ export function createSearch(input: HTMLInputElement, count: HTMLElement, getPla
     const lanes = !hits.length && plan ? matchingLanes(plan, input.value) : [];
     count.textContent = input.value.trim()
       ? hits.length
-        ? `${current + 1 > 0 ? `${current + 1} av ` : ''}${hits.length} treff`
-        : lanes.length
+        ? `${current + 1 > 0 ? `${current + 1} av ` : ''}${hits.length} treff${outside ? `, ${outside} til utenfor det som vises` : ''}`
+        : outside
+          ? `Ingen treff i det som vises, ${outside} utenfor`
+          : lanes.length
           ? `Ingen bokser. Passer lanen ${lanes[0]}${lanes.length > 1 ? ` og ${lanes.length - 1} til` : ''}`
           : 'Ingen treff'
       : '';
@@ -79,8 +91,7 @@ export function createSearch(input: HTMLInputElement, count: HTMLElement, getPla
   };
 
   const run = () => {
-    const plan = getPlan();
-    hits = plan ? findMatches(plan, input.value) : [];
+    find();
     current = -1;
     paint();
   };
@@ -118,14 +129,14 @@ export function createSearch(input: HTMLInputElement, count: HTMLElement, getPla
       svg = next;
       // Treffene regnes ut på nytt, for teksten kan ha blitt endret
       const keep = current >= 0 ? hits[current] : null;
-      const plan = getPlan();
-      hits = plan ? findMatches(plan, input.value) : [];
+      find();
       current = keep ? hits.indexOf(keep) : -1;
       paint();
     },
     reset() {
       input.value = '';
       hits = [];
+      outside = 0;
       current = -1;
       paint();
     },

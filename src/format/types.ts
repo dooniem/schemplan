@@ -107,7 +107,8 @@ export interface PlanSettings {
     legend: boolean;
     flag20Only: boolean;
     filterOutput: boolean;
-    colorBy: 'trade' | 'lane';
+    /** Fra eldre eksport, brukes ikke. */
+    colorBy?: 'trade' | 'lane';
   };
 }
 

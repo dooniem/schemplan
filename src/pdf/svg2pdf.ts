@@ -51,6 +51,23 @@ interface Ctx {
   fonts: Fonts;
   fontNames: Map<PDFFont, PDFName>;
   alpha: Map<number, PDFName>;
+  /** Tegn skriften ikke har, så brukeren kan få beskjed om dem. */
+  missing: Set<string>;
+}
+
+/** Usynlige tegn som styrer emoji og sammensatte tegn. De droppes i stedet for å bli «?». */
+const INVISIBLE = /[\u200B-\u200D\u2060\uFE00-\uFE0F]/u;
+
+/** Teksten med tegnene skriften har. Andre tegn blir «?» og legges i missing. */
+export function safeText(txt: string, has: (cp: number) => boolean, missing?: Set<string>): string {
+  return Array.from(txt)
+    .filter((ch) => !INVISIBLE.test(ch))
+    .map((ch) => {
+      if (has(ch.codePointAt(0)!)) return ch;
+      missing?.add(ch);
+      return '?';
+    })
+    .join('');
 }
 
 const num = (el: Element, a: string, d = 0) => {
@@ -236,7 +253,8 @@ function drawText(c: Ctx, el: SVGTextElement) {
     if (!txt) return;
     const bold = (attr(s, 'font-weight') ?? 'normal') === 'bold';
     const f = bold ? c.fonts.bold : c.fonts.regular;
-    const safe = Array.from(txt).map((ch) => (f.getCharacterSet().includes(ch.codePointAt(0)!) ? ch : '?')).join('');
+    const set = f.getCharacterSet();
+    const safe = safeText(txt, (cp) => set.includes(cp), c.missing);
     const w = f.widthOfTextAtSize(safe, size);
     let x = num(s, 'x', num(el, 'x'));
     if (anchor === 'middle') x -= w / 2;
@@ -318,11 +336,13 @@ function walk(c: Ctx, el: Element) {
 }
 
 /** Tegner hele SVG-en på siden. Siden må ha samme mål som SVG-ens viewBox (i mm). */
-export function drawSvg(doc: PDFDocument, page: PDFPage, svg: SVGSVGElement, fonts: Fonts, heightMm: number) {
-  const c: Ctx = { doc, page, ops: [], fonts, fontNames: new Map(), alpha: new Map() };
+/** Tegner SVG-en på siden. Svarer med tegnene skriften ikke har (de står som «?» i PDF-en). */
+export function drawSvg(doc: PDFDocument, page: PDFPage, svg: SVGSVGElement, fonts: Fonts, heightMm: number): Set<string> {
+  const c: Ctx = { doc, page, ops: [], fonts, fontNames: new Map(), alpha: new Map(), missing: new Set() };
   // Fra mm med y nedover (SVG) til punkter med y oppover (PDF)
   c.ops.push(pushGraphicsState(), concatTransformationMatrix(MM_TO_PT, 0, 0, -MM_TO_PT, 0, heightMm * MM_TO_PT));
   walk(c, svg);
   c.ops.push(popGraphicsState());
   page.pushOperators(...c.ops);
+  return c.missing;
 }

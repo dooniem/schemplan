@@ -960,7 +960,7 @@ type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
 // Samme nedtoning som på skjermen
 const DIM_OPACITY = 0.15;
 /** Lager PDF-en (hele planen, eller bare valgte fag) og filnavnet den foreslås lagret som. */
-async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Uint8Array; name: string }> {
+async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Uint8Array; name: string; missing: Set<string> }> {
   if (!plan || !shown) throw new Error('Ingen plan er åpen');
   const sh = shown;
   const onlyTrades = pick?.trades ?? [];
@@ -1008,8 +1008,9 @@ async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Ui
     }
     target = { layout, svg };
   }
-  const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__);
-  return { pdf, name };
+  const missing = new Set<string>();
+  const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__, missing);
+  return { pdf, name, missing };
 }
 
 async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false) {
@@ -1021,7 +1022,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     // PDF-en lages før Lagre som-dialogen. Dialogen tømmer filen du velger med en gang, så feiler
     // noe etterpå, står du igjen med en tom arbeidsfil. Nå er PDF-en ferdig før filen røres.
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
-    const { pdf, name } = await makePdf(variant, pick);
+    const { pdf, name, missing } = await makePdf(variant, pick);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
     const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
     let handle: FileSystemFileHandle | null = again && variant === 'arbeidsfil' ? workHandle : null;
@@ -1054,6 +1055,11 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     const kb = Math.max(1, Math.round(pdf.length / 1024));
     saveStatus.textContent = `Lagret ${handle?.name ?? name} (${kb} kB).${variant === 'arbeidsfil' ? ' Åpne den her igjen for å redigere eller oppdatere planen.' : ' Klar til deling.'}`;
     saveStatus.className = 'ok small';
+    // Tegn som vises på skjermen, men ikke finnes i skriften i PDF-en
+    if (missing.size) {
+      saveStatus.textContent += ` Disse tegnene finnes ikke i skriften og står som «?» i PDF-en: ${[...missing].slice(0, 12).join(' ')}.`;
+      saveStatus.className = 'error small';
+    }
     if (variant === 'arbeidsfil') {
       editor.markSaved();
       savedSettings = settingsNow();
