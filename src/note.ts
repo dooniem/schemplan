@@ -40,3 +40,19 @@ export function renderNote(note: PlanNote): { data: string; px: [number, number]
   lines.forEach((l, i) => g.fillText(l, pad, pad + size * (i * LINE + 0.95)));
   return { data: c.toDataURL('image/png'), px: [c.width, c.height], mm: [wMm, hMm] };
 }
+
+/** Minste og største skriftstørrelse en fritekst kan ha. */
+export const NOTE_MIN_PT = 4;
+export const NOTE_MAX_PT = 200;
+
+/** Halve pt, innenfor grensene. */
+export const roundNotePt = (pt: number) => Math.min(NOTE_MAX_PT, Math.max(NOTE_MIN_PT, Math.round(pt * 2) / 2));
+
+/**
+ * Skriftstørrelsen teksten faktisk har på arket. Tegningen er laget for `sizePt`; er den dratt
+ * større eller mindre, er teksten det også. W er arkets bredde i mm.
+ */
+export function shownPt(note: PlanNote, px: [number, number], w: number, W: number): number {
+  const k = (w * W) / (px[0] / PX_PER_MM);
+  return roundNotePt(note.sizePt * k);
+}
