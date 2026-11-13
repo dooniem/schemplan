@@ -1,6 +1,7 @@
 // «Størst mulig tekst»: gir hver boks den største teksten som får plass i boksen slik den er nå,
 // og lane-titlene én felles størrelse. Planen skal se lik ut ellers: ingen boks eller lane blir
 // høyere, og teksten i resten av planen krymper ikke.
+import { snapshotOf } from '../editmodel';
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
 import { computeLayout, defaultLaneTitleScale, laneTitleScaleOf, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
@@ -68,7 +69,7 @@ export function textHeightInBox(box: Pick<Box, 'text' | 'rotation' | 'callout'>,
 export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Measure, scope: FitTextScope): FitTextResult {
   const before = computeLayout(file, opts, measure);
   const planPt = before.textSizePt;
-  const next: PlanFile = structuredClone(file);
+  const next: PlanFile = snapshotOf(file);
   const laneIds = new Set(scope.laneIds ?? next.lanes.map((l) => l.id));
   let laneTitlePt: number | null = null;
 
@@ -132,14 +133,14 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
   if (!sameFit(before, after)) {
     if (scope.laneTitles && next.plan.layout.laneTitleScale !== file.plan.layout.laneTitleScale)
       return fitTextToBoxes(file, opts, measure, { ...scope, laneTitles: false });
-    return { plan: structuredClone(file), grown: 0, maxPt: planPt, laneTitlePt: null, planPt };
+    return { plan: snapshotOf(file), grown: 0, maxPt: planPt, laneTitlePt: null, planPt };
   }
   return { plan: next, grown, maxPt, laneTitlePt, planPt };
 }
 
 /** Standard tekststørrelse: planens tekst i boksene, og standardstørrelsen på lane-titlene. Faste høyder som ble satt for å holde på plassen, blir stående. */
 export function resetTextSizes(file: PlanFile, scope: FitTextScope): PlanFile {
-  const next: PlanFile = structuredClone(file);
+  const next: PlanFile = snapshotOf(file);
   const laneIds = new Set(scope.laneIds ?? next.lanes.map((l) => l.id));
   for (const lane of next.lanes) {
     if (!laneIds.has(lane.id)) continue;

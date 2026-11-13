@@ -14,7 +14,8 @@ export type PdfVariant = 'arbeidsfil' | 'deling';
 
 const bytesOf = (dataUrl: string) => Uint8Array.from(atob(dataUrl.slice(dataUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0));
 
-export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, variant: PdfVariant, appVersion: string): Promise<Uint8Array> {
+/** missing fylles med tegn skriften ikke har, som står som «?» i PDF-en. */
+export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, variant: PdfVariant, appVersion: string, missing?: Set<string>): Promise<Uint8Array> {
   // Uten updateMetadata skriver pdf-lib ikke inn programnavn og tidspunkt av seg selv
   const doc = await PDFDocument.create({ updateMetadata: false });
   doc.registerFontkit(fontkit);
@@ -27,7 +28,7 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
     bold: await doc.embedFont(bytesOf(boldUrl), { subset, features }),
   };
   const page = doc.addPage([L.width * MM_TO_PT, L.height * MM_TO_PT]);
-  drawSvg(doc, page, svg, fonts, L.height);
+  for (const ch of drawSvg(doc, page, svg, fonts, L.height)) missing?.add(ch);
   if (L.logo) {
     const bytes = Uint8Array.from(atob(L.logo.href.split(',')[1]), (ch) => ch.charCodeAt(0));
     const img = L.logo.href.startsWith('data:image/png') ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);

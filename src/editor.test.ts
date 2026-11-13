@@ -168,6 +168,16 @@ describe('kopier og lim inn', () => {
     expect(laneOf(p, back[0].id)!.id).toBe('1');
     expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
   });
+
+  it('beholder «følger» bare når boksen den fulgte finnes med samme tekst', () => {
+    const p = testplan();
+    const src = { ...structuredClone(p.lanes[0].boxes[0]), follows: { box: '1_2', edge: 'finish' as const, at: '2026-06-12' } };
+    const text = p.lanes[0].boxes[1].text;
+    expect(pasteBoxes(p, [{ box: structuredClone(src), lane: '1', followText: text }], null)[0].follows?.box).toBe('1_2');
+    // Samme id, annen tekst: kopiert fra en annen plan
+    expect(pasteBoxes(p, [{ box: structuredClone(src), lane: '1', followText: 'noe annet' }], null)[0].follows).toBeUndefined();
+    expect(pasteBoxes(p, [{ box: { ...structuredClone(src), follows: { box: 'finnes-ikke', edge: 'start', at: '2026-01-01' } }, lane: '1' }], null)[0].follows).toBeUndefined();
+  });
 });
 
 describe('bokser i en overskriftsboks', () => {

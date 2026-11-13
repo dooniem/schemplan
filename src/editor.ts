@@ -16,7 +16,7 @@ import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
-import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, snapshotOf, type Swatch, unpinBox } from './editmodel';
+import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, samePlanApartFromImages, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
@@ -285,7 +285,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     });
 
   /** Bokser kopiert med Ctrl+C. Ligger bare i minnet så lenge siden er åpen. */
-  let clipboard: { box: Box; lane: string; symbol?: PlanImage }[] = [];
+  let clipboard: { box: Box; lane: string; symbol?: PlanImage; followText?: string }[] = [];
   /** Bildet som er symbol for milepælen, så kopien får det samme. */
   const symbolOf = (plan: PlanFile, id: string) => {
     const im = (plan.plan.layout.images ?? []).find((x) => x.milestone?.id === id);
@@ -305,7 +305,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     clipboard = ids.flatMap((id) => {
       const b = findBox(plan, id);
       const l = laneOf(plan, id);
-      return b && l ? [{ box: structuredClone(b), lane: l.id, symbol: symbolOf(plan, id) }] : [];
+      // Teksten til boksen den følger, så koblingen ikke treffer en annen boks med samme id i en annen plan
+      const followText = b?.follows ? findBox(plan, b.follows.box)?.text : undefined;
+      return b && l ? [{ box: structuredClone(b), lane: l.id, symbol: symbolOf(plan, id), followText }] : [];
     });
     return clipboard.length > 0;
   };
@@ -3451,7 +3453,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || !before) return;
     endArrange();
     const { laneIds, boxIds } = arrangeScope(plan);
-    const next = structuredClone(plan);
+    const next = snapshotOf(plan);
     const unpin = !!arrangeUnpin?.checked;
     // Overskriftsbokser flyttes med boksene som ligger inni dem
     const groups = new Map<string, { id: string; dy: number }[]>();
@@ -3492,7 +3494,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         if (b) b.top = top;
       }
     }
-    if (JSON.stringify(next) === JSON.stringify(plan)) {
+    if (samePlanApartFromImages(next, plan)) {
       showArrangeBar(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede tidligst først.', false);
       return;
     }
@@ -3527,7 +3529,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.titles };
     const res = reset ? null : host.fitText(plan, scope);
     const next = res ? res.plan : resetTextSizes(plan, scope);
-    if (JSON.stringify(next) === JSON.stringify(plan)) {
+    if (samePlanApartFromImages(next, plan)) {
       showArrangeBar(reset ? 'Teksten har allerede standard størrelse.' : 'Fant ikke plass til større tekst. Gjør boksene høyere eller bredere først.', false);
       return;
     }

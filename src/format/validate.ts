@@ -1,4 +1,5 @@
 import { FORMAT_NAME, FORMAT_VERSION, type PlanFile } from './types';
+import { migrate } from './migrate';
 import { readLookahead } from '../layout/lookahead';
 import { readStatusLine } from '../layout/status';
 
@@ -37,11 +38,14 @@ export function validatePlan(input: string | unknown): ValidationResult {
     }
   }
 
+  // Eldre formatversjoner løftes til gjeldende før sjekken
+  if (isObj(data) && data.format === FORMAT_NAME) data = migrate(data);
   if (!isObj(data)) return { plan: null, errors: ['Filen inneholder ikke et planobjekt.'], warnings };
   if (data.format !== FORMAT_NAME) {
     return { plan: null, errors: ['Filen er ikke en skjematisk plan (feltet "format" mangler eller er feil).'], warnings };
   }
   if (typeof data.version !== 'number') errors.push('Feltet "version" mangler.');
+  else if (data.version < FORMAT_VERSION) errors.push(`Filen har planformat v${data.version}, som appen ikke kan lese lenger.`);
   else if (data.version > FORMAT_VERSION) {
     errors.push(`Filen er laget med planformat v${data.version}, men appen kjenner bare til v${FORMAT_VERSION}. Last siden på nytt.`);
   }
@@ -189,7 +193,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needBool(opt, 'legend', 'plan.options');
       needBool(opt, 'flag20Only', 'plan.options');
       needBool(opt, 'filterOutput', 'plan.options');
-      needEnum(opt, 'colorBy', 'plan.options', ['trade', 'lane']);
+      if (opt.colorBy !== undefined) needEnum(opt, 'colorBy', 'plan.options', ['trade', 'lane']);
     }
   }
 

@@ -16,6 +16,15 @@ export function snapshotOf<T>(v: T): T {
 import type { Box, Lane, PlanFile } from './format/types';
 import type { Item } from './layout/layout';
 
+/**
+ * Er planene like, sett bort fra bilder og logo? Omplasser og tekststørrelse endrer aldri bildene,
+ * så de sammenlignes ikke. Ellers ville store bilder blitt gjort om til tekst to ganger per klikk.
+ */
+export function samePlanApartFromImages(a: PlanFile, b: PlanFile): boolean {
+  const key = (p: PlanFile) => JSON.stringify([p.lanes, { ...p.plan.layout, images: undefined, logo: undefined }]);
+  return key(a) === key(b);
+}
+
 export function findLane(plan: PlanFile, id: string): Lane | null {
   return plan.lanes.find((l) => l.id === id) ?? null;
 }
@@ -123,7 +132,9 @@ export function copyBox(plan: PlanFile, id: string): Box | null {
  * boks i lanen den ble kopiert fra, ellers i første viste lane. Kopiene er laget i appen og følger
  * ikke Project, som med Ctrl+D. Gir de nye boksene.
  */
-export function pasteBoxes(plan: PlanFile, items: { box: Box; lane: string }[], laneId: string | null): Box[] {
+/** followText: teksten til boksen den kopierte boksen fulgte. Finnes ikke en boks med samme id og tekst
+    i planen det limes inn i, er det en annen plan, og koblingen fjernes. */
+export function pasteBoxes(plan: PlanFile, items: { box: Box; lane: string; followText?: string }[], laneId: string | null): Box[] {
   const fallback = plan.lanes.find((l) => l.shown && !l.hidden) ?? plan.lanes[0];
   const out: Box[] = [];
   for (const it of items) {
@@ -139,6 +150,10 @@ export function pasteBoxes(plan: PlanFile, items: { box: Box; lane: string }[], 
     delete b.fromLane;
     delete b.hidden;
     delete b.critical;
+    if (b.follows) {
+      const target = findBox(plan, b.follows.box);
+      if (!target || (it.followText !== undefined && target.text !== it.followText)) delete b.follows;
+    }
     b.shown = true;
     lane.boxes.push(b);
     out.push(b);
