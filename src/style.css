@@ -411,6 +411,9 @@ details summary { cursor: pointer; font-size: 13px; }
 .pswitch input:checked::after { transform: translateX(12px); }
 .pswitch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .locked-row { justify-content: space-between; padding: 6px 8px; border-radius: 6px; background: var(--bg); }
+.color-trial { gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg); }
+.color-trial .trial-text { margin-right: auto; color: var(--muted); }
+.trial-chip { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1px solid var(--border); border-radius: 3px; vertical-align: -2px; }
 .range-value { min-width: 48px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .prop-inline .row input[type='range'] { flex: 1; min-width: 0; accent-color: var(--accent); }
 .panel-foot { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface); }
