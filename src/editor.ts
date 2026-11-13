@@ -9,8 +9,8 @@ import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
-import type { PlanImage, PlanNote } from './format/types';
-import { NOTE_DEFAULT, NOTE_MAX_PT, NOTE_MIN_PT, PX_PER_MM, renderNote, shownPt } from './note';
+import type { NoteFont, PlanImage, PlanNote } from './format/types';
+import { loadNoteFont, NOTE_COLORS, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
@@ -2685,12 +2685,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const r = renderNote(note);
     Object.assign(im, { note, data: r.data, px: r.px, w: r.px[0] / PX_PER_MM / W, h: r.px[1] / PX_PER_MM / W });
   };
-  /** Endrer friteksten og tegner bildet på nytt. */
-  const setNote = (id: string, change: Partial<PlanNote>, typing = false) => {
+  /** Endrer friteksten og tegner bildet på nytt. En ny skrift lastes først, så den ikke tegnes med en annen. */
+  const setNote = (id: string, change: Partial<PlanNote>, typing = false, waited = false) => {
     const plan = host.getPlan();
     const L = layoutNow;
     const im = plan ? findImage(plan, id) : null;
     if (!plan || !L || !im?.note) return;
+    const next = { ...im.note, ...change };
+    if (!waited && !noteFontReady(next)) {
+      void loadNoteFont(next).then(() => setNote(id, change, typing, true));
+      return;
+    }
     if (!typing || !typingSession) snapshot();
     if (typing) typingSession = true;
     fitNote(im, L.width, change);
@@ -3170,9 +3175,43 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const pt = layoutNow ? shownPt(n, im.px, im.w, layoutNow.width) : n.sizePt;
       row.append(numField('Størrelse, pt', pt, 1, (v) => v >= NOTE_MIN_PT && v <= NOTE_MAX_PT && setNote(im.id, { sizePt: v }), 'note-size'));
       sn.append(row);
-      sn.append(switchRow('Fet', !!n.bold, (v) => setNote(im.id, { bold: v })));
+      // Skriften lastes nå, så den er klar hvis teksten dras større eller mindre
+      if (!noteFontReady(n)) void loadNoteFont(n);
+      const fontWrap = el('label', { class: 'prop prop-inline' });
+      fontWrap.append(el('span', { class: 'prop-label' }, 'Skrift'));
+      const fontSel = el('select', { id: 'note-font' }) as HTMLSelectElement;
+      for (const [key, name, css] of NOTE_FONTS) {
+        const o = el('option', { value: key }, name) as HTMLOptionElement;
+        o.style.fontFamily = css;
+        o.selected = key === (n.font ?? '');
+        fontSel.append(o);
+      }
+      fontSel.addEventListener('change', () => setNote(im.id, { font: (fontSel.value || undefined) as NoteFont | undefined }));
+      fontWrap.append(fontSel);
+      sn.append(fontWrap);
+      // Fet, kursiv og understreket kan kombineres, så de er av/på-knapper hver for seg
+      const styleWrap = el('div', { class: 'prop prop-inline' });
+      styleWrap.append(el('span', { class: 'prop-label' }, 'Stil'));
+      const styles = el('div', { class: 'group note-style', role: 'group', 'aria-label': 'Stil' });
+      for (const [key, label, title] of [['bold', 'F', 'Fet'], ['italic', 'K', 'Kursiv'], ['underline', 'U', 'Understreket']] as const) {
+        const b = el('button', { type: 'button', title, 'aria-label': title, 'aria-pressed': String(!!n[key]), class: `ns-${key}` }, label);
+        b.addEventListener('click', () => setNote(im.id, { [key]: !n[key] }));
+        styles.append(b);
+      }
+      styleWrap.append(styles);
+      sn.append(styleWrap);
+      sn.append(
+        segmented<'left' | 'center' | 'right'>('Justering', n.align ?? 'left', [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
+          setNote(im.id, { align: v === 'left' ? undefined : v }),
+        ),
+      );
+      const color = (n.color ?? '#000000').toUpperCase();
+      const tc = trial(`note:${im.id}`, color, (fill) => setNote(im.id, { color: fill === '#000000' ? undefined : fill }));
+      const colorWrap = el('div', { class: 'prop' });
+      colorWrap.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(color, NOTE_COLORS, tc), colorRow(color, tc));
+      sn.append(colorWrap);
       sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
-      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
+      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Justeringen gjelder når teksten har flere linjer. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
     }
     const ss = section('Størrelse og rotasjon');
     if (p) {

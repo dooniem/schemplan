@@ -154,7 +154,15 @@ export interface PlanNote {
   /** Hvit bakgrunn med tynn ramme. */
   frame?: boolean;
   color?: string;
+  /** Skrift; uten den brukes planens skrift. */
+  font?: NoteFont;
+  italic?: boolean;
+  underline?: boolean;
+  /** Justering av linjene; uten den venstrejustert. */
+  align?: 'center' | 'right';
 }
+
+export type NoteFont = 'arimo' | 'tinos' | 'cousine';
 
 export interface IsoWeek {
   year: number;

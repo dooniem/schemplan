@@ -2,6 +2,21 @@
    på alle maskiner, og likt i PDF-en (samme skrift bygges inn der). Lisens: assets/fonts/OFL.txt */
 @font-face { font-family: 'Carlito'; font-weight: 400; font-style: normal; src: url('./assets/fonts/carlito-regular.woff2') format('woff2'); }
 @font-face { font-family: 'Carlito'; font-weight: 700; font-style: normal; src: url('./assets/fonts/carlito-bold.woff2') format('woff2'); }
+@font-face { font-family: 'Carlito'; font-weight: 400; font-style: italic; src: url('./assets/fonts/carlito-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Carlito'; font-weight: 700; font-style: italic; src: url('./assets/fonts/carlito-700-italic.woff2') format('woff2'); }
+/* Flere skrifter for fritekst på arket. Lastes først når de brukes. Lisenser: assets/fonts/LICENSE-*.txt */
+@font-face { font-family: 'Arimo'; font-weight: 400; font-style: normal; src: url('./assets/fonts/arimo-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Arimo'; font-weight: 400; font-style: italic; src: url('./assets/fonts/arimo-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Arimo'; font-weight: 700; font-style: normal; src: url('./assets/fonts/arimo-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Arimo'; font-weight: 700; font-style: italic; src: url('./assets/fonts/arimo-700-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Tinos'; font-weight: 400; font-style: normal; src: url('./assets/fonts/tinos-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Tinos'; font-weight: 400; font-style: italic; src: url('./assets/fonts/tinos-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Tinos'; font-weight: 700; font-style: normal; src: url('./assets/fonts/tinos-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Tinos'; font-weight: 700; font-style: italic; src: url('./assets/fonts/tinos-700-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Cousine'; font-weight: 400; font-style: normal; src: url('./assets/fonts/cousine-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cousine'; font-weight: 400; font-style: italic; src: url('./assets/fonts/cousine-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Cousine'; font-weight: 700; font-style: normal; src: url('./assets/fonts/cousine-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cousine'; font-weight: 700; font-style: italic; src: url('./assets/fonts/cousine-700-italic.woff2') format('woff2'); }
 
 :root {
   --bg: #f6f6f4;
@@ -589,3 +604,8 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .rev-fields input { width: 100%; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font: inherit; color: inherit; }
 .rev-fields input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rev-fields[hidden] { display: none; }
+
+/* Stilknappene for fritekst viser hva de gjør */
+.note-style .ns-bold { font-weight: 700; }
+.note-style .ns-italic { font-style: italic; }
+.note-style .ns-underline { text-decoration: underline; }
