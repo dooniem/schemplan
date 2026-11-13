@@ -2667,7 +2667,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   // ---- Egendefinert planområde ----
   // Topp- og bunnkanten dras opp og ned. Punkter lager knekk, som punktbeskjæringen av bilder.
-  // Endepunktene står fast i hver side. Planen tegnes på nytt når du slipper.
+  // Endepunktene står fast i hver side. Planen tegnes på nytt mens du drar.
   type AreaEdge = 'top' | 'bottom';
   let liveArea: { edge: AreaEdge; pts: AreaPt[] } | null = null;
   const areaEdgeNow = (edge: AreaEdge): AreaPt[] => (liveArea?.edge === edge ? liveArea.pts : layoutNow?.area?.[edge] ?? []);
@@ -2714,9 +2714,30 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const [lo, hi] = areaBounds(edge);
     let from: number | null = null;
     let idx = kind === 'mid' ? i + 1 : i;
+    // Planen tegnes på nytt mens du drar, så lanene og beskjæringen følger med. Den lagrede kanten
+    // settes tilbake før endringen lagres, så angre går til der kanten sto før du begynte å dra.
+    const plan = host.getPlan();
+    const saved = plan?.plan.layout.planArea;
+    const W = layoutNow!.width;
+    const H = layoutNow!.height;
+    let frame = 0;
+    const restoreSaved = () => {
+      window.cancelAnimationFrame(frame);
+      if (!plan) return;
+      if (saved) plan.plan.layout.planArea = saved;
+      else delete plan.plan.layout.planArea;
+    };
     const live = (pts: AreaPt[]) => {
       liveArea = { edge, pts };
       overlay();
+      if (!plan || frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const now = liveArea?.edge === edge ? liveArea.pts : null;
+        if (!now) return;
+        plan.plan.layout.planArea = { ...(saved ?? {}), [edge]: now.map(([x, y]) => [x / W, y / H] as [number, number]) };
+        host.redraw();
+      });
     };
     return {
       startY: 0,
@@ -2749,8 +2770,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       end() {
         const pts = liveArea?.edge === edge ? liveArea.pts : null;
         liveArea = null;
+        restoreSaved();
         if (pts) storeArea(edge, pts);
-        else overlay();
+        else host.redraw();
       },
     };
   };

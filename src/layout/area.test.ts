@@ -57,6 +57,22 @@ describe('egendefinert planområde', () => {
     expect(L.area!.polygon.length).toBeGreaterThan(4);
   });
 
+  it('Multi Lane-boks i det kuttede hjørnet stopper ved bunnkanten', () => {
+    const { width: W, height: H } = plain;
+    const cutY = plain.plot.y0 + (plain.plot.y1 - plain.plot.y0) * 0.7;
+    const xa = plain.plot.x0 + (plain.plot.x1 - plain.plot.x0) * 0.6;
+    const b = plain.plot.y1 / H;
+    const f = withArea({ bottom: [[0, b], [xa / W, b], [xa / W, cutY / H], [1, cutY / H]] });
+    const tpl = f.lanes[0].boxes[0];
+    f.lanes[0].boxes.push({ ...tpl, id: 'span', text: 'Slakk', taskIds: [], spanTo: f.lanes[f.lanes.length - 1].id, resolved: { ...tpl.resolved!, start: '2026-10-01', finish: '2026-10-31' } });
+    const L = computeLayout(f, opts, approxMeasure);
+    const span = L.items.find((i) => i.id === 'span') as BoxItem;
+    expect(span.span).toBe(true);
+    expect(span.x0).toBeGreaterThan(xa);
+    expect(span.y + span.h).toBeLessThanOrEqual(cutY + 1e-3);
+    expect(span.y + span.h).toBeGreaterThan(cutY - 3);
+  });
+
   it('et kutt som tar nesten alt, krymper teksten i stedet for å kutte planen', () => {
     const cutY = plain.plot.y0 + 25;
     const H = plain.height;
