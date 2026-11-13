@@ -1,5 +1,6 @@
 // Datafanen: én rad per boks og milepæl, slik planen ser ut nå (med endringene fra appen).
 import type { Box, BoxChange, PlanFile, Task } from '../format/types';
+import { plainText } from '../format/text';
 import { boxTrade, tradeColors } from '../trades';
 
 export interface DataRow {
@@ -42,7 +43,7 @@ export interface DataWindow {
 }
 
 /** Teksten slik den leses: linjeskift og streker blir mellomrom, tvunget callout fjernes. */
-export const plainText = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
+export { plainText };
 
 function changesOf(b: Box): string[] {
   const c: string[] = [];

@@ -25,6 +25,9 @@ export function isoWeek(t: number): { year: number; week: number } {
 
 export const MONTHS_NB = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
 
+/** dd.mm.åååå, tom tekst for manglende dato. */
+export const formatLong = (iso: string) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
+
 export const formatShort = (iso: string) => {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y.slice(2)}`;

@@ -1,11 +1,12 @@
 // Søk i planen: bokser og milepæler der teksten eller aktivitetene passer, markeres i tegningen.
 // Markeringen ligger i et eget lag som ikke kommer med i PDF eller utskrift.
+import { plainText } from './format/text';
 import type { PlanFile } from './format/types';
 
 const NS = 'http://www.w3.org/2000/svg';
 const HIT = '#F5A000';
 
-const norm = (s: string) => s.toLocaleLowerCase('nb').replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
+const norm = (s: string) => plainText(s).toLocaleLowerCase('nb');
 
 /**
  * Id-ene til boksene som passer. Alle ordene må finnes i boksteksten, aktivitetsnavnene, faget
@@ -33,7 +34,7 @@ export function findMatches(plan: PlanFile, query: string): string[] {
 export function matchingLanes(plan: PlanFile, query: string): string[] {
   const words = norm(query).split(' ').filter(Boolean);
   if (!words.length) return [];
-  return plan.lanes.filter((l) => l.shown && !l.hidden && words.every((w) => norm(l.name).includes(w))).map((l) => l.name.replace(/\/?\|/g, ' ').trim());
+  return plan.lanes.filter((l) => l.shown && !l.hidden && words.every((w) => norm(l.name).includes(w))).map((l) => plainText(l.name));
 }
 
 export interface Search {

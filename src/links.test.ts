@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergePlans } from './merge';
-import { newBox, removeBox } from './editor';
+import { newBox, removeBox } from './editmodel';
 import { applyFollows, canFollow, followersOf, setFollow } from './links';
 import { testplan } from './test/testplaner';
 import { validatePlan } from './format/validate';
