@@ -108,6 +108,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let dirty = false;
   /** Skriving i tekstfeltet samles til ett angre-steg per økt i feltet. */
   let typingSession = false;
+  /** Teller angrestegene, så vi vet om noe annet er gjort siden fargeprøvingen startet. */
+  let stepCount = 0;
+  /**
+   * Fargeprøving: fargene du prøver for samme boks, lane eller fag blir ett angresteg til du
+   * beholder dem eller gjør noe annet. Avbryt går tilbake til fargen før du begynte.
+   */
+  let colorTrial: { key: string; step: number; from: string } | null = null;
+  /** Neste endring legges i samme angresteg som fargeprøvingen. */
+  let mergeStep = false;
+  /** Panelet bygges ikke på nytt mens fargevelgeren er åpen, ellers lukkes den. */
+  let holdPanel = false;
   let svgNow: SVGSVGElement | null = null;
   let layoutNow: Layout | null = null;
   let redrawTimer = 0;
@@ -147,9 +158,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Tar vare på planen før en endring, så den kan angres. */
   const snapshot = () => {
     const plan = host.getPlan();
-    if (!plan) return;
+    if (!plan || mergeStep) return;
     // En ny endring godtar omplasseringen
     endArrange();
+    colorTrial = null;
+    stepCount++;
     past.push({ plan: snapshotOf(plan), settings: host.getSettings() });
     if (past.length > MAX_HISTORY) past.shift();
     future = [];
@@ -367,6 +380,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     dirty = true;
     typingSession = false;
     recordKey = null;
+    colorTrial = null;
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
     group = group.filter((id) => findBox(prev, id));
@@ -377,6 +391,43 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const undo = () => restore(past, future);
   const redo = () => restore(future, past);
+
+  /** Fargeprøvingen gjelder fortsatt: ingenting annet er endret siden den startet. */
+  const trialOn = (key?: string) => !!colorTrial && colorTrial.step === stepCount && (key === undefined || colorTrial.key === key);
+  /** Går tilbake til fargen før prøvingen, uten å legge prøvingen i «Gjør om». */
+  const cancelTrial = () => {
+    if (!trialOn()) return;
+    colorTrial = null;
+    undo();
+    future.pop();
+    syncTools();
+  };
+  const keepTrial = () => {
+    colorTrial = null;
+    buildPanel();
+  };
+  /**
+   * Fargevalg for én ting (key). Alle farger som prøves etter hverandre blir ett angresteg.
+   * live: fargevelgeren er fortsatt åpen, så bare planen tegnes på nytt.
+   */
+  type Trial = { key: string; run: (fn: () => void, live?: boolean) => void; pick: (fill: string, live?: boolean) => void };
+  const trial = (key: string, now: string, set: (fill: string) => void): Trial => {
+    const run = (fn: () => void, live = false) => {
+      const same = trialOn(key);
+      const before = stepCount;
+      mergeStep = same;
+      holdPanel = live;
+      try {
+        fn();
+      } finally {
+        mergeStep = false;
+        holdPanel = false;
+      }
+      if (!same && stepCount !== before) colorTrial = { key, step: stepCount, from: now };
+      if (!live) buildPanel();
+    };
+    return { key, run, pick: (fill, live) => run(() => set(fill), live) };
+  };
 
   // ---- Panelet ----
   /** Tittel, en linje under (datoer, fag) og lukkeknapp. */
@@ -433,7 +484,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return b;
   };
   /** Fargeruter. Like farger vises bare én gang. */
-  const swatches = (current: string | null, list: Swatch[], onPick: (fill: string) => void) => {
+  const swatches = (current: string | null, list: Swatch[], t: Trial | ((fill: string) => void)) => {
     const sw = el('div', { class: 'swatches' });
     const seen = new Set<string>();
     for (const [fill, name, num] of list) {
@@ -448,27 +499,58 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         s.textContent = String(num);
         s.style.color = autoTextColor(key);
       }
-      s.addEventListener('click', () => onPick(key));
+      s.addEventListener('click', () => (typeof t === 'function' ? t(key) : t.pick(key)));
       sw.append(s);
     }
     return sw;
   };
   /** Egen farge, og eventuelt en knapp tilbake til fargen den ellers ville hatt. */
   type Back = { text: string; disabled: boolean; onClick: () => void; title?: string };
-  const colorRow = (value: string, onPick: (fill: string) => void, back?: Back | Back[]) => {
+  const colorRow = (value: string, t: Trial, back?: Back | Back[]) => {
+    const out = document.createDocumentFragment();
     const row = el('div', { class: 'row color-row' });
     const lab = el('label', { class: 'custom-color' });
     const inp = el('input', { type: 'color' }) as HTMLInputElement;
     inp.value = value.toLowerCase();
-    inp.addEventListener('change', () => onPick(inp.value.toUpperCase()));
+    // Fargen vises i planen mens du drar i fargevelgeren, høyst én gang per skjermbilde
+    let raf = 0;
+    inp.addEventListener('input', () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        t.pick(inp.value.toUpperCase(), true);
+      });
+    });
+    inp.addEventListener('change', () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      t.pick(inp.value.toUpperCase());
+    });
     lab.append(inp, 'Egen farge');
     row.append(lab);
     for (const x of back ? [back].flat() : []) {
-      const b = btn(x.text, null, x.onClick, x.title, 'button small');
+      const b = btn(x.text, null, () => t.run(x.onClick), x.title, 'button small');
       b.disabled = x.disabled;
       row.append(b);
     }
-    return row;
+    out.append(row);
+    if (trialOn(t.key)) {
+      const bar = el('div', { class: 'row color-trial', role: 'group', 'aria-label': 'Prøver farger' });
+      const from = colorTrial!.from;
+      const undoB = btn('Avbryt', null, cancelTrial, 'Tilbake til fargen før du begynte å prøve (Esc)', 'button small');
+      if (from) {
+        const chip = el('span', { class: 'trial-chip', 'aria-hidden': 'true' });
+        chip.style.background = from;
+        undoB.prepend(chip);
+      }
+      bar.append(
+        el('span', { class: 'trial-text' }, 'Prøver farger'),
+        undoB,
+        btn('Behold', null, keepTrial, 'Behold fargen (Enter)', 'button small primary'),
+      );
+      out.append(bar);
+    }
+    return out;
   };
   /** Linje som sier at noe er låst, med knapp for å løse det opp. Vises bare når det gjelder. */
   const lockedRow = (text: string, button: string, title: string, onClick: () => void) => {
@@ -736,14 +818,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         keepLaneOriginal(x);
         x.fill = f;
       });
+    const tl = trial(`lane:${l.id}`, now, setFill);
     sc.append(
       swatches(now, [
         ...LANE_PALETTE,
         ...plan.lanes.filter((x) => x.fill).map((x): [string, string] => [x.fill!, 'Brukt i planen']),
-      ], setFill),
+      ], tl),
     );
     sc.append(
-      colorRow(now, setFill, l.original
+      colorRow(now, tl, l.original
         ? {
             text: 'Fargen fra Project',
             disabled: (l.original.fill ?? '').toUpperCase() === (l.fill ?? '').toUpperCase(),
@@ -951,9 +1034,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sc = section('Farge');
     const cur = same((x) => (x.fill ?? '').toUpperCase());
     const fromProject = plain.filter((x) => !x.manual);
+    const tg = trial(`group:${group.join(',')}`, cur ?? '', (f) => all((x) => (x.fill = f)));
     sc.append(
-      swatches(cur, planSwatches(plan), (f) => all((x) => (x.fill = f))),
-      colorRow(cur || '#FFFFFF', (f) => all((x) => (x.fill = f)), [
+      swatches(cur, planSwatches(plan), tg),
+      colorRow(cur || '#FFFFFF', tg, [
         { text: 'Fagets farge', title: 'Fjerner egen farge, så boksene får fargen til faget de har nå', disabled: !plain.some((x) => x.fill), onClick: () => all((x) => delete x.fill) },
         ...(fromProject.length
           ? [{
@@ -1130,12 +1214,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     const s = section('Farge for hele faget');
     const keepText = own?.text ? { text: own.text } : {};
+    const tt = trial(`trade:${trade}`, fill, (f) => setTradeColor(trade, { fill: f, ...keepText }));
     s.append(
       swatches(fill, [
         ...BOX_PALETTE,
         ...tradeColors(plan).filter((c) => c.fill && c.name !== trade).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-      ], (f) => setTradeColor(trade, { fill: f, ...keepText })),
-      colorRow(fill, (f) => setTradeColor(trade, { fill: f, ...keepText }), app ? undefined : { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
+      ], tt),
+      colorRow(fill, tt, app ? undefined : { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
       segmented('Tekstfarge', textColorKey(own?.text), TEXT_COLORS, (v) =>
         setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
       ),
@@ -1165,6 +1250,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   const buildPanel = () => {
+    if (holdPanel) return;
     const plan = host.getPlan();
     const b = active && plan && selected ? findBox(plan, selected) : null;
     // Panelet står åpent hele tiden i redigering, så arket ikke skifter størrelse når du velger
@@ -1356,9 +1442,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const sc = section('Farge');
       const pf = projectFill(plan, b);
       const nowFill = currentFill(plan, b);
+      const tb = trial(`box:${b.id}`, nowFill, (f) => change((x) => (x.fill = f)));
       sc.append(
-        swatches((b.fill ?? '').toUpperCase(), planSwatches(plan), (f) => change((x) => (x.fill = f))),
-        colorRow(nowFill, (f) => change((x) => (x.fill = f)), [
+        swatches((b.fill ?? '').toUpperCase(), planSwatches(plan), tb),
+        colorRow(nowFill, tb, [
           { text: 'Fagets farge', title: `Fjerner egen farge, så boksen får fargen til «${tradeName(trade)}»`, disabled: !b.fill, onClick: () => change((x) => delete x.fill) },
           ...(pf ? [{ text: 'Fargen fra Project', title: 'Fargen boksen har i Project, uansett fag og fagfarger valgt i appen', disabled: nowFill === pf, onClick: () => change((x) => setProjectColor(plan, x)) }] : []),
         ]),
@@ -3595,6 +3682,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (k === 'z' && !e.shiftKey) undo();
       else redo();
       return;
+    }
+    // Esc avbryter fargeprøvingen, Enter beholder fargene. Også rett etter at fargevelgeren er lukket.
+    if (!mod && panel.querySelector('.color-trial')) {
+      const esc = e.key === 'Escape' && (!inField || t.matches('input[type=color]'));
+      // Enter på en knapp eller et felt gjør det den ellers gjør
+      const enter = e.key === 'Enter' && !inField && !t.closest?.('button, a, [role=button]');
+      if (esc || enter) {
+        e.preventDefault();
+        if (esc) cancelTrial();
+        else keepTrial();
+        return;
+      }
     }
     if (e.key === 'Escape') {
       if (inField) t.blur();
