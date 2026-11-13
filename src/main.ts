@@ -710,6 +710,12 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
   $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
   $<HTMLInputElement>('#show-today').checked = !!plan?.plan.layout.todayLine;
+  const rev = plan?.plan.layout.revision;
+  $<HTMLInputElement>('#rev-on').checked = !!rev?.on;
+  $<HTMLInputElement>('#rev-on').disabled = !plan;
+  $<HTMLElement>('#rev-fields').hidden = !rev?.on;
+  $<HTMLInputElement>('#rev-number').value = rev?.number ?? '';
+  $<HTMLInputElement>('#rev-text').value = rev?.text ?? '';
   const nChanges = Object.keys(plan?.plan.layout.changes ?? {}).length;
   const showChanges = $<HTMLInputElement>('#show-changes');
   showChanges.disabled = !nChanges;
@@ -789,6 +795,20 @@ document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((btn) =>
     draw();
   }),
 );
+// Revisjon: skrus av og på uten at nummer og tekst glemmes
+function setRevision(change: Partial<{ on: boolean; number: string; text: string }>) {
+  if (!plan) return;
+  const now = plan.plan.layout.revision ?? { on: false, number: 'A' };
+  plan.plan.layout.revision = { ...now, ...change };
+  $<HTMLElement>('#rev-fields').hidden = !plan.plan.layout.revision.on;
+  draw();
+}
+$<HTMLInputElement>('#rev-on').addEventListener('change', (e) => {
+  setRevision({ on: (e.target as HTMLInputElement).checked });
+  $<HTMLInputElement>('#rev-number').value = plan?.plan.layout.revision?.number ?? '';
+});
+$<HTMLInputElement>('#rev-number').addEventListener('input', (e) => setRevision({ number: (e.target as HTMLInputElement).value }));
+$<HTMLInputElement>('#rev-text').addEventListener('input', (e) => setRevision({ text: (e.target as HTMLInputElement).value }));
 $<HTMLInputElement>('#show-today').addEventListener('change', (e) => {
   if (!plan) return;
   plan.plan.layout.todayLine = (e.target as HTMLInputElement).checked;

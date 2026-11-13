@@ -117,6 +117,14 @@
             <input type="checkbox" id="show-bottom-cal" role="switch" />
           </label>
           <label class="set-switch">
+            <span><strong>Revisjon</strong><small>Nummer og kort tekst nede til høyre, foran datoen</small></span>
+            <input type="checkbox" id="rev-on" role="switch" />
+          </label>
+          <div class="rev-fields" id="rev-fields" hidden>
+            <label class="rev-num"><span>Rev.</span><input type="text" id="rev-number" maxlength="8" placeholder="A" /></label>
+            <label class="rev-text"><span>Tekst</span><input type="text" id="rev-text" maxlength="80" placeholder="Hva er endret" /></label>
+          </div>
+          <label class="set-switch">
             <span><strong>Dagens dato</strong><small>Tynn stiplet linje på dagen i dag, også på PDF</small></span>
             <input type="checkbox" id="show-today" role="switch" />
           </label>

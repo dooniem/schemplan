@@ -9,7 +9,8 @@ import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
-import type { PlanImage } from './format/types';
+import type { PlanImage, PlanNote } from './format/types';
+import { NOTE_DEFAULT, PX_PER_MM, renderNote } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
@@ -2691,6 +2692,48 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (made.length) selectImage(made[made.length - 1]);
   };
 
+  /** Ny fritekst der du høyreklikket (eller midt i det du ser), valgt med tekstfeltet klart. */
+  const insertNote = (at: Pt | null) => {
+    const L = layoutNow;
+    if (!L || !host.getPlan()) return;
+    const note: PlanNote = { ...NOTE_DEFAULT };
+    const r = renderNote(note);
+    const W = L.width;
+    const H = L.height;
+    const c = at ?? lastPointer ?? visibleCenter() ?? { x: W / 2, y: H / 2 };
+    let id = '';
+    commit((pl) => {
+      const im: PlanImage = { id: imageId(), data: r.data, px: r.px, x: c.x / W, y: c.y / H, w: r.mm[0] / W, h: r.mm[1] / W, rotation: 0, note };
+      (pl.plan.layout.images ??= []).push(im);
+      id = im.id;
+    });
+    if (!id) return;
+    selectImage(id);
+    const ta = document.getElementById('note-text') as HTMLTextAreaElement | null;
+    ta?.focus();
+    ta?.select();
+  };
+  /** Endrer friteksten og tegner bildet på nytt. Størrelsen du har dratt den til, beholdes i forhold til teksten. */
+  const setNote = (id: string, change: Partial<PlanNote>, typing = false) => {
+    const plan = host.getPlan();
+    const L = layoutNow;
+    const im = plan ? findImage(plan, id) : null;
+    if (!plan || !L || !im?.note) return;
+    if (!typing || !typingSession) snapshot();
+    if (typing) typingSession = true;
+    const note = { ...im.note, ...change };
+    const k = (im.w * L.width) / (im.px[0] / PX_PER_MM);
+    const r = renderNote(note);
+    Object.assign(im, { note, data: r.data, px: r.px, w: (r.mm[0] * k) / L.width, h: (r.mm[1] * k) / L.width });
+    window.clearTimeout(redrawTimer);
+    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else {
+      host.redraw();
+      buildPanel();
+    }
+    syncTools();
+  };
+
   /** Bruker et bilde som allerede er symbol for en milepæl på andre milepæler: samme bilde, størrelse, rotasjon og beskjæring. */
   const copySymbol = (fromId: string, milestones: string[]) => {
     const plan = host.getPlan();
@@ -3099,7 +3142,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const p = placedOf(im.id);
     const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
     const where = ms ? `Symbol for «${plain(ms.text) || 'milepæl'}»` : im.date ? `Festet til ${fmtDate(im.date.day)}` : 'Fritt på arket';
-    panelHead('Bilde', `${im.px[0]} × ${im.px[1]} px · ${where}`);
+    panelHead(im.note ? 'Tekst' : 'Bilde', im.note ? where : `${im.px[0]} × ${im.px[1]} px · ${where}`);
     const cm = (mm: number) => Math.round(mm) / 10;
     /** Tallfelt med navnet over, som datofeltene. */
     const numField = (label: string, value: number, step: number, onSet: (v: number) => void, id?: string) => {
@@ -3113,6 +3156,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return lab;
     };
 
+    if (im.note) {
+      const sn = section('Tekst');
+      const n = im.note;
+      sn.append(textField('note-text', 'Tekst', n.text, '3', (v) => setNote(im.id, { text: v }, true)));
+      const row = el('div', { class: 'row dates' });
+      row.append(numField('Størrelse, pt', n.sizePt, 1, (v) => v >= 4 && v <= 200 && setNote(im.id, { sizePt: v })));
+      sn.append(row);
+      sn.append(switchRow('Fet', !!n.bold, (v) => setNote(im.id, { bold: v })));
+      sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
+      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
+    }
     const ss = section('Størrelse og rotasjon');
     if (p) {
       const f = frameUv(p.crop, p.points);
@@ -3134,33 +3188,36 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const rr = btn('', 'rotate', () => changePlaced(im.id, (q) => keepX(rotateBy(q, 90), frameCenter(q).x)), 'Roter 90° med klokken', 'button small icon-only');
       rl.setAttribute('aria-label', 'Roter 90° mot klokken');
       rr.setAttribute('aria-label', 'Roter 90° med klokken');
-      row.append(rl, rr, natBtn);
+      row.append(rl, rr, ...(im.note ? [] : [natBtn]));
       ss.append(fields, row, el('p', { class: 'hint' }, 'Dra i hjørnene for å endre størrelsen; Shift gir fri form. Dra i den runde knotten for å rotere; Shift gir trinn på 15°.'));
     }
 
-    const sc = section('Beskjæring');
-    sc.append(
-      segmented<ImageMode>('Verktøy', imageMode, [['none', 'Av'], ['crop', 'Kanter'], ['points', 'Punkter']], (v) => setImageMode(v === 'none' ? imageMode : v)),
-    );
-    if (im.crop || im.points)
-      sc.append(lockedRow(im.points ? 'Beskåret langs punkter' : 'Beskåret', 'Vis hele', 'Fjern beskjæringen og vis hele bildet', () => {
-        imageMode = 'none';
-        changeImage(im.id, (x) => {
-          delete x.crop;
-          delete x.points;
-        });
-      }));
-    sc.append(
-      el(
-        'p',
-        { class: 'hint' },
-        imageMode === 'crop'
-          ? 'Dra i de svarte vinklene og strekene. Enter eller Esc når du er ferdig.'
-          : imageMode === 'points'
-            ? 'Dra de svarte punktene. Dra et hvitt punkt midt på en kant for å lage et nytt. Ctrl-klikk eller høyreklikk et punkt for å slette det. Punktene fanges av bildets kanter; hold Alt for å dra fritt. Enter eller Esc når du er ferdig.'
-            : 'Kanter skjærer bort rett inn fra hver side. Punkter former en mangekant, som «Rediger punkt» i PowerPoint. De kan brukes sammen. Dobbeltklikk bildet for å beskjære kantene.',
-      ),
-    );
+    // Fritekst beskjæres ikke
+    if (!im.note) {
+      const sc = section('Beskjæring');
+      sc.append(
+        segmented<ImageMode>('Verktøy', imageMode, [['none', 'Av'], ['crop', 'Kanter'], ['points', 'Punkter']], (v) => setImageMode(v === 'none' ? imageMode : v)),
+      );
+      if (im.crop || im.points)
+        sc.append(lockedRow(im.points ? 'Beskåret langs punkter' : 'Beskåret', 'Vis hele', 'Fjern beskjæringen og vis hele bildet', () => {
+          imageMode = 'none';
+          changeImage(im.id, (x) => {
+            delete x.crop;
+            delete x.points;
+          });
+        }));
+      sc.append(
+        el(
+          'p',
+          { class: 'hint' },
+          imageMode === 'crop'
+            ? 'Dra i de svarte vinklene og strekene. Enter eller Esc når du er ferdig.'
+            : imageMode === 'points'
+              ? 'Dra de svarte punktene. Dra et hvitt punkt midt på en kant for å lage et nytt. Ctrl-klikk eller høyreklikk et punkt for å slette det. Punktene fanges av bildets kanter; hold Alt for å dra fritt. Enter eller Esc når du er ferdig.'
+              : 'Kanter skjærer bort rett inn fra hver side. Punkter former en mangekant, som «Rediger punkt» i PowerPoint. De kan brukes sammen. Dobbeltklikk bildet for å beskjære kantene.',
+        ),
+      );
+    }
 
     const sp = section('Plassering');
     if (im.milestone) {
@@ -3248,8 +3305,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ],
       },
       { items: [{ label: 'Slett', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Angre med Ctrl+Z.', onSelect: () => removeImage(id) }] },
-    ], ms ? `Symbol for ${plain(ms.text) || 'milepæl'}` : im.date ? `Festet til ${fmtDate(im.date.day)}` : `${im.px[0]} × ${im.px[1]} px`);
+    ], ms ? `Symbol for ${plain(ms.text) || 'milepæl'}` : im.date ? `Festet til ${fmtDate(im.date.day)}` : im.note ? 'Tekst' : `${im.px[0]} × ${im.px[1]} px`);
   };
+
+  /** «Sett inn tekst» i høyreklikkmenyene. */
+  const insertNoteItem = (at: Pt) => ({
+    label: 'Sett inn tekst',
+    icon: 'pencil' as const,
+    hint: 'Fritekst hvor som helst på arket, for merknader eller forbehold.',
+    onSelect: () => insertNote(at),
+  });
 
   /** «Sett inn bilde» i høyreklikkmenyene, med hint om utklippstavlen. */
   const insertItem = (at: Pt) => ({
@@ -3341,7 +3406,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Utenfor lanene (marger, kalender, forklaring): bare bilder kan settes inn
     const sheetMenu = () => {
       e.preventDefault();
-      ctx.open(e.clientX, e.clientY, 'Arket', [{ items: [insertItem(p)] }]);
+      ctx.open(e.clientX, e.clientY, 'Arket', [{ items: [insertItem(p), insertNoteItem(p)] }]);
     };
     // Høyreklikk i forklaringen: skjul oppføringen eller endre den
     const legHit = (e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]');
@@ -3390,7 +3455,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       ctx.open(e.clientX, e.clientY, 'Topptekst', [
         { items: [{ label: 'Endre overskrift og tekst til høyre', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner toppteksten i panelet til høyre.', onSelect: () => selectHeader() }] },
-        { items: [insertItem(p)] },
+        { items: [insertItem(p), insertNoteItem(p)] },
       ]);
       return;
     }
@@ -3527,7 +3592,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           heading: hiddenBoxes.length ? 'Skjulte bokser' : undefined,
           items: hiddenBoxes.map((hb) => ({ label: plain(hb.text) || '(uten tekst)', icon: 'show' as const, hint: 'Vis boksen igjen på samme plass.', onSelect: () => commit((pl) => delete findBox(pl, hb.id)!.hidden) })),
         },
-        { items: [insertItem(p)] },
+        { items: [insertItem(p), insertNoteItem(p)] },
       ], 'Lane');
     }
   });

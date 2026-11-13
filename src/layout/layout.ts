@@ -611,11 +611,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // Egen størrelse (legendScale) gjelder hele forklaringen og datoen, også taket
   const legendBase = Math.min(opts.textSizePt * PT_TO_MM * Math.max(scale, 1) * (ny ? 1 : 0.85), LEGEND_MAX_PT * PT_TO_MM);
   const legendSize = legendBase * clampScale(file.plan.layout.legendScale);
+  // Nede til høyre: revisjonen (når den er slått på) og datoen
+  const footerText = footerLine(file);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (opts.showLegend ?? file.plan.options.legend) {
     // Plass til datoen nede til høyre
-    const lxMax = x1 - measure('00.00.0000', legendSize) - 6;
+    const lxMax = x1 - measure(footerText, legendSize, true) - 6;
     const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved'; key: string }[] = [
       // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
       ...(ny && file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
@@ -959,7 +961,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const subtitle: TextBlock = {
     x: x1,
     y: legendTop + legendSizeMm * 1.1 * 0.8,
-    lines: [formatLong(planDate(file))],
+    lines: [footerText],
     size: legendSizeMm,
     color: '#000000',
     anchor: 'end',
@@ -1628,6 +1630,14 @@ export function planDate(file: PlanFile): string {
   const exported = file.exportedAt.slice(0, 10);
   const edited = file.plan.layout.editedAt;
   return edited && edited > exported ? edited : exported;
+}
+
+/** Teksten nede til høyre: «Rev. B – tekst · dato», eller bare datoen. */
+export function footerLine(file: PlanFile): string {
+  const rev = file.plan.layout.revision;
+  const date = formatLong(planDate(file));
+  if (!rev?.on || !rev.number.trim()) return date;
+  return `Rev. ${rev.number.trim()}${rev.text?.trim() ? ` – ${rev.text.trim()}` : ''}  ·  ${date}`;
 }
 
 function formatLong(iso: string): string {

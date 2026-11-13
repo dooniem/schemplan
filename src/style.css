@@ -557,3 +557,11 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .row.dates input[type='number'] { font-variant-numeric: tabular-nums; }
 .row.dates input[type='number'] { width: 100%; }
 #sheet.editing svg.plan g.images > g[data-image] { cursor: move; }
+.rev-fields { display: flex; gap: 8px; padding: 2px 0 8px; }
+.rev-fields label { display: flex; flex-direction: column; gap: 2px; }
+.rev-fields .rev-num { width: 64px; flex: none; }
+.rev-fields .rev-text { flex: 1; min-width: 0; }
+.rev-fields label > span:first-child { font-size: 12px; color: var(--muted); }
+.rev-fields input { width: 100%; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font: inherit; color: inherit; }
+.rev-fields input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rev-fields[hidden] { display: none; }

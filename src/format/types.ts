@@ -90,6 +90,8 @@ export interface PlanSettings {
     images?: PlanImage[];
     /** Endringer fra Project ved siste oppdatering: nye bokser, og bokser med nye datoer (med datoene de hadde før). */
     changes?: Record<string, BoxChange>;
+    /** Revisjon nede til høyre, foran datoen. Kan skrus av uten at nummer og tekst glemmes. */
+    revision?: { on: boolean; number: string; text?: string };
     /** Tynn linje på dagens dato, uavhengig av statuslinjen. */
     todayLine?: boolean;
     /** Marker endringene fra siste oppdatering på arket. */
@@ -134,6 +136,19 @@ export interface PlanImage {
    * punkt til midten av det synlige, som andel av arkets bredde. Milepælens eget symbol tegnes ikke.
    */
   milestone?: { id: string; dx: number; dy: number };
+  /** Fritekst: bildet er tegnet fra denne teksten og tegnes på nytt når den endres. */
+  note?: PlanNote;
+}
+
+/** Fritekst på arket. */
+export interface PlanNote {
+  /** Linjeskift med \n. */
+  text: string;
+  sizePt: number;
+  bold?: boolean;
+  /** Hvit bakgrunn med tynn ramme. */
+  frame?: boolean;
+  color?: string;
 }
 
 export interface IsoWeek {
