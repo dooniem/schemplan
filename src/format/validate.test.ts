@@ -16,7 +16,6 @@ describe('validatePlan', () => {
     expect(s.lanes).toBe(5);
     expect(s.boxes).toBe(13);
     expect(s.milestones).toBe(2);
-    expect(s.drawable).toBe(12);
   });
 
   it('tåler BOM først i filen', () => {

@@ -46,6 +46,8 @@ export interface EditorHost {
   setTitleSize(pt: number): void;
   /** Valgene i Innstillinger som ikke ligger i planen, så de kan angres sammen med den. */
   getSettings(): unknown;
+  /** Viser en feilmelding i appen (ikke i nettleserens varselboks). */
+  notify(message: string): void;
   setSettings(s: unknown): void;
 }
 
@@ -2408,7 +2410,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       try {
         read.push(await readImage(f));
       } catch {
-        window.alert('Kunne ikke lese bildet. Bruk PNG, JPEG, GIF, WebP eller SVG.');
+        host.notify(`Kunne ikke lese ${f instanceof File ? f.name : 'bildet'}. Bruk PNG, JPEG, GIF, WebP eller SVG.`);
       }
     }
     if (!read.length) return;
