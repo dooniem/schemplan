@@ -134,6 +134,19 @@ export interface PlanImage {
    * punkt til midten av det synlige, som andel av arkets bredde. Milepælens eget symbol tegnes ikke.
    */
   milestone?: { id: string; dx: number; dy: number };
+  /** Fritekst: bildet er tegnet fra denne teksten og tegnes på nytt når den endres. */
+  note?: PlanNote;
+}
+
+/** Fritekst på arket. */
+export interface PlanNote {
+  /** Linjeskift med \n. */
+  text: string;
+  sizePt: number;
+  bold?: boolean;
+  /** Hvit bakgrunn med tynn ramme. */
+  frame?: boolean;
+  color?: string;
 }
 
 export interface IsoWeek {

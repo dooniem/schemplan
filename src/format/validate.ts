@@ -149,7 +149,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
             (i.crop === undefined || (Array.isArray(i.crop) && i.crop.length === 4 && i.crop.every(uv))) &&
             (i.points === undefined || (Array.isArray(i.points) && i.points.length >= 3 && i.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(uv)))) &&
             (i.date === undefined || (isObj(i.date) && typeof (i.date as Obj).day === 'string' && ISO_DATE.test((i.date as Obj).day as string) && fin((i.date as Obj).dx))) &&
-            (i.milestone === undefined || (isObj(i.milestone) && typeof (i.milestone as Obj).id === 'string' && fin((i.milestone as Obj).dx) && fin((i.milestone as Obj).dy)))
+            (i.milestone === undefined || (isObj(i.milestone) && typeof (i.milestone as Obj).id === 'string' && fin((i.milestone as Obj).dx) && fin((i.milestone as Obj).dy))) &&
+            (i.note === undefined || (isObj(i.note) && typeof (i.note as Obj).text === 'string' && fin((i.note as Obj).sizePt) && ((i.note as Obj).sizePt as number) > 0))
           );
         };
         if (!Array.isArray(lay.images) || !lay.images.every(ok)) err('plan.layout.images', 'må være en liste med bilder (PNG eller JPEG som data-URL) med plass, størrelse og rotasjon');
