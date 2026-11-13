@@ -529,7 +529,7 @@ function showPlan(p: PlanFile, name: string, warnings: string[], note?: HTMLElem
   if (note) info.append(note);
   if (warnings.length) info.append(details(`${warnings.length} ting å se på`, [['', warnings]]));
   info.append(status, suggest, saveStatus);
-  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#edit', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
+  for (const id of ['#print', '#save-menu', '#save-work', '#save-share', '#copy-png', '#edit', '#search', '#view-data']) $<HTMLButtonElement>(id).disabled = false;
   draw();
 }
 
@@ -1021,6 +1021,38 @@ function syncUnsaved() {
   b.classList.toggle('unsaved', u);
   b.title = u ? 'Planen har endringer som ikke er lagret' : '';
 }
+// Bilde av arket til utklippstavlen. Uten tilgang til utklippstavlen lastes bildet ned i stedet.
+$<HTMLButtonElement>('#copy-png').addEventListener('click', async (e) => {
+  if (!shown) return;
+  const btn = e.currentTarget as HTMLButtonElement;
+  btn.disabled = true;
+  saveStatus.textContent = 'Lager bilde …';
+  saveStatus.className = 'muted small';
+  try {
+    const { svgToPng } = await import('./png');
+    // Tegnes på nytt fra layouten, så markeringer fra redigering ikke kommer med
+    const width = Math.round(shown.layout.width * 6); // omtrent 150 dpi
+    const blob = svgToPng(renderPlan(shown.layout), width);
+    const Item = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+    if (Item && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new Item({ 'image/png': blob })]);
+      saveStatus.textContent = 'Bildet er kopiert. Lim det inn med Ctrl+V.';
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await blob);
+      a.download = `${baseName}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      saveStatus.textContent = `Nettleseren kan ikke kopiere bilder, så bildet ble lastet ned som ${baseName}.png.`;
+    }
+    saveStatus.className = 'ok small';
+  } catch (err) {
+    saveStatus.textContent = `Bildet ble ikke kopiert: ${(err as Error).message}`;
+    saveStatus.className = 'error small';
+  } finally {
+    btn.disabled = false;
+  }
+});
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'bare' }));
