@@ -36,7 +36,8 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
 
   await drawImages(doc, page, L);
 
-  doc.setTitle(plan.plan.title, { showInWindowTitleBar: true });
+  // Samme tittel som overskriften på arket: egen overskrift fra appen går foran navnet fra Project
+  doc.setTitle((plan.plan.layout.title ?? plan.plan.title).replace(/\s*\|\s*/g, ' ').trim() || plan.plan.title, { showInWindowTitleBar: true });
   if (variant === 'arbeidsfil') {
     doc.setCreator(`Skjematisk plan v${appVersion}`);
     doc.setSubject('Arbeidsfil med innebygd plan. Internt dokument.');
