@@ -560,12 +560,20 @@ describe('overskriftsboks', () => {
   });
 
   it('blir høyere når en boks inni den blir skjøvet ned, og boksene under flyttes ned', () => {
-    for (const heightMode of ['compact', 'fill'] as const) {
+    for (const [heightMode, withCallout] of [['compact', false], ['fill', false], ['compact', true], ['fill', true]] as const) {
       const p = example();
       const [head, a, b] = p.lanes[1].boxes;
       Object.assign(head, { header: true, top: 0, height: 3.8 });
       a.top = 1.2;
       b.top = 2.4;
+      if (withCallout) {
+        // Boksen nederst har callout som stikker ut til høyre for overskriftsboksen
+        a.resolved = { ...a.resolved!, start: '2026-09-01', finish: '2026-11-13' };
+        b.resolved = { ...b.resolved!, start: '2026-11-02', finish: '2026-11-20' };
+        b.text = 'Etterarbeid og opprydding';
+        b.callout = 'on';
+        b.calloutSide = 'right';
+      }
       // a blir høyere (som når teksten blir callout eller større), og skyver b ned
       a.height = 3;
       const L = computeLayout(p, { ...o, heightMode }, approxMeasure);
