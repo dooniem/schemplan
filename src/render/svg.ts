@@ -197,7 +197,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
   // Bokser og milepæler
   const itemsG = node('g', { class: 'items' }, svg);
   for (const it of L.items) {
-    const g = node('g', { 'data-id': it.id }, itemsG);
+    // Multi Lane-bokser går over flere lanes og klippes til planområdets omriss
+    const g = node('g', { 'data-id': it.id, ...(it.kind === 'box' && it.span ? clipAttrs : {}) }, itemsG);
     if (it.kind === 'box') {
       if (it.callout) {
         const cb = it.callout.box;

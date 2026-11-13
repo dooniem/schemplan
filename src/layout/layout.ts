@@ -913,7 +913,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       // Kompakt har egen bunn, ellers samme som «Fyll hele arket». Lanen blir aldri høyere av den.
       const ownEnd = compact ? (box?.compactSpanEnd ?? box?.spanEnd) : box?.spanEnd;
       const end = lanes[j].id === box?.spanTo && ownEnd !== undefined ? laneLayouts[j].top + ownEnd * lh : Infinity;
-      const bottom = Math.min(end, laneLayouts[j].y1 - LANE_PAD);
+      // Egendefinert planområde: aldri lenger ned enn bunnkantens laveste punkt under boksen. Skrå kanter klippes ved tegning.
+      const edgeBottom = edges ? edgeRange(edges.bottom, p.item.x0, p.item.x1, 'max') - LANE_PAD : Infinity;
+      const bottom = Math.min(end, laneLayouts[j].y1 - LANE_PAD, edgeBottom);
       const textH = p.item.h;
       p.item.h = Math.max(p.item.h, bottom - p.item.y);
       if (box?.textMiddle && p.item.text) p.item.text.y += (p.item.h - textH) / 2;
