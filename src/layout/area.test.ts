@@ -73,6 +73,29 @@ describe('egendefinert planområde', () => {
     expect(span.y + span.h).toBeGreaterThan(cutY - 3);
   });
 
+  it('overskriftsboks med fast plass under kuttet løftes opp til kanten, med boksene inne i den', () => {
+    const { width: W, height: H } = plain;
+    const cutY = plain.plot.y0 + (plain.plot.y1 - plain.plot.y0) * 0.7;
+    const xa = plain.plot.x0 + (plain.plot.x1 - plain.plot.x0) * 0.4;
+    const b = plain.plot.y1 / H;
+    const f = withArea({ bottom: [[0, b], [xa / W, b], [xa / W, cutY / H], [1, cutY / H]] });
+    const lane = f.lanes[f.lanes.length - 1];
+    const tpl = lane.boxes[0];
+    const mk = (id: string, start: string, finish: string, top: number, extra: object = {}) => ({ ...tpl, id, text: id, taskIds: [], milestone: null, top, ...extra, resolved: { ...tpl.resolved!, start, finish, isMilestone: false } });
+    // Overskriftsboksen står med fast plass rett under kuttet
+    const top = 25;
+    lane.boxes.push(mk('hode', '2026-06-01', '2026-11-20', top, { header: true, height: 4 }), mk('barn', '2026-07-01', '2026-08-20', top + 1.5));
+    const L = computeLayout(f, opts, approxMeasure);
+    expect(L.overflow).toBe(false);
+    // Teksten krympes ikke: det er plass når boksen bare løftes
+    expect(L.textSizePt).toBe(plain.textSizePt);
+    const hode = L.items.find((i) => i.id === 'hode') as BoxItem;
+    const barn = L.items.find((i) => i.id === 'barn') as BoxItem;
+    expect(hode.y + hode.h).toBeLessThanOrEqual(cutY + 1e-3);
+    expect(hode.y + hode.h).toBeGreaterThan(cutY - 3);
+    expect(barn.y - hode.y).toBeCloseTo(1.5 * L.unit, 3);
+  });
+
   it('et kutt som tar nesten alt, krymper teksten i stedet for å kutte planen', () => {
     const cutY = plain.plot.y0 + 25;
     const H = plain.height;
