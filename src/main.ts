@@ -18,6 +18,7 @@ import { createEditor } from './editor';
 import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
+import { setupSubmenus } from './submenu';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
 import { boxTrade } from './trades';
@@ -51,6 +52,7 @@ $('#help-version').textContent = `Versjon ${__APP_VERSION__}`;
   help.addEventListener('click', (e) => e.target === help && help.close());
 }
 placePopovers();
+setupSubmenus($<HTMLElement>('#menu-sheet'));
 checkOutboundBlocked().then((blocked) => {
   const s = $('#csp-status');
   s.textContent = blocked ? 'aktiv' : 'ikke aktiv (utviklingsmodus)';

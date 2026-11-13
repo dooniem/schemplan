@@ -58,180 +58,227 @@
       <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen" aria-label="Hjelp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg><span class="tb-label">Hjelp</span></button>
     </header>
 
-    <div id="menu-sheet" class="pop settings no-print" popover aria-label="Innstillinger">
-      <section class="set-sec" aria-labelledby="set-ark">
-        <h3 id="set-ark">Ark</h3>
-        <div class="set-row">
-          <span class="set-label" id="lbl-paper">Størrelse</span>
-          <div class="group" role="group" aria-labelledby="lbl-paper">
-            <button type="button" data-paper="A4" aria-pressed="false" title="Til å lime inn i Word og lignende">A4</button>
-            <button type="button" data-paper="A3" aria-pressed="true">A3</button>
-            <button type="button" data-paper="A2" aria-pressed="false">A2</button>
-            <button type="button" data-paper="A1" aria-pressed="false">A1</button>
-          </div>
-        </div>
-        <div class="set-row">
-          <span class="set-label" id="lbl-orient">Retning</span>
-          <div class="group" role="group" aria-labelledby="lbl-orient">
-            <button type="button" data-orientation="landscape" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Liggende</button>
-            <button type="button" data-orientation="portrait" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="3" width="11" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Stående</button>
-          </div>
-        </div>
-        <div class="set-row">
-          <span class="set-label" id="lbl-lanes">Lanes</span>
-          <div class="group group-tight" role="group" aria-labelledby="lbl-lanes">
-            <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
-            <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
-            <button type="button" data-height="custom" aria-pressed="false" title="Som «Fyll arket», men du drar topp- og bunnkanten selv, for eksempel for å gi plass til et kart">Egendefinert</button>
-          </div>
-        </div>
-        <div class="set-row set-note" id="area-note" hidden>
-          <span></span>
-          <p class="hint">Dra den stiplede topp- og bunnkanten. Dra et hvitt punkt for å lage et knekkpunkt. Lanes og bokser flyttes så alt får plass.</p>
-        </div>
-      </section>
-
-      <section class="set-sec" aria-labelledby="set-vis">
-        <h3 id="set-vis">Visning</h3>
-        <div class="set-row">
-          <span class="set-label" id="lbl-cal">Kalender</span>
-          <div class="group" role="group" aria-labelledby="lbl-cal">
-            <button type="button" data-cal="month" aria-pressed="true" title="Én kolonne per måned">Måned</button>
-            <button type="button" data-cal="week" aria-pressed="false" title="Én kolonne per uke">Uke</button>
-          </div>
-        </div>
-        <div class="set-row">
-          <span class="set-label" id="lbl-style">Stil</span>
-          <div class="group" role="group" aria-labelledby="lbl-style">
-            <button type="button" data-style="ny" aria-pressed="true" title="Forslag med bedre lesbarhet">Ny</button>
-            <button type="button" data-style="excel" aria-pressed="false" title="Slik Excel-løsningen tegner">Excel-lik</button>
-          </div>
-        </div>
-        <div class="set-switches">
-          <label class="set-switch">
-            <span><strong>Forklaring</strong><small>Fagene og fargene nederst</small></span>
-            <input type="checkbox" id="show-legend" role="switch" />
-          </label>
-          <label class="set-switch">
-            <span><strong>Kalender nederst</strong><small>Måneder og uker også under planen</small></span>
-            <input type="checkbox" id="show-bottom-cal" role="switch" />
-          </label>
-          <label class="set-switch">
-            <span><strong>Revisjon</strong><small>Nummer og kort tekst nede til høyre, foran datoen</small></span>
-            <input type="checkbox" id="rev-on" role="switch" />
-          </label>
-          <div class="rev-fields" id="rev-fields" hidden>
-            <label class="rev-num"><span>Rev.</span><input type="text" id="rev-number" maxlength="8" placeholder="A" /></label>
-            <label class="rev-text"><span>Tekst</span><input type="text" id="rev-text" maxlength="80" placeholder="Hva er endret" /></label>
-          </div>
-          <label class="set-switch">
-            <span><strong>Fremdrift</strong><small>% ferdig som mørk stripe nederst i boksene</small></span>
-            <input type="checkbox" id="show-progress" role="switch" />
-          </label>
-          <label class="set-switch">
-            <span><strong>Baseline</strong><small>Tynn strek under boksene der baseline lå</small></span>
-            <input type="checkbox" id="show-baseline" role="switch" />
-          </label>
-          <label class="set-switch">
-            <span><strong>Dagens dato</strong><small>Tynn stiplet linje på dagen i dag, også på PDF</small></span>
-            <input type="checkbox" id="show-today" role="switch" />
-          </label>
-          <label class="set-switch">
-            <span><strong>Endringer fra Project</strong><small id="show-changes-hint">Ramme rundt nye bokser og nye datoer etter siste oppdatering. Kommer med i PDF-en.</small></span>
-            <input type="checkbox" id="show-changes" role="switch" />
-          </label>
-        </div>
-      </section>
-
-      <section class="set-sec" aria-labelledby="set-status">
-        <h3 id="set-status">Statuslinje</h3>
-        <label class="set-switch">
-          <span><strong>Vis statuslinje</strong><small>Loddrett strek på statusdatoen, også på PDF</small></span>
-          <input type="checkbox" id="sl-on" role="switch" />
-        </label>
-        <div class="sl-details" id="sl-details" hidden>
+    <div id="menu-sheet" class="pop settings set-menu no-print" popover aria-label="Innstillinger">
+      <div class="pm-group" role="group" aria-label="Innstillinger">
+        <button type="button" class="pm-item set-item" data-sub="sub-ark" aria-haspopup="true" aria-expanded="false" aria-controls="sub-ark">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z M14 3v4h4"/></svg>
+          <span class="pm-text"><strong>Ark</strong><span class="pm-desc set-sum" data-sum="ark"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="pm-item set-item" data-sub="sub-kal" aria-haspopup="true" aria-expanded="false" aria-controls="sub-kal">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>
+          <span class="pm-text"><strong>Kalender og stil</strong><span class="pm-desc set-sum" data-sum="kal"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="pm-item set-item" data-sub="sub-vis" aria-haspopup="true" aria-expanded="false" aria-controls="sub-vis">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+          <span class="pm-text"><strong>Vis på arket</strong><span class="pm-desc set-sum" data-sum="vis"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="pm-item set-item" data-sub="sub-status" aria-haspopup="true" aria-expanded="false" aria-controls="sub-status">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18 M5 8h4 M5 12h4 M15 12h4 M15 16h4"/></svg>
+          <span class="pm-text"><strong>Statuslinje</strong><span class="pm-desc set-sum" data-sum="status"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="pm-item set-item" data-sub="sub-tekst" aria-haspopup="true" aria-expanded="false" aria-controls="sub-tekst">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19 9 5l5 14 M6 14h6 M15 19l3-8 3 8 M16 16.5h4"/></svg>
+          <span class="pm-text"><strong>Tekst</strong><span class="pm-desc set-sum" data-sum="tekst"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="pm-item set-item" data-sub="sub-logo" aria-haspopup="true" aria-expanded="false" aria-controls="sub-logo">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4-4 4 4 3-3 5 5 M15.5 9.5h.01"/></svg>
+          <span class="pm-text"><strong>Logo og revisjon</strong><span class="pm-desc set-sum" data-sum="logo"></span></span>
+          <svg class="ctx-ico set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+      </div>
+      <div id="sub-ark" class="pop settings set-sub" popover role="group" aria-labelledby="set-ark">
+        <section class="set-sec">
+          <h3 id="set-ark">Ark</h3>
           <div class="set-row">
-            <span class="set-label" id="lbl-sl-date">Dato</span>
-            <div class="group" role="group" aria-labelledby="lbl-sl-date">
-              <button type="button" data-sl-source="project" aria-pressed="false" title="Statusdatoen som er satt i Project">Project</button>
-              <button type="button" data-sl-source="monday" aria-pressed="true" title="Mandag denne uken. Følger med når uka skifter.">Mandag</button>
-              <button type="button" data-sl-source="custom" aria-pressed="false">Velg dato</button>
-            </div>
-          </div>
-          <div class="set-row" id="sl-date-row" hidden>
-            <span class="set-label"><label for="sl-date">Dag</label></span>
-            <span class="num"><input id="sl-date" type="date" /></span>
-          </div>
-          <p class="pop-hint" id="sl-help" role="status"></p>
-          <div class="set-row">
-            <span class="set-label" id="lbl-sl-width">Strek</span>
-            <div class="group" role="group" aria-labelledby="lbl-sl-width">
-              <button type="button" data-sl-width="0.3" aria-pressed="false">Tynn</button>
-              <button type="button" data-sl-width="0.5" aria-pressed="true">Middels</button>
-              <button type="button" data-sl-width="0.9" aria-pressed="false">Tykk</button>
+            <span class="set-label" id="lbl-paper">Størrelse</span>
+            <div class="group" role="group" aria-labelledby="lbl-paper">
+              <button type="button" data-paper="A4" aria-pressed="false" title="Til å lime inn i Word og lignende">A4</button>
+              <button type="button" data-paper="A3" aria-pressed="true">A3</button>
+              <button type="button" data-paper="A2" aria-pressed="false">A2</button>
+              <button type="button" data-paper="A1" aria-pressed="false">A1</button>
             </div>
           </div>
           <div class="set-row">
-            <span class="set-label" id="lbl-sl-color">Farge</span>
-            <div class="swatches" role="group" aria-labelledby="lbl-sl-color" id="sl-colors"></div>
+            <span class="set-label" id="lbl-orient">Retning</span>
+            <div class="group" role="group" aria-labelledby="lbl-orient">
+              <button type="button" data-orientation="landscape" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Liggende</button>
+              <button type="button" data-orientation="portrait" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="3" width="11" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>Stående</button>
+            </div>
           </div>
+          <div class="set-row">
+            <span class="set-label" id="lbl-lanes">Lanes</span>
+            <div class="group group-tight" role="group" aria-labelledby="lbl-lanes">
+              <button type="button" data-height="fill" aria-pressed="true" title="Lanes fyller hele arket">Fyll arket</button>
+              <button type="button" data-height="compact" aria-pressed="false" title="Lanes blir så lave som boksene tillater">Kompakt</button>
+              <button type="button" data-height="custom" aria-pressed="false" title="Som «Fyll arket», men du drar topp- og bunnkanten selv, for eksempel for å gi plass til et kart">Egendefinert</button>
+            </div>
+          </div>
+          <div class="set-row set-note" id="area-note" hidden>
+            <span></span>
+            <p class="hint">Dra den stiplede topp- og bunnkanten. Dra et hvitt punkt for å lage et knekkpunkt. Lanes og bokser flyttes så alt får plass.</p>
+          </div>
+        </section>
+      </div>
+      <div id="sub-kal" class="pop settings set-sub" popover role="group" aria-labelledby="set-kal">
+        <section class="set-sec">
+          <h3 id="set-kal">Kalender og stil</h3>
+          <div class="set-row">
+            <span class="set-label" id="lbl-cal">Kalender</span>
+            <div class="group" role="group" aria-labelledby="lbl-cal">
+              <button type="button" data-cal="month" aria-pressed="true" title="Én kolonne per måned">Måned</button>
+              <button type="button" data-cal="week" aria-pressed="false" title="Én kolonne per uke">Uke</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-label" id="lbl-style">Stil</span>
+            <div class="group" role="group" aria-labelledby="lbl-style">
+              <button type="button" data-style="ny" aria-pressed="true" title="Forslag med bedre lesbarhet">Ny</button>
+              <button type="button" data-style="excel" aria-pressed="false" title="Slik Excel-løsningen tegner">Excel-lik</button>
+            </div>
+          </div>
+          <div class="set-switches">
+            <label class="set-switch">
+              <span><strong>Kalender nederst</strong><small>Måneder og uker også under planen</small></span>
+              <input type="checkbox" id="show-bottom-cal" role="switch" />
+            </label>
+          </div>
+        </section>
+      </div>
+      <div id="sub-vis" class="pop settings set-sub" popover role="group" aria-labelledby="set-vis">
+        <section class="set-sec">
+          <h3 id="set-vis">Vis på arket</h3>
+          <div class="set-switches set-switches-top">
+            <label class="set-switch">
+              <span><strong>Forklaring</strong><small>Fagene og fargene nederst</small></span>
+              <input type="checkbox" id="show-legend" role="switch" />
+            </label>
+            <label class="set-switch">
+              <span><strong>Fremdrift</strong><small>% ferdig som mørk stripe nederst i boksene</small></span>
+              <input type="checkbox" id="show-progress" role="switch" />
+            </label>
+            <label class="set-switch">
+              <span><strong>Baseline</strong><small>Tynn strek under boksene der baseline lå</small></span>
+              <input type="checkbox" id="show-baseline" role="switch" />
+            </label>
+            <label class="set-switch">
+              <span><strong>Dagens dato</strong><small>Tynn stiplet linje på dagen i dag, også på PDF</small></span>
+              <input type="checkbox" id="show-today" role="switch" />
+            </label>
+            <label class="set-switch">
+              <span><strong>Endringer fra Project</strong><small id="show-changes-hint">Ramme rundt nye bokser og nye datoer etter siste oppdatering. Kommer med i PDF-en.</small></span>
+              <input type="checkbox" id="show-changes" role="switch" />
+            </label>
+          </div>
+        </section>
+      </div>
+      <div id="sub-status" class="pop settings set-sub" popover role="group" aria-labelledby="set-status">
+        <section class="set-sec">
+          <h3 id="set-status">Statuslinje</h3>
           <label class="set-switch">
-            <span><strong>Dato på streken</strong><small>«Status 6.11» øverst i planen</small></span>
-            <input type="checkbox" id="sl-label" role="switch" />
+            <span><strong>Vis statuslinje</strong><small>Loddrett strek på statusdatoen, også på PDF</small></span>
+            <input type="checkbox" id="sl-on" role="switch" />
           </label>
-          <label class="set-switch">
-            <span><strong>Fremdriftsfront</strong><small>Streken går ut til der arbeidet er kommet i boksene som pågår</small></span>
-            <input type="checkbox" id="pf-on" role="switch" />
-          </label>
-          <div class="pf-details" id="pf-details" hidden>
+          <div class="sl-details" id="sl-details" hidden>
             <div class="set-row">
-              <span class="set-label" id="lbl-pf-against">Mål mot</span>
-              <div class="group" role="group" aria-labelledby="lbl-pf-against">
-                <button type="button" data-pf-against="plan" aria-pressed="true" title="Datoene i planen slik den er nå">Planen nå</button>
-                <button type="button" data-pf-against="baseline" aria-pressed="false" disabled title="Planen har ingen baseline fra Project">Baseline</button>
+              <span class="set-label" id="lbl-sl-date">Dato</span>
+              <div class="group" role="group" aria-labelledby="lbl-sl-date">
+                <button type="button" data-sl-source="project" aria-pressed="false" title="Statusdatoen som er satt i Project">Project</button>
+                <button type="button" data-sl-source="monday" aria-pressed="true" title="Mandag denne uken. Følger med når uka skifter.">Mandag</button>
+                <button type="button" data-sl-source="custom" aria-pressed="false">Velg dato</button>
               </div>
             </div>
-            <p class="pop-hint" id="pf-help" role="status"></p>
+            <div class="set-row" id="sl-date-row" hidden>
+              <span class="set-label"><label for="sl-date">Dag</label></span>
+              <span class="num"><input id="sl-date" type="date" /></span>
+            </div>
+            <p class="pop-hint" id="sl-help" role="status"></p>
+            <div class="set-row">
+              <span class="set-label" id="lbl-sl-width">Strek</span>
+              <div class="group" role="group" aria-labelledby="lbl-sl-width">
+                <button type="button" data-sl-width="0.3" aria-pressed="false">Tynn</button>
+                <button type="button" data-sl-width="0.5" aria-pressed="true">Middels</button>
+                <button type="button" data-sl-width="0.9" aria-pressed="false">Tykk</button>
+              </div>
+            </div>
+            <div class="set-row">
+              <span class="set-label" id="lbl-sl-color">Farge</span>
+              <div class="swatches" role="group" aria-labelledby="lbl-sl-color" id="sl-colors"></div>
+            </div>
             <label class="set-switch">
-              <span><strong>Ta med det som henger etter</strong><small>Også bokser som skulle vært ferdige, men ikke er det</small></span>
-              <input type="checkbox" id="pf-late" role="switch" />
+              <span><strong>Dato på streken</strong><small>«Status 6.11» øverst i planen</small></span>
+              <input type="checkbox" id="sl-label" role="switch" />
             </label>
             <label class="set-switch">
-              <span><strong>Vis avvik</strong><small>«−3 d» ved hvert knekkpunkt, i arbeidsdager</small></span>
-              <input type="checkbox" id="pf-dev" role="switch" />
+              <span><strong>Fremdriftsfront</strong><small>Streken går ut til der arbeidet er kommet i boksene som pågår</small></span>
+              <input type="checkbox" id="pf-on" role="switch" />
             </label>
+            <div class="pf-details" id="pf-details" hidden>
+              <div class="set-row">
+                <span class="set-label" id="lbl-pf-against">Mål mot</span>
+                <div class="group" role="group" aria-labelledby="lbl-pf-against">
+                  <button type="button" data-pf-against="plan" aria-pressed="true" title="Datoene i planen slik den er nå">Planen nå</button>
+                  <button type="button" data-pf-against="baseline" aria-pressed="false" disabled title="Planen har ingen baseline fra Project">Baseline</button>
+                </div>
+              </div>
+              <p class="pop-hint" id="pf-help" role="status"></p>
+              <label class="set-switch">
+                <span><strong>Ta med det som henger etter</strong><small>Også bokser som skulle vært ferdige, men ikke er det</small></span>
+                <input type="checkbox" id="pf-late" role="switch" />
+              </label>
+              <label class="set-switch">
+                <span><strong>Vis avvik</strong><small>«−3 d» ved hvert knekkpunkt, i arbeidsdager</small></span>
+                <input type="checkbox" id="pf-dev" role="switch" />
+              </label>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section class="set-sec" aria-labelledby="set-tekst">
-        <h3 id="set-tekst">Tekst</h3>
-        <div class="set-row">
-          <span class="set-label" id="lbl-fit">Tilpasning</span>
-          <div class="group" role="group" aria-labelledby="lbl-fit">
-            <button type="button" data-fit="sheet" aria-pressed="true" title="Teksten krymper til planen får plass på arket">Tilpass arket</button>
-            <button type="button" data-fit="fixed" aria-pressed="false" title="Teksten har alltid samme størrelse">Fast</button>
+        </section>
+      </div>
+      <div id="sub-tekst" class="pop settings set-sub" popover role="group" aria-labelledby="set-tekst">
+        <section class="set-sec">
+          <h3 id="set-tekst">Tekst</h3>
+          <div class="set-row">
+            <span class="set-label" id="lbl-fit">Tilpasning</span>
+            <div class="group" role="group" aria-labelledby="lbl-fit">
+              <button type="button" data-fit="sheet" aria-pressed="true" title="Teksten krymper til planen får plass på arket">Tilpass arket</button>
+              <button type="button" data-fit="fixed" aria-pressed="false" title="Teksten har alltid samme størrelse">Fast</button>
+            </div>
           </div>
-        </div>
-        <div class="set-nums">
-          <label><span>Tekst</span><span class="num"><input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /><i>pt</i></span></label>
-          <label id="min-text-field"><span>Minst</span><span class="num"><input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /><i>pt</i></span></label>
-          <label><span>Overskrift</span><span class="num"><input id="title-size" type="number" min="8" max="40" step="1" value="16" /><i>pt</i></span></label>
-          <label title="Hvor bred en callout kan bli på arket før teksten brytes"><span>Callout</span><span class="num"><input id="callout-width" type="number" min="1" max="15" step="0.5" value="3" /><i>cm</i></span></label>
-        </div>
-      </section>
-
-      <section class="set-sec" aria-labelledby="set-logo">
-        <h3 id="set-logo">Logo</h3>
-        <div class="set-logo">
-          <div class="logo-well" id="logo-well"><img id="logo-preview" alt="" hidden /><span id="logo-empty">Ingen logo</span></div>
-          <div class="set-logo-actions">
-            <label class="button" id="logo-pick">Velg bilde …<input id="logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden /></label>
-            <button type="button" id="logo-remove" class="button" disabled>Fjern</button>
+          <div class="set-nums">
+            <label><span>Tekst</span><span class="num"><input id="text-size" type="number" min="4" max="24" step="0.5" value="9" /><i>pt</i></span></label>
+            <label id="min-text-field"><span>Minst</span><span class="num"><input id="min-text" type="number" min="4" max="20" step="0.5" value="6" /><i>pt</i></span></label>
+            <label><span>Overskrift</span><span class="num"><input id="title-size" type="number" min="8" max="40" step="1" value="16" /><i>pt</i></span></label>
+            <label title="Hvor bred en callout kan bli på arket før teksten brytes"><span>Callout</span><span class="num"><input id="callout-width" type="number" min="1" max="15" step="0.5" value="3" /><i>cm</i></span></label>
           </div>
-        </div>
-        <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>
-      </section>
+        </section>
+      </div>
+      <div id="sub-logo" class="pop settings set-sub" popover role="group" aria-labelledby="set-logo">
+        <section class="set-sec">
+          <h3 id="set-logo">Logo og revisjon</h3>
+          <div class="set-logo">
+            <div class="logo-well" id="logo-well"><img id="logo-preview" alt="" hidden /><span id="logo-empty">Ingen logo</span></div>
+            <div class="set-logo-actions">
+              <label class="button" id="logo-pick">Velg bilde …<input id="logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden /></label>
+              <button type="button" id="logo-remove" class="button" disabled>Fjern</button>
+            </div>
+          </div>
+          <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>
+          <div class="set-switches">
+            <label class="set-switch">
+              <span><strong>Revisjon</strong><small>Nummer og kort tekst nede til høyre, foran datoen</small></span>
+              <input type="checkbox" id="rev-on" role="switch" />
+            </label>
+            <div class="rev-fields" id="rev-fields" hidden>
+              <label class="rev-num"><span>Rev.</span><input type="text" id="rev-number" maxlength="8" placeholder="A" /></label>
+              <label class="rev-text"><span>Tekst</span><input type="text" id="rev-text" maxlength="80" placeholder="Hva er endret" /></label>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
 
     <div id="menu-arrange" class="pop pop-menu arrange-menu no-print" popover aria-labelledby="arrange-title">
