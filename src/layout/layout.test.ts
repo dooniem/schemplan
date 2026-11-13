@@ -558,6 +558,29 @@ describe('overskriftsboks', () => {
     expect(c.y + c.h).toBeLessThanOrEqual(h.y + h.h + 1e-6);
     expect(hi).toBeLessThan(L.items.findIndex((i) => i.id === '2_2'));
   });
+
+  it('blir høyere når en boks inni den blir skjøvet ned, og boksene under flyttes ned', () => {
+    for (const heightMode of ['compact', 'fill'] as const) {
+      const p = example();
+      const [head, a, b] = p.lanes[1].boxes;
+      Object.assign(head, { header: true, top: 0, height: 3.8 });
+      a.top = 1.2;
+      b.top = 2.4;
+      // a blir høyere (som når teksten blir callout eller større), og skyver b ned
+      a.height = 3;
+      const L = computeLayout(p, { ...o, heightMode }, approxMeasure);
+      const box = (id: string) => L.items.find((i) => i.id === id) as Extract<Item, { kind: 'box' }>;
+      const h = box('2_1');
+      expect(box('2_3').y + box('2_3').h).toBeLessThanOrEqual(h.y + h.h + 1e-6);
+      // Ingen annen boks i lanen overlapper overskriftsboksen
+      const lane = L.lanes.find((l) => l.id === '2')!;
+      for (const it of L.items) {
+        if (it.kind !== 'box' || ['2_1', '2_2', '2_3'].includes(it.id) || it.y < lane.y0 || it.y >= lane.y1) continue;
+        const overlapX = it.x0 < h.x1 && h.x0 < it.x1;
+        if (overlapX) expect(it.y).toBeGreaterThanOrEqual(h.y + h.h - 1e-6);
+      }
+    }
+  });
 });
 
 describe('forklaringen', () => {

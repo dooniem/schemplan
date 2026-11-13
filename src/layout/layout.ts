@@ -322,7 +322,7 @@ export function packVariants(
   pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[],
   gap = GAP,
   limit?: (fx0: number, fx1: number) => [number, number],
-): { y: number; k: number; bad?: boolean }[] {
+): { y: number; k: number; bad?: boolean; h?: number }[] {
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
   // Overskriftsbokser: for bokser med fast plass er det bare tekstfeltet øverst som er opptatt
   const inner: { x0: number; x1: number; y0: number; y1: number }[] = [];
@@ -331,7 +331,8 @@ export function packVariants(
     const candidates = [from, ...overlapping.map((q) => q.y1 + gap)].filter((c) => c >= from - 1e-6).sort((a, b) => a - b);
     return candidates.find((c) => overlapping.every((q) => c + p.h <= q.y0 + 1e-6 || c >= q.y1 + gap - 1e-6)) ?? from;
   };
-  const out: { y: number; k: number; bad?: boolean }[] = new Array(pieces.length);
+  const out: { y: number; k: number; bad?: boolean; h?: number }[] = new Array(pieces.length);
+  const rectOf = new Map<number, number>();
   // Brikker med fast plass legges først, så de andre pakkes rundt dem
   const order = pieces.map((_, i) => i);
   const lockAt = liftLocks(pieces, limit);
@@ -339,6 +340,8 @@ export function packVariants(
   const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => lockAt[a]! - lockAt[b]! || (pieces[b].band !== undefined ? 1 : 0) - (pieces[a].band !== undefined ? 1 : 0));
   const free = order.filter((i) => pieces[i].lock === undefined);
   for (const i of [...locked, ...free]) {
+    // Overskriftsboksene blir høyere når boksene inni dem er skjøvet ned, før resten pakkes rundt dem
+    if (i === free[0]) growHeaders();
     const p = pieces[i];
     let best = { y: 0, k: 0, score: Infinity, w: Infinity, bad: false };
     p.alts.forEach((v, k) => {
@@ -352,11 +355,38 @@ export function packVariants(
       if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && w < best.w - 1e-6)) best = { y, k, score, w, bad };
     });
     const v = p.alts[best.k];
+    rectOf.set(i, placed.length);
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
     inner.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + (p.band ?? v.h) });
     out[i] = best.bad ? { y: best.y, k: best.k, bad: true } : { y: best.y, k: best.k };
   }
+  if (!free.length) growHeaders();
   return out;
+
+  /**
+   * En boks med fast plass inne i en overskriftsboks kan bli skjøvet ned, f.eks. av en callout over den.
+   * Da blir overskriftsboksen høyere, så boksen fortsatt står inni den. Hører til gjør bokser som er
+   * satt inne i den: startpunktet innenfor overskriftsboksen og hele bredden under den.
+   */
+  function growHeaders() {
+    const heads = locked.filter((i) => pieces[i].band !== undefined).sort((a, b) => pieces[a].alts[out[a].k].h - pieces[b].alts[out[b].k].h);
+    for (const i of heads) {
+      const v = pieces[i].alts[out[i].k];
+      const y0 = lockAt[i]!;
+      const h0 = out[i].h ?? v.h;
+      let bottom = -Infinity;
+      for (const j of locked) {
+        if (j === i) continue;
+        const w = pieces[j].alts[out[j].k];
+        if (w.fx0 < v.fx0 - 1e-6 || w.fx1 > v.fx1 + 1e-6 || lockAt[j]! < y0 - 1e-6 || lockAt[j]! >= y0 + h0 - 1e-6) continue;
+        bottom = Math.max(bottom, out[j].y + (out[j].h ?? w.h));
+      }
+      const need = bottom + PAD_Y - out[i].y;
+      if (need <= h0 + 1e-6) continue;
+      out[i].h = need;
+      placed[rectOf.get(i)!].y1 = out[i].y + need;
+    }
+  }
 }
 
 /**
@@ -650,6 +680,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     pieces.forEach((p, j) => {
       const v = (p.alts ?? [p])[placed[j].k];
       Object.assign(p, { item: v.item, fx0: v.fx0, fx1: v.fx1, h: v.h });
+      // Overskriftsboks som ble høyere for å romme boksene inni
+      const h = placed[j].h;
+      if (h !== undefined && p.item.kind === 'box') {
+        grow(p.item, h);
+        p.h = h;
+      }
     });
     // Kompakt: festede bokser beholder rekkefølgen, men tomrommet over dem tas bort.
     // Bokser plassert i Kompakt står der de er satt.
