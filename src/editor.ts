@@ -1840,45 +1840,90 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
 
-  const startMove = (it: Item): Drag | null => {
+  /**
+   * Flytter boksen eller milepælen `it`, og med flere valgt også de andre valgte (`ids`), like langt.
+   * Ett slipp gir ett angresteg.
+   */
+  const startMove = (it: Item, ids: string[] = [it.id]): Drag | null => {
     if (!layoutNow) return null;
-    const r = bounds(it);
     const L = layoutNow;
-    // Lanen boksen hører til. Et flagg øverst i lanen kan stikke litt over kanten, så toppen av
-    // tegningen kan ligge i lanen over (eller over den første lanen).
     const plan0 = host.getPlan();
-    const own = plan0 ? laneOf(plan0, it.id)?.id : undefined;
-    const home = L.lanes.find((l) => l.id === own) ?? laneAt(r.y0);
-    if (!home) return null;
     const unit = L.unit;
-    // Multi Lane-boks: i lanen tar den bare plass til teksten øverst, så det er den som flyttes innenfor lanen
-    const span = it.kind === 'box' && !!it.span;
-    const fh = span ? Math.min((it as BoxItem).minH ?? r.y1 - r.y0, r.y1 - r.y0) : r.y1 - r.y0;
-    let lane = home;
+    const many = ids.length > 1;
+    type Unit = {
+      it: Item;
+      r: ReturnType<typeof bounds>;
+      home: LaneLayout;
+      span: boolean;
+      /** Høyden som teller i lanen: for Multi Lane-bokser bare teksten øverst. */
+      fh: number;
+      /** Kanten som snapper: selve boksen, ikke callouten. */
+      bh: number;
+      sideways: boolean;
+      /** Bokser inne i en overskriftsboks, med avstanden fra toppen av overskriftsboksen. */
+      kids: { id: string; dy: number }[];
+      lane: LaneLayout;
+      y: number;
+      ghost?: SVGRectElement;
+    };
+    const unitOf = (o: Item): Unit | null => {
+      const r = bounds(o);
+      // Lanen boksen hører til. Et flagg øverst i lanen kan stikke litt over kanten, så toppen av
+      // tegningen kan ligge i lanen over (eller over den første lanen).
+      const own = plan0 ? laneOf(plan0, o.id)?.id : undefined;
+      const home = L.lanes.find((l) => l.id === own) ?? laneAt(r.y0);
+      if (!home) return null;
+      // Multi Lane-boks: i lanen tar den bare plass til teksten øverst, så det er den som flyttes innenfor lanen
+      const span = o.kind === 'box' && !!o.span;
+      const fh = span ? Math.min((o as BoxItem).minH ?? r.y1 - r.y0, r.y1 - r.y0) : r.y1 - r.y0;
+      // Egne bokser og milepæler kan også dras sidelengs til nye datoer (ikke når de følger en annen boks)
+      const b = plan0 ? findBox(plan0, o.id) : null;
+      const sideways = !!b?.manual && !b.follows && !!b.resolved && !(o.kind === 'box' && (o.header || o.span));
+      const kids = o.kind === 'box' && o.header && !o.span ? L.items.filter((k) => inHeaderBox(o, k)).map((k) => ({ id: k.id, dy: bounds(k).y0 - r.y0 })) : [];
+      return { it: o, r, home, span, fh, bh: o.kind === 'box' ? o.h : fh, sideways, kids, lane: home, y: r.y0 };
+    };
+    const lead = unitOf(it);
+    if (!lead) return null;
+    const units: Unit[] = [lead];
+    for (const id of ids) {
+      const o = id === it.id ? undefined : L.items.find((i) => i.id === id);
+      const u = o && unitOf(o);
+      if (u) units.push(u);
+    }
+    // En boks inne i en valgt overskriftsboks følger overskriftsboksen og flyttes ikke for seg
+    const carried = new Set(units.flatMap((u) => u.kids.map((k) => k.id)));
+    const moving = units.filter((u) => u === lead || !carried.has(u.it.id));
+    for (const u of moving) u.kids = u.kids.filter((k) => !moving.some((m) => m.it.id === k.id));
+    const skip = new Set(moving.flatMap((u) => [u.it.id, ...u.kids.map((k) => k.id)]));
+    const { r, span } = lead;
     let g: SVGGElement | null = null;
-    let rect: SVGRectElement | null = null;
     let target: SVGRectElement | null = null;
-    let y = r.y0;
     let snap: ReturnType<typeof snapper> | null = null;
-    const kidItems = () =>
-      it.kind === 'box' && it.header && !it.span
-        ? L.items.filter((o) => inHeaderBox(it, o))
-        : [];
-    const kidsOf = () => kidItems().map((o) => o.id);
-    // Kanten som snapper: selve boksen, ikke callouten
-    const bh = it.kind === 'box' ? it.h : fh;
-    // Egne bokser og milepæler kan også dras sidelengs til nye datoer (ikke når de følger en annen boks)
-    const own0 = plan0 ? findBox(plan0, it.id) : null;
-    const sideways = !!own0?.manual && !own0.follows && !!own0.resolved && !(it.kind === 'box' && (it.header || it.span));
     const refX = it.kind === 'box' ? it.x0 : it.x;
+    const anySideways = moving.some((u) => u.sideways);
     let days = 0;
     let xShift = 0;
+    const first = L.lanes[0];
+    const last = L.lanes[L.lanes.length - 1];
+    /** Plassen for `u` når toppen ønskes ved `top`. `exact`: toppen skal ikke rundes av (snappet, eller fulgt av en annen). */
+    const place = (u: Unit, top: number, exact: boolean) => {
+      // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
+      const lane = laneAt(clamp(top + u.fh / 2, first.y0, last.y1 - 1e-3)) ?? u.home;
+      const pad = lane.top - lane.y0;
+      const maxY = Math.max(lane.top, lane.y1 - pad - u.fh);
+      // Ellers trinn på en kvart tekstlinje
+      const want = exact ? top : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
+      // I samme lane står bunnen av en Multi Lane-boks fast, så toppen kan flyttes ned uten at bunnen følger
+      u.lane = lane;
+      u.y = clamp(want, lane.top, u.span && lane === u.home ? Math.min(maxY, u.r.y1 - u.fh) : maxY);
+      return want;
+    };
     return {
       startY: r.y0,
       startClient: 0,
       moved: false,
       move(dy, dx) {
-        if (sideways) {
+        if (anySideways) {
           // Hele dager: datoen under venstre kant (midten for milepæler) bestemmer forskyvningen
           const x = clamp(refX + dx, L.plot.x0, L.plot.x1 - 1e-3);
           days = daysBetween(L.dateAt(refX), L.dateAt(x));
@@ -1888,68 +1933,65 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         }
         if (!g) {
           g = ghostLayer();
-          // Lanen boksen havner i, markert svakt
-          target = shape(g, 'rect', { x: L.laneTitleX, y: home.y0, width: L.plot.x1 - L.laneTitleX, height: home.y1 - home.y0, fill: ACCENT, 'fill-opacity': 0.06 });
-          rect = shape(g, 'rect', { x: r.x0, y: r.y0, width: r.x1 - r.x0, height: r.y1 - r.y0, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
+          // Lanen boksen havner i, markert svakt (bare når én boks dras)
+          if (!many) target = shape(g, 'rect', { x: L.laneTitleX, y: lead.home.y0, width: L.plot.x1 - L.laneTitleX, height: lead.home.y1 - lead.home.y0, fill: ACCENT, 'fill-opacity': 0.06 });
+          for (const u of moving) u.ghost = shape(g, 'rect', { x: u.r.x0, y: u.r.y0, width: u.r.x1 - u.r.x0, height: u.r.y1 - u.r.y0, fill: ACCENT, 'fill-opacity': 0.15, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6' });
         }
-        // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
-        const first = L.lanes[0];
-        const last = L.lanes[L.lanes.length - 1];
-        lane = laneAt(clamp(r.y0 + dy + fh / 2, first.y0, last.y1 - 1e-3)) ?? home;
-        const pad = lane.top - lane.y0;
-        const maxY = Math.max(lane.top, lane.y1 - pad - fh);
-        // Topp eller bunn snapper til kanten av en annen boks, ellers trinn på en kvart tekstlinje
-        if (!snap) snap = snapper(g!, new Set([it.id, ...kidsOf()]));
+        // Topp eller bunn på boksen det dras i snapper til kanten av en annen boks. De andre valgte flyttes like langt.
+        if (!snap) snap = snapper(g, skip);
         const top = r.y0 + dy;
-        const hit = it.kind === 'box' ? snap.find(span ? [top] : [top, top + bh]) : null;
-        const want = hit ? top + hit.d : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
-        // I samme lane står bunnen av en Multi Lane-boks fast, så toppen kan flyttes ned uten at bunnen følger
-        y = clamp(want, lane.top, span && lane === home ? Math.min(maxY, r.y1 - fh) : maxY);
-        snap.show(hit && Math.abs(y - want) < 1e-6 ? hit : null);
-        set(rect!, span && lane === home ? { y, height: r.y1 - y } : { y, height: r.y1 - r.y0 });
-        if (sideways) set(rect!, { x: r.x0 + xShift });
-        set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
+        const hit = it.kind === 'box' ? snap.find(span ? [top] : [top, top + lead.bh]) : null;
+        const want = place(lead, hit ? top + hit.d : top, !!hit);
+        const shift = want - r.y0;
+        // Ikke rundet av for seg, så de valgte står like i forhold til hverandre
+        for (const u of moving) if (u !== lead) place(u, u.r.y0 + shift, true);
+        snap.show(hit && Math.abs(lead.y - want) < 1e-6 ? hit : null);
+        for (const u of moving) {
+          set(u.ghost!, u.span && u.lane === u.home ? { y: u.y, height: u.r.y1 - u.y } : { y: u.y, height: u.r.y1 - u.r.y0 });
+          set(u.ghost!, { x: u.r.x0 + (u.sideways ? xShift : 0) });
+        }
+        if (target) set(target, { y: lead.lane.y0, height: lead.lane.y1 - lead.lane.y0, 'fill-opacity': lead.lane === lead.home ? 0 : 0.06 });
       },
       end() {
         g?.remove();
-        const vertical = !(Math.abs(y - r.y0) < 1e-6 && lane === home);
+        const vertical = moving.some((u) => !(Math.abs(u.y - u.r.y0) < 1e-6 && u.lane === u.home));
         if (!vertical && !days) return;
-        selected = it.id;
-        if (!vertical) {
-          commit((plan) => {
-            const b = findBox(plan, it.id);
-            if (b?.resolved) b.resolved = { ...b.resolved, start: addDaysIso(b.resolved.start, days), finish: addDaysIso(b.resolved.finish, days) };
-          });
-          return;
-        }
-        // En overskriftsboks tar med seg boksene som ligger inne i den
-        const kids = kidItems().map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }));
-        commit((plan) => {
-          // Med «Fyll hele arket» fordeles ledig plass likt på lanene. Slippes boksen lenger ned enn
-          // innholdet i lanen gikk, ville lanen blitt høyere og lanene over lavere, så boksen havnet
-          // nesten der den var. Lanen beholder derfor høyden den har, så boksen står der den ble sluppet.
-          const pl = findLane(plan, lane.id);
-          if (!L.compact && pl && !pl.height && y + (r.y1 - r.y0) - lane.y0 > lane.minH + 1e-6) pl.height = lines(lane.y1 - lane.y0, unit);
-          if (days) {
-            const b = findBox(plan, it.id);
+        if (!many) selected = it.id;
+        const shiftDates = (plan: PlanFile) => {
+          if (!days) return;
+          for (const u of moving) {
+            const b = u.sideways ? findBox(plan, u.it.id) : null;
             if (b?.resolved) b.resolved = { ...b.resolved, start: addDaysIso(b.resolved.start, days), finish: addDaysIso(b.resolved.finish, days) };
           }
-          for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
-            if (lane !== home) moveBox(plan, m.id, lane.id);
-            const b = findBox(plan, m.id);
-            // I Kompakt lagres plassen bare for Kompakt, så «Fyll hele arket» er som før.
-            // Til en annen lane gjelder plassen begge, den gamle hører til forrige lane.
-            if (b) {
-              const at = lines(y + m.dy - lane.top, unit);
-              if (!L.compact || lane !== home) b.top = at;
-              if (L.compact) b.compactTop = at;
-              else if (lane !== home) delete b.compactTop;
-            }
-            // Multi Lane-boks i en annen lane: den går like mange lanes ned som før
-            if (b && span && lane !== home && b.spanTo !== undefined) {
-              const from = L.lanes.findIndex((l) => l.id === b.spanTo);
-              const shift = L.lanes.indexOf(lane) - L.lanes.indexOf(home);
-              if (from >= 0) b.spanTo = L.lanes[clamp(from + shift, L.lanes.indexOf(lane), L.lanes.length - 1)].id;
+        };
+        if (!vertical) return commit(shiftDates);
+        commit((plan) => {
+          shiftDates(plan);
+          for (const u of moving) {
+            const { lane, home, y } = u;
+            // Med «Fyll hele arket» fordeles ledig plass likt på lanene. Slippes boksen lenger ned enn
+            // innholdet i lanen gikk, ville lanen blitt høyere og lanene over lavere, så boksen havnet
+            // nesten der den var. Lanen beholder derfor høyden den har, så boksen står der den ble sluppet.
+            const pl = findLane(plan, lane.id);
+            if (!L.compact && pl && !pl.height && y + (u.r.y1 - u.r.y0) - lane.y0 > lane.minH + 1e-6) pl.height = lines(lane.y1 - lane.y0, unit);
+            // En overskriftsboks tar med seg boksene som ligger inne i den
+            for (const m of [{ id: u.it.id, dy: 0 }, ...u.kids]) {
+              if (lane !== home) moveBox(plan, m.id, lane.id);
+              const b = findBox(plan, m.id);
+              // I Kompakt lagres plassen bare for Kompakt, så «Fyll hele arket» er som før.
+              // Til en annen lane gjelder plassen begge, den gamle hører til forrige lane.
+              if (b) {
+                const at = lines(y + m.dy - lane.top, unit);
+                if (!L.compact || lane !== home) b.top = at;
+                if (L.compact) b.compactTop = at;
+                else if (lane !== home) delete b.compactTop;
+              }
+              // Multi Lane-boks i en annen lane: den går like mange lanes ned som før
+              if (b && u.span && m.id === u.it.id && lane !== home && b.spanTo !== undefined) {
+                const from = L.lanes.findIndex((l) => l.id === b.spanTo);
+                const shift = L.lanes.indexOf(lane) - L.lanes.indexOf(home);
+                if (from >= 0) b.spanTo = L.lanes[clamp(from + shift, L.lanes.indexOf(lane), L.lanes.length - 1)].id;
+              }
             }
           }
         });
@@ -2334,7 +2376,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           const p = toMm(e.clientX, e.clientY);
           d = startMarquee(p.x, p.y);
         }
-      } else if (it) d = startMove(it);
+      } else if (it) d = startMove(it, group.includes(it.id) ? group : [it.id]);
       else {
         const ln = titleLaneOf(e);
         if (ln) d = startLaneMove(ln);
