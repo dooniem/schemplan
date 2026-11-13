@@ -92,6 +92,10 @@ export interface PlanSettings {
     changes?: Record<string, BoxChange>;
     /** Revisjon nede til høyre, foran datoen. Kan skrus av uten at nummer og tekst glemmes. */
     revision?: { on: boolean; number: string; text?: string };
+    /** % ferdig som mørk stripe nederst i boksene. */
+    showProgress?: boolean;
+    /** Baseline som tynn strek under boksene. */
+    showBaseline?: boolean;
     /** Tynn linje på dagens dato, uavhengig av statuslinjen. */
     todayLine?: boolean;
     /** Marker endringene fra siste oppdatering på arket. */

@@ -710,6 +710,9 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
   $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
   $<HTMLInputElement>('#show-today').checked = !!plan?.plan.layout.todayLine;
+  $<HTMLInputElement>('#show-progress').checked = !!plan?.plan.layout.showProgress;
+  $<HTMLInputElement>('#show-baseline').checked = !!plan?.plan.layout.showBaseline;
+  $<HTMLInputElement>('#show-baseline').disabled = !plan?.tasks.some((t) => t.baselineFinish);
   const rev = plan?.plan.layout.revision;
   $<HTMLInputElement>('#rev-on').checked = !!rev?.on;
   $<HTMLInputElement>('#rev-on').disabled = !plan;
@@ -809,6 +812,12 @@ $<HTMLInputElement>('#rev-on').addEventListener('change', (e) => {
 });
 $<HTMLInputElement>('#rev-number').addEventListener('input', (e) => setRevision({ number: (e.target as HTMLInputElement).value }));
 $<HTMLInputElement>('#rev-text').addEventListener('input', (e) => setRevision({ text: (e.target as HTMLInputElement).value }));
+for (const [id, key] of [['#show-progress', 'showProgress'], ['#show-baseline', 'showBaseline']] as const)
+  $<HTMLInputElement>(id).addEventListener('change', (e) => {
+    if (!plan) return;
+    plan.plan.layout[key] = (e.target as HTMLInputElement).checked;
+    draw();
+  });
 $<HTMLInputElement>('#show-today').addEventListener('change', (e) => {
   if (!plan) return;
   plan.plan.layout.todayLine = (e.target as HTMLInputElement).checked;
