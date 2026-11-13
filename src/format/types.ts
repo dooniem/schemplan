@@ -90,6 +90,8 @@ export interface PlanSettings {
     images?: PlanImage[];
     /** Endringer fra Project ved siste oppdatering: nye bokser, og bokser med nye datoer (med datoene de hadde før). */
     changes?: Record<string, BoxChange>;
+    /** Tynn linje på dagens dato, uavhengig av statuslinjen. */
+    todayLine?: boolean;
     /** Marker endringene fra siste oppdatering på arket. */
     showChanges?: boolean;
     /** Egendefinert planområde: topp- og bunnkanten som punkter [x, y], andeler av arket fra venstre til høyre. */

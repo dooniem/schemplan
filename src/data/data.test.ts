@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { crc32 } from 'node:zlib';
-import { cell, COLUMNS, planRows, plainText } from './rows';
+import { cell, COLUMNS, planRows, plainText, progressOf } from './rows';
 import { buildXlsx, excelDate, zip } from './xlsx';
 import { testplan } from '../test/testplaner';
 
@@ -77,7 +77,7 @@ describe('Excel-fil', () => {
     expect([...files.keys()]).toEqual(['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/worksheets/sheet1.xml']);
     const sheet = files.get('xl/worksheets/sheet1.xml')!;
     expect(sheet.match(/<row /g)).toHaveLength(rows.length + 1);
-    expect(sheet).toContain('<autoFilter ref="A1:P');
+    expect(sheet).toContain('<autoFilter ref="A1:R');
     // Datoer lagres som tall med datoformat
     expect(sheet).toContain(`<c r="C2" s="2"><v>${excelDate(rows[0].start)}</v></c>`);
   });
@@ -89,5 +89,14 @@ describe('Excel-fil', () => {
     expect(unzip(z).get('a.txt')).toBe('hei');
     const dv = new DataView(z.buffer);
     expect(dv.getUint32(z.length - 22, true)).toBe(0x06054b50);
+  });
+});
+
+describe('% ferdig og baseline', () => {
+  const t = (p: number, bf?: string) => ({ uid: 1, name: 'a', start: '2026-01-01', finish: '2026-02-01', deadline: null, milestone: false, summary: false, flag20: false, percentComplete: p, trade: null, baselineFinish: bf });
+  it('gir snitt og avvik i dager', () => {
+    expect(progressOf([t(50, '2026-01-28'), t(100)], '2026-02-01')).toEqual({ progress: '75 %', baseline: '4 dager senere' });
+    expect(progressOf([t(0, '2026-02-02')], '2026-02-01').baseline).toBe('1 dag tidligere');
+    expect(progressOf([], '2026-02-01')).toEqual({ progress: '', baseline: '' });
   });
 });
