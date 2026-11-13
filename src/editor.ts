@@ -639,9 +639,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Neste hele steg opp eller ned (halve punkter for tekst), så størrelsene blir runde tall
     down.disabled = cur <= lo + 1e-3;
     up.disabled = cur >= hi - 1e-3;
-    // Planens størrelse er også et stopp, så teksten kan gjøres like stor som i resten av planen
-    const downTo = Math.max(lo, Math.ceil(cur / step - 1e-3) * step - step);
-    const upTo = Math.min(hi, Math.floor(cur / step + 1e-3) * step + step);
+    // Planens størrelse er også et stopp, så teksten kan gjøres like stor som i resten av planen.
+    // Forholdet lagres med fire desimaler, så 25 pt kan bli 25,001; slingringsmonnet må tåle det.
+    const downTo = Math.max(lo, Math.ceil(cur / step - 0.02) * step - step);
+    const upTo = Math.min(hi, Math.floor(cur / step + 0.02) * step + step);
     down.addEventListener('click', () => setPt(planPt < cur - 1e-3 && planPt > downTo + 1e-3 ? planPt : downTo));
     up.addEventListener('click', () => setPt(planPt > cur + 1e-3 && planPt < upTo - 1e-3 ? planPt : upTo));
     g.append(down, val, up);
