@@ -31,6 +31,14 @@ describe('utkikk: periode', () => {
   it('fra valgt uke til og med valgt uke', () => {
     const w = resolveWindow(rule({ from: { year: 2026, week: 10 }, length: { year: 2026, week: 12 } }), p, '2026-11-08');
     expect(span(w)).toEqual(['2026-03-02', '2026-03-23']);
+    expect(w.tag).toBe('u10-12');
+  });
+
+  it('ukenummer får to sifre, så knappen ikke endrer bredde', () => {
+    const w = resolveWindow(rule({ from: { year: 2026, week: 3 }, length: { year: 2026, week: 5 } }), p, '2026-11-08');
+    expect(w.tag).toBe('u03-05');
+    const en = resolveWindow(rule({ from: { year: 2026, week: 9 }, length: { year: 2026, week: 9 } }), p, '2026-11-08');
+    expect(en.tag).toBe('u09');
   });
 
   it('plan som ikke har startet: viser de første ukene og sier fra', () => {
