@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeLayout, LANE_TITLE_DEFAULT, type BoxItem, type LayoutOptions } from './layout';
-import { fitTextToBoxes, resetTextSizes } from './fittext';
+import { fitTextIntoLaneSpace, fitTextToBoxes, resetTextSizes } from './fittext';
 import { approxMeasure, PT_TO_MM } from './text';
 import { validatePlan } from '../format/validate';
 import { testplan } from '../test/testplaner';
@@ -70,6 +70,45 @@ describe('størst mulig tekst', () => {
     const it = box(L, '2_2');
     expect(it.text!.size).toBeCloseTo(L.textSizePt * 1.5 * (25.4 / 72), 5);
     expect(it.h).toBeGreaterThan(h0);
+  });
+});
+
+describe('størst mulig tekst med ledig plass i lanene', () => {
+  const fill: LayoutOptions = { ...opts, heightMode: 'fill' };
+
+  it('gir boksene større tekst der den vanlige varianten ikke finner plass', () => {
+    const p = testplan();
+    expect(fitTextToBoxes(p, fill, approxMeasure, { laneTitles: false }).grown).toBe(0);
+    const before = computeLayout(p, fill, approxMeasure);
+    const r = fitTextIntoLaneSpace(p, fill, approxMeasure, { laneTitles: false });
+    expect(r.grown).toBeGreaterThan(0);
+    const after = computeLayout(r.plan, fill, approxMeasure);
+    // Planens tekst krymper ikke, og planen blir ikke høyere
+    expect(after.textSizePt).toBe(before.textSizePt);
+    expect(after.plot.y1).toBeLessThanOrEqual(before.plot.y1 + 1e-6);
+    expect(validatePlan(r.plan).errors).toEqual([]);
+  });
+
+  it('lar milepæler og callouts være, og gjør ingen boks til callout', () => {
+    const p = testplan();
+    const r = fitTextIntoLaneSpace(p, fill, approxMeasure, { laneTitles: false });
+    const all = r.plan.lanes.flatMap((l) => l.boxes);
+    expect(all.find((b) => b.id === '3_3')!.textScale).toBeUndefined();
+    expect(all.find((b) => b.id === '1_3')!.textScale).toBeUndefined();
+    const L = computeLayout(r.plan, fill, approxMeasure);
+    for (const b of all) if (b.textScale) expect(box(L, b.id).callout).toBeNull();
+  });
+
+  it('gjelder bare valgte bokser, og gjør aldri planen høyere', () => {
+    const p = testplan();
+    const r = fitTextIntoLaneSpace(p, fill, approxMeasure, { boxIds: new Set(['2_1']), laneTitles: false });
+    expect(r.plan.lanes.flatMap((l) => l.boxes).filter((b) => b.textScale).map((b) => b.id)).toEqual(['2_1']);
+    // Kompakt: bare bokser som deler høyden med en høyere boks i lanen, kan vokse
+    const c = fitTextIntoLaneSpace(p, opts, approxMeasure, { laneTitles: true });
+    const a = computeLayout(c.plan, opts, approxMeasure);
+    const b = computeLayout(p, opts, approxMeasure);
+    expect(a.textSizePt).toBe(b.textSizePt);
+    expect(a.plot.y1).toBeLessThanOrEqual(b.plot.y1 + 1e-6);
   });
 });
 

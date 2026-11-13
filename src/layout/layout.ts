@@ -486,6 +486,11 @@ export function laneTitleScaleOf(layout: { laneTitleScale?: number }, planPt: nu
 /** Lenger ned krymper vi aldri, heller ikke for å få plass. */
 export const ABS_MIN_TEXT_PT = 3;
 
+/** Tegner planen med fast tekststørrelse: scale ganger opts.textSizePt, uten å krympe. */
+export function layoutAtScale(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: number): Layout {
+  return layoutAt(file, opts, measure, scale);
+}
+
 /**
  * Tegner planen. Med fitToSheet finner den største tekststørrelsen (i trinn på 0,25 pt) mellom
  * minTextPt og valgt størrelse der planen får plass. Får den ikke plass ved minTextPt, krympes

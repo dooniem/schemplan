@@ -5,7 +5,7 @@ import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
 import type { PlanFile, ProgressFront, StatusLine } from './format/types';
 import { setPrintPage } from './print';
-import { fitTextToBoxes } from './layout/fittext';
+import { fitTextIntoLaneSpace } from './layout/fittext';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
 import type { Paper } from './sheet';
 import { renderPlan } from './render/svg';
@@ -94,7 +94,7 @@ const editor = createEditor(
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
     arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
-    fitText: (p, scope) => fitTextToBoxes(p, viewOf(p).opts, measure, scope),
+    fitText: (p, scope) => fitTextIntoLaneSpace(p, viewOf(p).opts, measure, scope),
     setTitleSize: (pt) => {
       opts.titleSizePt = pt;
       syncControls();
