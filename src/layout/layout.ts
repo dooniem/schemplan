@@ -1697,12 +1697,16 @@ export function planDate(file: PlanFile): string {
   return edited && edited > exported ? edited : exported;
 }
 
-/** Teksten nede til høyre: «Rev. B – tekst · dato», eller bare datoen. */
+/** Teksten nede til høyre: «Rev. B – tekst · dato», «tekst · dato» uten nummer, eller bare datoen. */
 export function footerLine(file: PlanFile): string {
   const rev = file.plan.layout.revision;
   const date = formatLong(planDate(file));
-  if (!rev?.on || !rev.number.trim()) return date;
-  return `Rev. ${rev.number.trim()}${rev.text?.trim() ? ` – ${rev.text.trim()}` : ''}  ·  ${date}`;
+  if (!rev?.on) return date;
+  const num = rev.number.trim();
+  const text = rev.text?.trim() ?? '';
+  const parts = [num ? `Rev. ${num}` : '', text].filter(Boolean);
+  if (!parts.length) return date;
+  return `${parts.join(' – ')}  ·  ${date}`;
 }
 
 /** Rammer rundt bokser og milepæler som er nye eller har nye datoer, og hvor de sto før. */
