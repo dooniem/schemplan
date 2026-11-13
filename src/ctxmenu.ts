@@ -18,6 +18,7 @@ const ICONS = {
   tag: 'M3.5 12.5V4h8.5l8.5 8.5-8 8z M8 8.5h.01',
   laneAdd: 'M4 5h16 M4 10h16 M12 14v7 M8.5 17.5h7',
   laneAddAbove: 'M12 3v7 M8.5 6.5h7 M4 14h16 M4 19h16',
+  merge: 'M4 4h16 M4 20h16 M12 8v8 M8.5 12.5L12 16l3.5-3.5',
   pencil: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
   fixed: 'M5 4h14 M5 20h14 M12 7.5v9',
   auto: 'M5 4h14 M12 8v12 M8.5 16.5L12 20l3.5-3.5',

@@ -15,6 +15,8 @@ import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, ke
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
+import { mergeLanes, mergeTargets } from './lanemerge';
+import { contentWords, createLanePick, laneName } from './lanepick';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
 import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, samePlanApartFromImages, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
@@ -138,6 +140,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
   let followPick: { id: string; edge: Edge } | null = null;
   const followBar = document.querySelector<HTMLElement>('#follow-bar');
+  /** «Slå sammen med …»: neste klikk på en lane slår den valgte lanen sammen med den. */
+  const laneMergeBar = document.querySelector<HTMLElement>('#lanemerge-bar');
+  const lanePick = laneMergeBar && createLanePick({
+    bar: laneMergeBar,
+    accent: ACCENT,
+    getPlan: () => host.getPlan(),
+    onMerge: (from, to) => mergeLaneInto(from, to),
+    onChange: () => {
+      overlay();
+      syncTools();
+    },
+  });
 
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
@@ -152,7 +166,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
     sheet.classList.toggle('critical-mode', active && criticalMode);
-    sheet.classList.toggle('follow-mode', active && !!followPick);
+    sheet.classList.toggle('follow-mode', active && (!!followPick || !!lanePick?.from));
   };
 
   /** Tar vare på planen før en endring, så den kan angres. */
@@ -284,6 +298,34 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!plan || plan.lanes.filter((l) => l.shown && !l.hidden).length <= 1) return;
     if (selectedLane === id) selectedLane = null;
     commit((pl) => removeLane(pl, id));
+    overlay();
+  };
+  /** Starter «Slå sammen med …» for lanen. */
+  const startLaneMerge = (id: string) => {
+    endFollowPick();
+    if (criticalMode) setCriticalMode(false);
+    lanePick?.start(id);
+  };
+  /** Slår sammen lanene som ett angresteg, og merker boksene som ble flyttet til de godtas eller angres. */
+  const mergeLaneInto = (from: string, to: string) => {
+    const plan = host.getPlan();
+    const fromLane = plan && findLane(plan, from);
+    const toLane = plan && findLane(plan, to);
+    if (!plan || !fromLane || !toLane) return;
+    const words = contentWords(plan, from);
+    // Festede bokser havner under det som står i lanen fra før
+    const L = layoutNow;
+    const ln = L?.lanes.find((x) => x.id === to);
+    const ids = new Set(toLane.boxes.map((b) => b.id));
+    const bottom = ln && L ? Math.max(ln.top, ...L.items.filter((it) => ids.has(it.id)).map((it) => bounds(it).y1)) : 0;
+    const offset = ln && L ? Math.max(0, lines(bottom - ln.top, L.unit)) : 0;
+    let moved: string[] = [];
+    selected = null;
+    group = [];
+    selectedLane = to;
+    commit((pl) => (moved = (mergeLanes(pl, from, to, offset) ?? []).map((b) => b.id)));
+    arrangeMoved = new Set(moved);
+    showArrangeBar(`${laneName(fromLane.name)} er slått sammen med ${laneName(toLane.name)}. ${words.charAt(0).toUpperCase() + words.slice(1)} flyttet.`, true);
     overlay();
   };
   /** Flytter lanen ett hakk opp eller ned blant lanene som vises. */
@@ -858,7 +900,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     down.disabled = pos < 0 || pos >= vis.length - 1;
     og.append(up, down);
     ow.append(og);
-    sp.append(ow, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
+    const mw = el('div', { class: 'prop prop-inline' });
+    const merge = btn('Med en annen lane …', null, () => startLaneMerge(l.id), 'Bokser og milepæler flyttes til lanen du velger, og denne lanen blir borte. Angre med Ctrl+Z.');
+    merge.disabled = !mergeTargets(plan, l.id).length;
+    mw.append(el('span', { class: 'prop-label' }, 'Slå sammen'), merge);
+    sp.append(ow, mw, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const del = btn(l.manual ? 'Slett' : 'Skjul', l.manual ? 'trash' : 'hide', () => removeLaneById(l.id),
@@ -1283,7 +1329,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ['Lanes', [
           'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
           'Dra i nederste kant av en lane for å gi den fast høyde.',
-          'Høyreklikk et lane-navn for ny lane og skjulte lanes. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
+          'Høyreklikk et lane-navn for ny lane, skjulte lanes og for å slå lanen sammen med en annen. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
           'Lanes: Egendefinert i Innstillinger gir en stiplet topp- og bunnkant du kan dra, f.eks. for å gi plass til et kart. Dra et hvitt punkt for å lage et knekkpunkt.',
         ]],
         ['Arket', [
@@ -1645,6 +1691,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
+    lanePick?.draw(g, L);
     areaOverlay(g);
     imageOverlay(g);
     svgNow.append(g);
@@ -2278,6 +2325,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid')) return;
     const g = itemOf(e);
     if (followPick) return pickFollowTarget(boxAt(e));
+    if (lanePick?.from) return lanePick.click(laneAt(toMm(e.clientX, e.clientY).y)?.id ?? null);
     if (criticalMode) {
       const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
@@ -2326,7 +2374,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.select();
   });
   sheet.addEventListener('pointerdown', (e) => {
-    if (!active || e.button !== 0 || !layoutNow || criticalMode || followPick) return;
+    if (!active || e.button !== 0 || !layoutNow || criticalMode || followPick || lanePick?.from) return;
     const t = e.target as Element;
     let d: Drag | null = null;
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
@@ -3266,6 +3314,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!active || !layoutNow) return;
     const q = toMm(e.clientX, e.clientY);
     lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
+    if (lanePick?.from && lanePick.hover(laneAt(q.y)?.id ?? null)) overlay();
   });
   sheet.addEventListener('pointerleave', () => (lastPointer = null));
   // Nettleserens egen dra-og-slipp av bilder i tegningen skal ikke starte: den ville lagt inn en kopi
@@ -3377,7 +3426,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const box = hitId ? findBox(plan, hitId) : null;
     const onTitle = p.x < L.plot.x0;
     if (onTitle) {
-      const hiddenLanes = plan.lanes.filter((x) => x.shown && x.hidden);
+      // Sammenslåtte lanes er borte for brukeren; de angres med Ctrl+Z, ikke vises igjen herfra
+      const hiddenLanes = plan.lanes.filter((x) => x.shown && x.hidden && !x.mergedInto);
       ctx.open(e.clientX, e.clientY, plainText(lane.name), [
         ...(L.compact ? [] : [{
           heading: 'Høyde',
@@ -3391,6 +3441,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             { label: 'Endre navn og farge', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner lanen i panelet til høyre.', onSelect: () => selectLane(ln.id) },
             { label: 'Ny lane over', icon: 'laneAddAbove', hint: 'Lanen lages i appen og følger ikke Project.', onSelect: () => addLaneAbove(ln.id) },
             { label: 'Ny lane under', icon: 'laneAdd', hint: 'Lanen lages i appen og følger ikke Project.', onSelect: () => addLane(ln.id) },
+            { label: 'Slå sammen med …', icon: 'merge', hint: 'Klikk lanen den skal slås sammen med. Bokser og milepæler flyttes dit, og denne lanen blir borte.', disabled: !mergeTargets(plan, ln.id).length, onSelect: () => startLaneMerge(ln.id) },
           ],
         },
         {
@@ -3510,6 +3561,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!active) {
       endArrange();
       endFollowPick();
+      lanePick?.end();
       criticalMode = false;
       selected = null;
       selectedLane = null;
@@ -3533,9 +3585,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     if (!plan) return;
     snapshot();
+    // Lanene først: da er sammenslåinger opphevet, og boksene flyttes tilbake til lanen de kom fra
+    plan.lanes.forEach((l) => resetLane(l));
     const ids = plan.lanes.flatMap((l) => l.boxes.map((b) => b.id));
     ids.forEach((id) => resetBoxInPlan(plan, id));
-    plan.lanes.forEach((l) => resetLane(l));
     delete plan.plan.layout.tradeColors;
     delete plan.plan.layout.laneTitleScale;
     delete plan.plan.layout.legendItems;
@@ -3740,6 +3793,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (e.key === 'Escape') {
       if (inField) t.blur();
       else if (followPick) endFollowPick();
+      else if (lanePick?.from) lanePick.end();
       else if (criticalMode) setCriticalMode(false);
       else if (selectedImage && imageMode !== 'none') setImageMode(imageMode);
       else select(null);
@@ -3847,6 +3901,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     reset() {
       endArrange();
       endFollowPick();
+      lanePick?.end();
       past = [];
       future = [];
       dirty = false;
@@ -3881,6 +3936,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     },
     replacePlan(p) {
       endFollowPick();
+      lanePick?.end();
       snapshot();
       host.setPlan(p);
       selected = null;

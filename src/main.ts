@@ -616,6 +616,7 @@ async function updateFrom(file: File): Promise<'ok' | 'avbrutt' | 'feil'> {
     ['Egne bokser flyttet med boksen de følger:', report.followMoved],
     ['Egne bokser som fulgte en boks som er borte fra Project (de står der de sto):', report.followLost],
     ['Project har endret navnet på lanes du hadde gitt nytt navn (navnet fra Project gjelder):', report.laneNameChanged],
+    ['Sammenslåtte lanes som vises igjen, fordi lanen de var slått sammen med er borte fra Project:', report.unmerged],
   ]);
   note.classList.add('small');
   showPlan(merged, file.name, r.warnings, note);

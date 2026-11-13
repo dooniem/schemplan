@@ -509,6 +509,10 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .work { position: relative; }
 .focus-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 4px 6px 4px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px; }
 .focus-bar[hidden] { display: none; }
+/* Slå sammen lanes: teksten brytes heller enn at linjen blir bredere enn arket */
+.lanemerge-bar .lanemerge-text { min-width: 0; }
+.lanemerge-bar select { flex: none; max-width: 14em; font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.lanemerge-bar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Endringer fra Project: nederst, så den ikke krasjer med fokus- og omplasseringslinjen øverst */
 .changes-bar { top: auto; bottom: 12px; }
 .changes-bar .changes-text { color: var(--text); }
