@@ -255,6 +255,21 @@ export function renderPlan(L: Layout): SVGSVGElement {
   }
 
   // Kritisk linje oppå boksene. Klikk går gjennom den til boksene under.
+  // Fremdrift (stripe nederst i boksen) og baseline (strek under boksen)
+  if (L.progress.length) {
+    const pg = node('g', { class: 'progress', 'pointer-events': 'none' }, svg);
+    for (const m of L.progress) {
+      if (m.done) {
+        const sh = Math.min(1.2, Math.max(0.5, m.h * 0.22));
+        node('rect', { x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * m.done, height: sh, fill: '#000000', 'fill-opacity': 0.4 }, pg);
+      }
+      if (m.base) {
+        const by = m.y + m.h + 0.45;
+        node('path', { d: `M${r(m.base.x0)} ${r(by - 0.35)} L${r(m.base.x0)} ${r(by)} L${r(m.base.x1)} ${r(by)} L${r(m.base.x1)} ${r(by - 0.35)}`, fill: 'none', stroke: '#404040', 'stroke-width': 0.25 }, pg);
+      }
+    }
+  }
+
   // Ramme rundt det som er nytt eller har nye datoer
   if (L.changes.length) {
     const cg = node('g', { class: 'change-marks', 'pointer-events': 'none' }, svg);

@@ -220,6 +220,14 @@ export function newBox(plan: PlanFile, laneId: string, start: string, finish: st
   return b;
 }
 
+/** Dato flyttet et antall dager (YYYY-MM-DD). */
+export const addDaysIso = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+
 /** Ny milepæl laget i appen: rødt flagg med dato, på én dag. */
 export function newMilestone(plan: PlanFile, laneId: string, date: string): Box | null {
   const lane = plan.lanes.find((l) => l.id === laneId);
@@ -1852,7 +1860,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     startY: number;
     startClient: number;
     moved: boolean;
-    move(dy: number): void;
+    /** dx er bare med for dra som kan gå sidelengs (egne bokser). */
+    move(dy: number, dx: number): void;
+    startX?: number;
     /** Dra som også følger musen sidelengs (rektangelvalg). Får punktet i mm. */
     moveXY?(x: number, y: number): void;
     startClientX?: number;
@@ -2053,11 +2063,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const kidsOf = () => kidItems().map((o) => o.id);
     // Kanten som snapper: selve boksen, ikke callouten
     const bh = it.kind === 'box' ? it.h : fh;
+    // Egne bokser og milepæler kan også dras sidelengs til nye datoer (ikke når de følger en annen boks)
+    const own0 = plan0 ? findBox(plan0, it.id) : null;
+    const sideways = !!own0?.manual && !own0.follows && !!own0.resolved && !(it.kind === 'box' && (it.header || it.span));
+    const refX = it.kind === 'box' ? it.x0 : it.x;
+    let days = 0;
+    let xShift = 0;
     return {
       startY: r.y0,
       startClient: 0,
       moved: false,
-      move(dy) {
+      move(dy, dx) {
+        if (sideways) {
+          // Hele dager: datoen under venstre kant (midten for milepæler) bestemmer forskyvningen
+          const x = clamp(refX + dx, L.plot.x0, L.plot.x1 - 1e-3);
+          days = daysBetween(L.dateAt(refX), L.dateAt(x));
+          const nx = L.xOfDate(addDaysIso(L.dateAt(refX), days));
+          const ox = L.xOfDate(L.dateAt(refX));
+          xShift = nx !== null && ox !== null ? nx - ox : dx;
+        }
         if (!g) {
           g = ghostLayer();
           // Lanen boksen havner i, markert svakt
@@ -2079,12 +2103,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         y = clamp(want, lane.top, span && lane === home ? Math.min(maxY, r.y1 - fh) : maxY);
         snap.show(hit && Math.abs(y - want) < 1e-6 ? hit : null);
         set(rect!, span && lane === home ? { y, height: r.y1 - y } : { y, height: r.y1 - r.y0 });
+        if (sideways) set(rect!, { x: r.x0 + xShift });
         set(target!, { y: lane.y0, height: lane.y1 - lane.y0, 'fill-opacity': lane === home ? 0 : 0.06 });
       },
       end() {
         g?.remove();
-        if (Math.abs(y - r.y0) < 1e-6 && lane === home) return;
+        const vertical = !(Math.abs(y - r.y0) < 1e-6 && lane === home);
+        if (!vertical && !days) return;
         selected = it.id;
+        if (!vertical) {
+          commit((plan) => {
+            const b = findBox(plan, it.id);
+            if (b?.resolved) b.resolved = { ...b.resolved, start: addDaysIso(b.resolved.start, days), finish: addDaysIso(b.resolved.finish, days) };
+          });
+          return;
+        }
         // En overskriftsboks tar med seg boksene som ligger inne i den
         const kids = kidItems().map((o) => ({ id: o.id, dy: bounds(o).y0 - r.y0 }));
         commit((plan) => {
@@ -2093,6 +2126,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           // nesten der den var. Lanen beholder derfor høyden den har, så boksen står der den ble sluppet.
           const pl = findLane(plan, lane.id);
           if (!L.compact && pl && !pl.height && y + (r.y1 - r.y0) - lane.y0 > lane.minH + 1e-6) pl.height = lines(lane.y1 - lane.y0, unit);
+          if (days) {
+            const b = findBox(plan, it.id);
+            if (b?.resolved) b.resolved = { ...b.resolved, start: addDaysIso(b.resolved.start, days), finish: addDaysIso(b.resolved.finish, days) };
+          }
           for (const m of [{ id: it.id, dy: 0 }, ...kids]) {
             if (lane !== home) moveBox(plan, m.id, lane.id);
             const b = findBox(plan, m.id);
@@ -2503,7 +2540,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     e.preventDefault();
     d.startClient = e.clientY;
     d.startClientX = e.clientX;
-    if (!d.moveXY) d.startY = toMm(e.clientX, e.clientY).y;
+    if (!d.moveXY) {
+      const p0 = toMm(e.clientX, e.clientY);
+      d.startY = p0.y;
+      d.startX = p0.x;
+    }
     drag = d;
   });
   window.addEventListener('pointermove', (e) => {
@@ -2515,7 +2556,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     shiftNow = e.shiftKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
-    else drag.move(p.y - drag.startY);
+    else drag.move(p.y - drag.startY, p.x - (drag.startX ?? p.x));
   });
   const endDrag = () => {
     if (!drag) return;

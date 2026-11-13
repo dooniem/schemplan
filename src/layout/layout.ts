@@ -201,6 +201,19 @@ export interface ChangeMark {
   ghost: { x0: number; x1: number } | null;
 }
 
+/** % ferdig som stripe nederst i boksen, og baseline som strek under den. */
+export interface ProgressMark {
+  id: string;
+  x0: number;
+  x1: number;
+  y: number;
+  h: number;
+  /** Andel ferdig, 0–1. Null når fremdrift ikke vises eller boksen ikke har aktiviteter. */
+  done: number | null;
+  /** Baseline fra første baseline-start til siste baseline-slutt, når det vises og finnes. */
+  base: { x0: number; x1: number } | null;
+}
+
 /** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
 export const FERIE_KEY = '(ferie)';
 
@@ -243,6 +256,8 @@ export interface Layout {
   /** Bilder satt inn i appen, i mm. Bilder festet til en dato utenfor kalenderen er ikke med. */
   images: PlacedImage[];
   changes: ChangeMark[];
+  /** Fremdrift i boksene og baseline under dem, når det er slått på. */
+  progress: ProgressMark[];
   /** Linjen for i dag (midt på dagen), når den er slått på og dagen er i kalenderen. */
   todayX: number | null;
   /** x for midten av en dag (YYYY-MM-DD), eller null når dagen ikke er med i kalenderen. */
@@ -1024,6 +1039,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     logo,
     changes: changeMarks(items, changeOf, axis),
     todayX: opts.today ? xOfDate(opts.today) : null,
+    progress: progressMarks(items, file, axis),
     images: (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p),
     xOfDate,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
@@ -1664,6 +1680,35 @@ function changeMarks(items: Item[], changes: Record<string, BoxChange>, axis: Ti
       const gx = c.kind === 'moved' && inCal(f) ? axis.xEnd(f) : null;
       marks.push({ id: it.id, kind: c.kind, x0: it.x - half, x1: it.x + half, y: it.y - half, h: it.size, ghost: gx === null ? null : { x0: gx - half, x1: gx + half } });
     }
+  }
+  return marks;
+}
+
+/** Fremdrift og baseline for bokser fra Project (ikke overskrifts- og Multi Lane-bokser). */
+function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressMark[] {
+  const showDone = !!file.plan.layout.showProgress;
+  const showBase = !!file.plan.layout.showBaseline;
+  if (!showDone && !showBase) return [];
+  const tasks = new Map(file.tasks.map((t) => [t.uid, t]));
+  const boxes = new Map(file.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as const)));
+  const last = addDays(axis.end, -1);
+  const marks: ProgressMark[] = [];
+  for (const it of items) {
+    if (it.kind !== 'box' || it.header || it.span) continue;
+    const ts = (boxes.get(it.id)?.taskIds ?? []).map((id) => tasks.get(id)).filter((t) => !!t);
+    if (!ts.length) continue;
+    const done = showDone ? Math.min(1, Math.max(0, ts.reduce((s, t) => s + t.percentComplete, 0) / ts.length / 100)) : null;
+    let base: ProgressMark['base'] = null;
+    if (showBase) {
+      const bs = ts.map((t) => t.baselineStart).filter((d): d is string => !!d).sort()[0];
+      const bf = ts.map((t) => t.baselineFinish).filter((d): d is string => !!d).sort().pop();
+      if (bs && bf && bf >= bs) {
+        const s = parseIso(bs);
+        const f = parseIso(bf);
+        if (f >= axis.start && s < axis.end) base = { x0: axis.xStart(Math.max(s, axis.start)), x1: axis.xEnd(Math.min(f, last)) };
+      }
+    }
+    if (done !== null || base) marks.push({ id: it.id, x0: it.x0, x1: it.x1, y: it.y, h: it.h, done, base });
   }
   return marks;
 }
