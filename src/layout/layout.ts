@@ -334,8 +334,9 @@ export function packVariants(
   const out: { y: number; k: number; bad?: boolean }[] = new Array(pieces.length);
   // Brikker med fast plass legges først, så de andre pakkes rundt dem
   const order = pieces.map((_, i) => i);
+  const lockAt = liftLocks(pieces, limit);
   // Overskriftsbokser først ved lik plass, så boksene inne i dem legges oppå
-  const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => pieces[a].lock! - pieces[b].lock! || (pieces[b].band !== undefined ? 1 : 0) - (pieces[a].band !== undefined ? 1 : 0));
+  const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => lockAt[a]! - lockAt[b]! || (pieces[b].band !== undefined ? 1 : 0) - (pieces[a].band !== undefined ? 1 : 0));
   const free = order.filter((i) => pieces[i].lock === undefined);
   for (const i of [...locked, ...free]) {
     const p = pieces[i];
@@ -343,7 +344,7 @@ export function packVariants(
     p.alts.forEach((v, k) => {
       // Egendefinert planområde: brikken må ligge mellom kantene der den står
       const [lo, hi] = limit ? limit(v.fx0, v.fx1) : [0, Infinity];
-      const y = lowest(v, Math.max(p.lock ?? 0, lo), p.lock !== undefined);
+      const y = lowest(v, Math.max(lockAt[i] ?? 0, lo), p.lock !== undefined);
       const bad = y + v.h > hi + 1e-6;
       // En variant som går utenfor kanten velges bare når ingen andre får plass
       const score = y + v.h + (bad ? 1e6 : 0);
@@ -356,6 +357,52 @@ export function packVariants(
     out[i] = best.bad ? { y: best.y, k: best.k, bad: true } : { y: best.y, k: best.k };
   }
   return out;
+}
+
+/**
+ * Egendefinert planområde: en brikke med fast plass som går under bunnkanten, løftes så underkanten
+ * står i flukt med kanten. En overskriftsboks tar med seg boksene med fast plass inne i den, så de
+ * beholder avstanden. Brikken løftes aldri over toppkanten. Uten kanter er plassen som før.
+ */
+function liftLocks(
+  pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number }[],
+  limit?: (fx0: number, fx1: number) => [number, number],
+): (number | undefined)[] {
+  const at = pieces.map((p) => p.lock);
+  if (!limit) return at;
+  const locked = pieces.map((_, i) => i).filter((i) => pieces[i].lock !== undefined);
+  const done = new Set<number>();
+  // Overskriftsboksene først, ovenfra, så boksene inne i dem følger med
+  const heads = locked.filter((i) => pieces[i].band !== undefined).sort((a, b) => pieces[a].lock! - pieces[b].lock!);
+  for (const i of [...heads, ...locked.filter((i) => pieces[i].band === undefined)]) {
+    if (done.has(i)) continue;
+    const p = pieces[i];
+    const v = p.alts[0];
+    const y0 = p.lock!;
+    const group = [i];
+    if (p.band !== undefined)
+      for (const j of locked) {
+        if (j === i || done.has(j)) continue;
+        const w = pieces[j].alts[0];
+        const y = pieces[j].lock!;
+        if (w.fx0 >= v.fx0 - 1e-6 && w.fx1 <= v.fx1 + 1e-6 && y >= y0 - 1e-6 && y + w.h <= y0 + v.h + 1e-6) group.push(j);
+      }
+    // Hvor mye gruppen må opp for at alle står over bunnkanten, og hvor mye den kan før en treffer toppkanten
+    let need = 0;
+    let room = Infinity;
+    for (const j of group) {
+      const w = pieces[j].alts[0];
+      const [lo, hi] = limit(w.fx0, w.fx1);
+      need = Math.max(need, pieces[j].lock! + w.h - hi);
+      room = Math.min(room, pieces[j].lock! - lo);
+    }
+    const lift = Math.max(0, Math.min(need, room));
+    for (const j of group) {
+      done.add(j);
+      at[j] = pieces[j].lock! - lift;
+    }
+  }
+  return at;
 }
 
 /**
