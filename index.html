@@ -137,7 +137,7 @@
             <input type="checkbox" id="show-today" role="switch" />
           </label>
           <label class="set-switch">
-            <span><strong>Endringer fra Project</strong><small id="show-changes-hint">Ramme rundt nye bokser og nye datoer etter siste oppdatering</small></span>
+            <span><strong>Endringer fra Project</strong><small id="show-changes-hint">Ramme rundt nye bokser og nye datoer etter siste oppdatering. Kommer med i PDF-en.</small></span>
             <input type="checkbox" id="show-changes" role="switch" />
           </label>
         </div>
@@ -471,6 +471,12 @@
         <div id="follow-bar" class="focus-bar no-print" role="status" hidden>
           <span class="follow-text"></span>
           <button type="button" class="tb" id="follow-cancel" title="Avbryt (Esc)">Avbryt</button>
+        </div>
+        <div id="changes-bar" class="focus-bar changes-bar no-print" role="status" hidden>
+          <span class="changes-mark" aria-hidden="true"></span>
+          <span class="changes-text"></span>
+          <button type="button" class="tb" id="changes-hide" title="Fjerner rammene fra arket og PDF-en. Kan slås på igjen i Innstillinger.">Skjul</button>
+          <button type="button" class="tb" id="changes-keep" title="Rammene blir stående. Slås av i Innstillinger, under Vis på arket.">Fortsett å vise</button>
         </div>
         <aside id="panel" class="panel no-print" aria-label="Egenskaper" hidden></aside>
       </div>
