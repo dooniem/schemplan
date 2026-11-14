@@ -28,7 +28,7 @@ import { hasBaseline } from './layout/progress';
 import { withCalendarRange } from './layout/range';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
-import { startIn } from './pickstart';
+import { setWantedFolder, startIn } from './pickstart';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -650,15 +650,19 @@ $<HTMLInputElement>('#update-pick').addEventListener('change', async (e) => {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = '';
-  if (!file) return;
+  if (file) await updateWith(file);
+});
+/** Med handle (bare i betaen) lagrer Ctrl+S den oppdaterte planen rett tilbake til arbeidsfilen. */
+async function updateWith(file: File, handle?: FileSystemFileHandle) {
   const result = await updateFrom(file);
   if (result === 'ok') {
+    if (handle) workHandle = handle;
     updateDialog.close();
     return;
   }
   updateError.textContent = result === 'avbrutt' ? 'Planen er ikke oppdatert. Velg arbeidsfilen som hører til denne planen.' : `${file.name} er ikke en arbeidsfil fra appen. Velg PDF-en du lagret med «Lagre arbeidsfil».`;
   updateError.hidden = false;
-});
+}
 
 // ---- Statuslinje ----
 const statusRule = (): StatusLine => plan?.plan.layout.statusLine ?? STATUS_DEFAULT;
@@ -1234,6 +1238,8 @@ async function openFromAddress() {
   const data = params.get('plan');
   if (!data) return;
   history.replaceState(null, '', location.pathname); // også ?t=…, som bare tvinger fram ny henting av appen
+  // Betaen: den lokale mappen Project-filen ligger i, så appen kan gå rett til prosjektmappen
+  if (__BETA__) setWantedFolder(params.get('mappe') ?? '');
   // Navnet kan være hele adressen til Project-filen (for eksempel i SharePoint); bare filnavnet brukes
   const name = lastPart(params.get('navn') ?? '') || 'Plan fra Project.json';
   try {
@@ -1314,6 +1320,6 @@ type LaunchQueue = { setConsumer: (fn: (p: { files: FileSystemFileHandle[] }) =>
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
 
 // Betaen: åpne og lagre i en valgt mappe (for eksempel en SharePoint-mappe koblet til OneDrive)
-if (__BETA__) void import('./beta/folder').then((m) => m.startBeta(openFile));
+if (__BETA__) void import('./beta/folder').then((m) => m.startBeta({ openFile, updateWith }));
 
 draw();

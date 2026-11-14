@@ -632,3 +632,5 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .beta-file { display: inline-flex; gap: 8px; align-items: baseline; }
 .beta-log { margin: 0; }
 .beta-log:empty, .beta-bar [hidden] { display: none; }
+.beta-update { margin: 8px 0; align-items: baseline; }
+.beta-update p { flex-basis: 100%; margin: 0; }
