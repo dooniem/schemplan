@@ -135,6 +135,26 @@
             </div>
           </div>
           <div class="set-row">
+            <span class="set-label"><label for="cal-start">Start</label></span>
+            <div class="cal-step" role="group" aria-label="Start på tidsaksen">
+              <button type="button" class="cal-nudge" data-cal-nudge="start" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <span class="num"><input id="cal-start" type="date" /></span>
+              <button type="button" class="cal-nudge" data-cal-nudge="start" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-label"><label for="cal-end">Slutt</label></span>
+            <div class="cal-step" role="group" aria-label="Slutt på tidsaksen">
+              <button type="button" class="cal-nudge" data-cal-nudge="end" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <span class="num"><input id="cal-end" type="date" /></span>
+              <button type="button" class="cal-nudge" data-cal-nudge="end" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+          <div class="cal-range-foot">
+            <p class="pop-hint" id="cal-range-help" role="status"></p>
+            <button type="button" id="cal-range-reset" class="button small" hidden title="Start og slutt følger Project igjen">Bruk datoene fra Project</button>
+          </div>
+          <div class="set-row">
             <span class="set-label" id="lbl-style">Stil</span>
             <div class="group" role="group" aria-labelledby="lbl-style">
               <button type="button" data-style="ny" aria-pressed="true" title="Forslag med bedre lesbarhet">Ny</button>
@@ -440,6 +460,7 @@
             <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
             <li>Hold musen over en boks for datoer.</li>
             <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
+            <li>Start og slutt på tidsaksen velges under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Kalender og stil</span>. Bokser som stikker utenfor, får pil. Bokser helt utenfor vises ikke, men ligger urørt og kommer tilbake når kalenderen utvides.</li>
             <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
           </ul>
           <h4>Rediger</h4>
