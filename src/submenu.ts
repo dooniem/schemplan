@@ -15,7 +15,7 @@ const join = (parts: (string | false | undefined)[]) => parts.filter(Boolean).jo
 
 const SUMMARIES: Record<string, Summary> = {
   ark: (s) => join([pressed(s, 'data-paper'), pressed(s, 'data-orientation'), pressed(s, 'data-height')]),
-  kal: (s) => join([pressed(s, 'data-cal'), `${pressed(s, 'data-style')} stil`, checked('show-bottom-cal') && 'Også nederst']),
+  kal: (s) => join([pressed(s, 'data-cal'), s.dataset.range, `${pressed(s, 'data-style')} stil`, checked('show-bottom-cal') && 'Også nederst']),
   vis: (s) => {
     const on = [...s.querySelectorAll<HTMLInputElement>('.set-switch input:checked')].map(
       (i) => i.closest('.set-switch')?.querySelector('strong')?.textContent?.trim() ?? '',

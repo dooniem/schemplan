@@ -19,11 +19,13 @@ import { createFocus } from './focus';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { setupSubmenus } from './submenu';
+import { rangeSummary, setupRangeMenu } from './rangemenu';
 import { createDataView } from './data/view';
 import { cell } from './data/rows';
 import { boxTrade } from './trades';
 import { FRONT_DEFAULT, resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
 import { hasBaseline } from './layout/progress';
+import { withCalendarRange } from './layout/range';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
@@ -216,7 +218,9 @@ const sheetName = (paper: Paper, o: string) => `${paper} ${o === 'landscape' ? '
 // ---- Utkikk ----
 let lookWindow: LookaheadWindow | null = null;
 /** Planen slik den tegnes: hele, eller bare perioden når utkikken er på. */
-function viewOf(p: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
+function viewOf(full: PlanFile): { plan: PlanFile; window: LookaheadWindow | null; opts: LayoutOptions } {
+  // Omfanget valgt i Kalender gjelder alt videre, også utkikken
+  const p = withCalendarRange(full, opts.calendarMode ?? full.plan.calendar.mode);
   const sl = p.plan.layout.statusLine;
   const moment = sl?.on ? resolveStatus(sl, p, todayIso()) : null;
   const o: LayoutOptions = { ...opts, status: moment && sl ? { moment, style: sl } : undefined, today: p.plan.layout.todayLine ? todayIso() : undefined };
@@ -732,8 +736,19 @@ $<HTMLInputElement>('#sl-date').addEventListener('change', (e) => {
 });
 document.querySelectorAll<HTMLButtonElement>('[data-sl-width]').forEach((b) => b.addEventListener('click', () => setStatus({ width: Number(b.dataset.slWidth) })));
 
+const rangeMenu = setupRangeMenu({
+  plan: () => plan,
+  mode: () => opts.calendarMode ?? plan?.plan.calendar.mode ?? 'month',
+  changed: () => {
+    syncControls();
+    draw();
+  },
+});
+
 function syncControls() {
   syncStatus();
+  rangeMenu.sync();
+  $<HTMLElement>('#sub-kal').dataset.range = rangeSummary(plan, opts.calendarMode ?? plan?.plan.calendar.mode ?? 'month') ?? '';
   document.querySelectorAll<HTMLButtonElement>('[data-orientation]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.orientation === opts.orientation)));
   document.querySelectorAll<HTMLButtonElement>('[data-height]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.height === opts.heightMode)));
   $<HTMLElement>('#area-note').hidden = opts.heightMode !== 'custom';

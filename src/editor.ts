@@ -1,5 +1,6 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
+import { effectiveRange } from './layout/range';
 import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
@@ -125,6 +126,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let holdPanel = false;
   let svgNow: SVGSVGElement | null = null;
   let layoutNow: Layout | null = null;
+  /** Kalenderens omfang slik det tegnes, med start og slutt valgt i appen. */
+  const calRange = (plan: PlanFile) => effectiveRange(plan, layoutNow?.calendarMode ?? plan.plan.calendar.mode);
   let redrawTimer = 0;
   /** Bokser som ble flyttet av siste omplassering, markert til den godtas eller angres. */
   let arrangeMoved = new Set<string>();
@@ -1394,7 +1397,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const row = el('div', { class: 'row dates' });
       const mk = (key: 'start' | 'finish', label: string) => {
         const lab = el('label', {}, label);
-        const inp = el('input', { type: 'date', value: r[key], min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
+        const inp = el('input', { type: 'date', value: r[key], min: calRange(plan).start, max: calRange(plan).end }) as HTMLInputElement;
         inp.addEventListener('change', () => {
           const v = inp.value;
           if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
@@ -3275,7 +3278,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (im.date) {
         const wrap = el('label', { class: 'prop prop-inline' });
         wrap.append(el('span', { class: 'prop-label' }, 'Dato'));
-        const d = el('input', { type: 'date', value: im.date.day, min: plan.plan.calendar.start, max: plan.plan.calendar.end }) as HTMLInputElement;
+        const d = el('input', { type: 'date', value: im.date.day, min: calRange(plan).start, max: calRange(plan).end }) as HTMLInputElement;
         d.addEventListener('change', () => d.value && setImageDate(im.id, d.value));
         wrap.append(d);
         sp.append(wrap);
@@ -3601,7 +3604,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const days = (layoutNow?.calendarMode ?? plan.plan.calendar.mode) === 'week' ? 13 : 29;
       const finishT = new Date(`${start}T00:00:00Z`);
       finishT.setUTCDate(finishT.getUTCDate() + days);
-      const finish = [finishT.toISOString().slice(0, 10), plan.plan.calendar.end].sort()[0];
+      const finish = [finishT.toISOString().slice(0, 10), calRange(plan).end].sort()[0];
       const hiddenBoxes = lane.boxes.filter((b) => b.hidden);
       ctx.open(e.clientX, e.clientY, plainText(lane.name), [
         {

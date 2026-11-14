@@ -62,6 +62,8 @@ export interface PlanSettings {
     showBottomCalendar?: boolean;
     /** Måneds- eller ukesvisning valgt i appen. Mangler den, gjelder valget fra Project. */
     calendarMode?: 'month' | 'week';
+    /** Kalenderens start og slutt valgt i appen. En ende som mangler, følger Project. */
+    calendarRange?: CalendarRange;
     /** Logo øverst til venstre: PNG som data-URL, og bredde delt på høyde. */
     logo?: { data: string; aspect: number };
     /** Logoens høyde i forhold til standard. Uavhengig av overskriften. */
@@ -167,6 +169,12 @@ export type NoteFont = 'arimo' | 'tinos' | 'cousine';
 export interface IsoWeek {
   year: number;
   week: number;
+}
+
+/** Rundes ut til hele måneder eller uker når planen tegnes. */
+export interface CalendarRange {
+  start?: IsoDate;
+  end?: IsoDate;
 }
 
 export interface Lookahead {

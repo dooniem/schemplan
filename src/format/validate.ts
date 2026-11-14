@@ -1,6 +1,7 @@
 import { FORMAT_NAME, FORMAT_VERSION, type PlanFile } from './types';
 import { migrate } from './migrate';
 import { readLookahead } from '../layout/lookahead';
+import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
 
 export interface ValidationResult {
@@ -141,6 +142,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       }
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
       if (lay.calendarMode !== undefined) needEnum(lay, 'calendarMode', 'plan.layout', ['month', 'week']);
+      if (lay.calendarRange !== undefined && !readCalendarRange(lay.calendarRange)) err('plan.layout.calendarRange', 'kan bare ha start og end (YYYY-MM-DD)');
       if (lay.logo !== undefined) {
         const lg = lay.logo as Obj;
         if (!isObj(lg) || typeof lg.data !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(lg.data) || typeof lg.aspect !== 'number' || !(lg.aspect > 0))
@@ -252,6 +254,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
   const boxIds = new Set<string>();
   const calStart = isObj(plan) && isObj(plan.calendar) ? plan.calendar.start : undefined;
   const calEnd = isObj(plan) && isObj(plan.calendar) ? plan.calendar.end : undefined;
+  // Med omfang valgt i appen er bokser utenfor et bevisst valg: de ligger urørt og nevnes i menyen
+  const ownRange = isObj(plan) && isObj(plan.layout) && isObj(plan.layout.calendarRange);
 
   if (!Array.isArray(data.lanes)) err('lanes', 'må være en liste');
   else
@@ -347,7 +351,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
           if (typeof r.trade === 'string' && tradeNames.size > 0 && !tradeNames.has(r.trade)) {
             warnings.push(`${label} har faget "${r.trade}", som ikke har noen farge. Fargen for (none) brukes.`);
           }
-          if (isIsoDate(r.start) && isIsoDate(r.finish) && isIsoDate(calStart) && isIsoDate(calEnd)) {
+          if (!ownRange && isIsoDate(r.start) && isIsoDate(r.finish) && isIsoDate(calStart) && isIsoDate(calEnd)) {
             if (r.finish < calStart || r.start > calEnd) {
               warnings.push(`${label} ligger helt utenfor kalenderen (${r.start} til ${r.finish}).`);
             }

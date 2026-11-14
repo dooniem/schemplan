@@ -175,6 +175,19 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .pf-details .pop-hint:empty { display: none; }
 .settings .group button:disabled { opacity: 0.45; cursor: not-allowed; }
 .settings .num input[type='date'] { width: 100%; min-width: 0; padding: 4px 8px; border: 0; background: none; font: inherit; color: var(--text); font-variant-numeric: tabular-nums; outline: none; }
+/* Tidsaksen: dato med et steg tilbake og fram (én måned eller uke) */
+.cal-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 4px; align-items: stretch; }
+.cal-nudge { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out; }
+.cal-nudge:hover:not(:disabled) { background: var(--track-hover); color: var(--text); }
+.cal-nudge:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-nudge:disabled { opacity: 0.45; cursor: not-allowed; }
+.cal-step .num { align-items: center; }
+.cal-step .num.is-own { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.cal-range-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 6px 0 14px calc(76px + 12px + 32px); }
+.settings .cal-range-foot .pop-hint { display: flex; flex-direction: column; gap: 2px; margin: 0; text-wrap: pretty; }
+.cal-range-foot .pop-hint span:first-child { color: var(--text); font-variant-numeric: tabular-nums; }
+.cal-range-foot .button[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .cal-nudge { transition: none; } }
 #sl-colors { grid-template-columns: repeat(auto-fill, 24px); }
 #sl-colors .swatch { width: 24px; height: 24px; }
 #logo-pick:has(input:disabled) { opacity: 0.5; pointer-events: none; }
@@ -609,3 +622,5 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .note-style .ns-bold { font-weight: 700; }
 .note-style .ns-italic { font-style: italic; }
 .note-style .ns-underline { text-decoration: underline; }
+/* Datovelgerens ikon følger mørk modus */
+@media (prefers-color-scheme: dark) { input[type='date'] { color-scheme: dark; } }
