@@ -1,11 +1,11 @@
 {
   "name": "schemplan",
   "private": true,
-  "version": "0.32.0",
+  "version": "0.32.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build --mode beta",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -47,17 +47,37 @@ function serviceWorker(): Plugin {
   };
 }
 
-export default defineConfig({
-  // Appen ligger på https://dooniem.github.io/schemplan/
-  base: '/schemplan/',
-  define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
-  },
-  plugins: [cspMeta(), serviceWorker()],
-  build: {
-    // Ingen eksterne kilder: alt pakkes inn i appen
-    assetsInlineLimit: 0,
-    // PDF-delen (pdf-lib, skrift) er stor, men lastes først når brukeren lagrer eller åpner en PDF
-    chunkSizeWarningLimit: 1000,
-  },
+// Betaen (vite build --mode beta) er samme app med mappefunksjonen slått på. Den bygges inn i
+// dist/beta og ligger på /schemplan/beta/ ved siden av appen. Den har ingen service worker og
+// kan ikke installeres, så den aldri blander seg med den installerte appen.
+function betaHtml(): Plugin {
+  return {
+    name: 'beta-html',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html
+        .replace(/\s*<link rel="manifest"[^>]*>/, '')
+        .replace('<title>Skjematisk plan</title>', '<title>Skjematisk plan (beta)</title>');
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const beta = mode === 'beta';
+  return {
+    // Appen ligger på https://dooniem.github.io/schemplan/
+    base: beta ? '/schemplan/beta/' : '/schemplan/',
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
+      __BETA__: JSON.stringify(beta),
+    },
+    plugins: beta ? [cspMeta(), betaHtml()] : [cspMeta(), serviceWorker()],
+    build: {
+      outDir: beta ? 'dist/beta' : 'dist',
+      // Ingen eksterne kilder: alt pakkes inn i appen
+      assetsInlineLimit: 0,
+      // PDF-delen (pdf-lib, skrift) er stor, men lastes først når brukeren lagrer eller åpner en PDF
+      chunkSizeWarningLimit: 1000,
+    },
+  };
 });

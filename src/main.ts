@@ -28,6 +28,7 @@ import { hasBaseline } from './layout/progress';
 import { withCalendarRange } from './layout/range';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
+import { startIn } from './pickstart';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -190,7 +191,7 @@ async function saveFile(name: string, blob: Blob, description: string, mime: str
   const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
   if (picker) {
     try {
-      const handle = await picker({ suggestedName: name, types: [{ description, accept: { [mime]: [ext] } }] });
+      const handle = await picker({ suggestedName: name, types: [{ description, accept: { [mime]: [ext] } }], ...startIn() });
       const w = await handle.createWritable();
       await w.write(blob);
       await w.close();
@@ -567,14 +568,17 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (e) => {
   if (file) await openFile(file);
 });
 
-async function openFile(file: File) {
-  if (unsaved() && !confirm('Planen har endringer som ikke er lagret. Vil du åpne en annen plan likevel?')) return;
+/** Med handle (bare i betaen) lagrer Ctrl+S arbeidsfilen rett tilbake til filen som ble åpnet. Gir true når planen ble åpnet. */
+async function openFile(file: File, handle?: FileSystemFileHandle): Promise<boolean> {
+  if (unsaved() && !confirm('Planen har endringer som ikke er lagret. Vil du åpne en annen plan likevel?')) return false;
   const r = await readPlan(new Uint8Array(await file.arrayBuffer()), file.name);
-  if (!r) return;
+  if (!r) return false;
   editor.reset();
   search.reset();
   focus.reset();
   showPlan(r.plan, file.name, r.warnings);
+  if (handle && r.isPdf) workHandle = handle;
+  return true;
 }
 
 // Dra en planfil (.json eller .pdf) inn i vinduet for å åpne den. Bilder som slippes på arket
@@ -1078,7 +1082,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
     const { pdf, name, missing } = await makePdf(variant, pick);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
-    const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
+    const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }], ...startIn() };
     let handle: FileSystemFileHandle | null = again && variant === 'arbeidsfil' ? workHandle : null;
     if (picker && !handle) {
       try {
@@ -1266,7 +1270,7 @@ window.addEventListener('hashchange', openFromAddress);
 
 // ---- Installert app ----
 // Service workeren lagrer bare appens egne filer, så den kan startes uten nett (se sw-template.js)
-if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+if ('serviceWorker' in navigator && import.meta.env.PROD && !__BETA__) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
 // Nettleseren sier fra når appen kan installeres; da vises knappen i Hjelp
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 let installPrompt: InstallPrompt | null = null;
@@ -1308,5 +1312,8 @@ type LaunchQueue = { setConsumer: (fn: (p: { files: FileSystemFileHandle[] }) =>
 });
 
 window.addEventListener('beforeprint', () => setPrintPage(opts.paper ?? 'A3', opts.orientation));
+
+// Betaen: åpne og lagre i en valgt mappe (for eksempel en SharePoint-mappe koblet til OneDrive)
+if (__BETA__) void import('./beta/folder').then((m) => m.startBeta(openFile));
 
 draw();

@@ -624,3 +624,11 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .note-style .ns-underline { text-decoration: underline; }
 /* Datovelgerens ikon følger mørk modus */
 @media (prefers-color-scheme: dark) { input[type='date'] { color-scheme: dark; } }
+/* Beta: mappestripen under topplinjen (finnes bare i betaen) */
+.beta-bar { display: grid; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); font-size: 13px; }
+.beta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.beta-files { display: flex; flex-wrap: wrap; gap: 4px; max-height: 96px; overflow: auto; }
+.beta-files:empty { display: none; }
+.beta-file { display: inline-flex; gap: 8px; align-items: baseline; }
+.beta-log { margin: 0; }
+.beta-log:empty, .beta-bar [hidden] { display: none; }

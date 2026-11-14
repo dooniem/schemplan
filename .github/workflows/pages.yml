@@ -26,7 +26,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Sjekk at sikkerhetssperren er med i bygget
-        run: grep -q "connect-src 'none'" dist/index.html
+        run: grep -q "connect-src 'none'" dist/index.html && grep -q "connect-src 'none'" dist/beta/index.html
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
