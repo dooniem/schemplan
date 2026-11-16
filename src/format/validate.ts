@@ -163,6 +163,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
           const to = (a as Obj).to;
           return to === undefined || (isObj(to) && typeof (to as Obj).id === 'string' && uv((to as Obj).u) && uv((to as Obj).v));
         };
+        const padOk = (p: unknown) => p === undefined || (Array.isArray(p) && p.length === 2 && p.every((v) => fin(v) && (v as number) >= 0));
         const ok = (im: unknown) => {
           if (!isObj(im)) return false;
           const i = im as Obj;
@@ -176,7 +177,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
             (i.points === undefined || (Array.isArray(i.points) && i.points.length >= 3 && i.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(uv)))) &&
             (i.date === undefined || (isObj(i.date) && isIsoDate((i.date as Obj).day) && fin((i.date as Obj).dx))) &&
             (i.milestone === undefined || (isObj(i.milestone) && typeof (i.milestone as Obj).id === 'string' && fin((i.milestone as Obj).dx) && fin((i.milestone as Obj).dy))) &&
-            (i.note === undefined || (isObj(i.note) && typeof (i.note as Obj).text === 'string' && fin((i.note as Obj).sizePt) && ((i.note as Obj).sizePt as number) > 0 && arrowOk((i.note as Obj).arrow)))
+            (i.note === undefined || (isObj(i.note) && typeof (i.note as Obj).text === 'string' && fin((i.note as Obj).sizePt) && ((i.note as Obj).sizePt as number) > 0 && arrowOk((i.note as Obj).arrow) && padOk((i.note as Obj).pad)))
           );
         };
         if (!Array.isArray(lay.images) || !lay.images.every(ok)) err('plan.layout.images', 'må være en liste med bilder (PNG eller JPEG som data-URL) med plass, størrelse og rotasjon');
