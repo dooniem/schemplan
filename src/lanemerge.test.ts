@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { homeLane, mergeLanes } from './lanemerge';
+import { homeLane, mergedInto, mergeLanes, splitLane } from './lanemerge';
 import { mergePlans } from './merge';
 import { moveBox, newBox, newLane, removeLane, resetBoxInPlan, resetLane } from './editmodel';
 import { validatePlan } from './format/validate';
@@ -50,6 +50,44 @@ describe('slå sammen lanes', () => {
     }
     expect(box(p, '3_1').fromLane).toBeUndefined();
     expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
+
+  it('skiller ut igjen: lanen vises, og boksene fra Project flyttes tilbake', () => {
+    const p = testplan();
+    box(p, '3_1').top = 1;
+    mergeLanes(p, '3', '1', 2);
+    newBox(p, '1', '2026-02-01', '2026-03-01');
+    moveBox(p, '3_2', '2');
+    lane(p, '1').order = ['3_1', '1_1', '1_2', '1_3', '3_3'];
+    expect(mergedInto(p, '1').map((l) => l.id)).toEqual(['3']);
+    const back = splitLane(p, '3')!;
+    expect(back.map((b) => b.id)).toEqual(['3_1', '3_3']);
+    expect(lane(p, '3').boxes.map((b) => b.id)).toEqual(['3_1', '3_3']);
+    expect(lane(p, '3').hidden).toBeUndefined();
+    expect(lane(p, '3').mergedInto).toBeUndefined();
+    expect(box(p, '3_1').fromLane).toBeUndefined();
+    expect(box(p, '3_1').top).toBeUndefined();
+    // Boksen som er flyttet videre, og den egne boksen, blir stående
+    expect(laneOf(p, '3_2')).toBe('2');
+    expect(lane(p, '1').boxes.filter((b) => b.manual)).toHaveLength(1);
+    expect(lane(p, '1').order).toEqual(['1_1', '1_2', '1_3']);
+    expect(mergedInto(p, '1')).toEqual([]);
+    expect(splitLane(p, '3')).toBeNull();
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
+
+  it('skiller ut én av flere sammenslåtte lanes, og nye bokser fra Project følger riktig lane etterpå', () => {
+    const p = testplan();
+    mergeLanes(p, '3', '1');
+    mergeLanes(p, '4', '1');
+    splitLane(p, '3');
+    expect(lane(p, '3').boxes.map((b) => b.id)).toEqual(['3_1', '3_2', '3_3']);
+    expect(lane(p, '4').mergedInto).toBe('1');
+    expect(laneOf(p, '4_1')).toBe('1');
+    const fresh = testplan();
+    const r = mergePlans(p, fresh).plan;
+    expect(r.lanes.find((l) => l.id === '3')!.boxes.map((b) => b.id)).toEqual(['3_1', '3_2', '3_3']);
+    expect(r.lanes.find((l) => l.id === '1')!.boxes.map((b) => b.id)).toContain('4_1');
   });
 
   it('festede bokser flyttes ned under innholdet, og Multi Lane-bokser følger med', () => {
