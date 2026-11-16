@@ -104,6 +104,8 @@ export interface PlanSettings {
     showChanges?: boolean;
     /** Egendefinert planområde: topp- og bunnkanten som punkter [x, y], andeler av arket fra venstre til høyre. */
     planArea?: { top?: [number, number][]; bottom?: [number, number][] };
+    /** Grupper av lanes som står etter hverandre: en smal bar med rotert tekst til venstre for lane-navnene. */
+    laneGroups?: LaneGroup[];
   };
   options: {
     legend: boolean;
@@ -236,6 +238,16 @@ export interface TradeColor {
 export interface Holiday {
   start: IsoDate;
   end: IsoDate;
+}
+
+/** Gruppe av lanes, laget i appen. En lane er i høyst én gruppe. */
+export interface LaneGroup {
+  id: string;
+  /** Teksten i baren. | gir linjeskift. */
+  name: string;
+  fill: HexColor;
+  /** Lane-id-ene i gruppen. Rekkefølgen på arket følger lanene. */
+  lanes: string[];
 }
 
 export interface Lane {

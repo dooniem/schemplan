@@ -125,9 +125,15 @@ export function renderPlan(L: Layout): SVGSVGElement {
   // Lanes: tittelcelle med lanefarge, tynne skillelinjer i planområdet
   const lanesG = node('g', { class: 'lanes' }, back);
   L.lanes.forEach((ln, i) => {
-    node('rect', { x: left, y: ln.y0, width: x0 - left, height: ln.y1 - ln.y0, fill: ln.fill ?? '#FFFFFF', stroke: '#000000', 'stroke-width': 0.3 }, lanesG);
+    node('rect', { x: ln.titleX0, y: ln.y0, width: x0 - ln.titleX0, height: ln.y1 - ln.y0, fill: ln.fill ?? '#FFFFFF', stroke: '#000000', 'stroke-width': 0.3 }, lanesG);
     if (i > 0) node('line', { x1: x0, x2: x1, y1: ln.y0, y2: ln.y0, stroke: GRID, 'stroke-width': 0.15 }, lanesG);
     text(ln.title, lanesG);
+  });
+  // Grupper av lanes: smal bar til venstre for lane-navnene
+  L.laneGroups.forEach((gr) => {
+    const g = node('g', { 'data-lane-group': gr.id }, lanesG);
+    node('rect', { x: gr.x0, y: gr.y0, width: gr.x1 - gr.x0, height: gr.y1 - gr.y0, fill: gr.fill, stroke: '#000000', 'stroke-width': 0.3 }, g);
+    text(gr.title, g);
   });
 
   // Ferier: skravert

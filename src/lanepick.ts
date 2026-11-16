@@ -1,17 +1,21 @@
-// Valgmodus for «Slå sammen med …»: lanen som skal bli borte er merket, og neste klikk på en
-// annen lane slår dem sammen. Linjen øverst har også en liste, så det går uten mus og når lanen
-// ligger langt unna på arket.
+// Valgmodus for «Slå sammen med …» og «Grupper med …»: valgt lane er merket, og neste klikk på en
+// annen lane slår dem sammen eller grupperer dem. Linjen øverst har også en liste, så det går uten
+// mus og når lanen ligger langt unna på arket.
 import type { PlanFile } from './format/types';
 import type { Layout } from './layout/layout';
 import { plainText } from './format/text';
 import { mergeTargets } from './lanemerge';
+import { groupOfLane, groupPreview, groupTargets } from './lanegroup';
+
+/** merge: slå sammen. group: grupper lanene fra den valgte til den som klikkes. */
+export type LanePickMode = 'merge' | 'group';
 
 const NS = 'http://www.w3.org/2000/svg';
 
 export interface LanePick {
   /** Lanen som skal slås sammen med en annen, eller null når valget ikke er i gang. */
   readonly from: string | null;
-  start(from: string): void;
+  start(from: string, mode?: LanePickMode): void;
   end(): void;
   /** Lanen musen er over. Gir true når merkingen må tegnes på nytt. */
   hover(lane: string | null): boolean;
@@ -37,6 +41,7 @@ export function createLanePick(o: {
   accent: string;
   getPlan: () => PlanFile | null;
   onMerge: (from: string, to: string) => void;
+  onGroup: (from: string, to: string) => void;
   /** Valget startet, sluttet eller fikk nytt mål: oppdater verktøylinje, markør og merking. */
   onChange: () => void;
 }): LanePick {
@@ -45,12 +50,18 @@ export function createLanePick(o: {
   const go = o.bar.querySelector<HTMLButtonElement>('#lanemerge-go')!;
   let from: string | null = null;
   let target: string | null = null;
+  let mode: LanePickMode = 'merge';
+  const targets = (plan: PlanFile, id: string) => (mode === 'group' ? groupTargets(plan, id) : mergeTargets(plan, id));
 
   const prompt = () => {
     const plan = o.getPlan();
     const lane = plan?.lanes.find((l) => l.id === from);
     if (!plan || !lane) return;
-    text.textContent = `Klikk lanen ${laneName(lane.name)} skal slås sammen med. ${capital(contentWords(plan, lane.id))} flyttes dit, og lanen blir borte.`;
+    text.textContent = mode === 'group'
+      ? groupOfLane(plan, lane.id)
+        ? `Klikk lanen gruppen med ${laneName(lane.name)} skal gå til. Lanene imellom blir også med.`
+        : `Klikk lanen ${laneName(lane.name)} skal grupperes med. Lanene imellom blir også med.`
+      : `Klikk lanen ${laneName(lane.name)} skal slås sammen med. ${capital(contentWords(plan, lane.id))} flyttes dit, og lanen blir borte.`;
   };
   const setTarget = (id: string | null) => {
     target = id;
@@ -59,15 +70,19 @@ export function createLanePick(o: {
   };
   const merge = (to: string) => {
     const f = from;
+    const m = mode;
     end();
-    if (f) o.onMerge(f, to);
+    if (f) (m === 'group' ? o.onGroup : o.onMerge)(f, to);
   };
 
-  const start = (id: string) => {
+  const start = (id: string, m: LanePickMode = 'merge') => {
     const plan = o.getPlan();
     if (!plan) return;
     from = id;
-    select.replaceChildren(new Option('Velg lane …', ''), ...mergeTargets(plan, id).map((l) => new Option(plainText(l.name.replace(/\|/g, ' ')) || 'Uten navn', l.id)));
+    mode = m;
+    go.textContent = m === 'group' ? 'Grupper' : 'Slå sammen';
+    select.setAttribute('aria-label', m === 'group' ? 'Lanen den skal grupperes med' : 'Lanen den skal slås sammen med');
+    select.replaceChildren(new Option('Velg lane …', ''), ...targets(plan, id).map((l) => new Option(plainText(l.name.replace(/\|/g, ' ')) || 'Uten navn', l.id)));
     setTarget(null);
     prompt();
     o.bar.hidden = false;
@@ -106,13 +121,26 @@ export function createLanePick(o: {
       const plan = o.getPlan();
       if (from === null || !plan || !lane) return;
       if (lane === from) {
-        text.textContent = 'Det er lanen som skal slås sammen. Klikk en annen lane.';
+        text.textContent = mode === 'group' ? 'Det er lanen som skal grupperes. Klikk en annen lane.' : 'Det er lanen som skal slås sammen. Klikk en annen lane.';
         return;
       }
-      if (mergeTargets(plan, from).some((l) => l.id === lane)) merge(lane);
+      if (targets(plan, from).some((l) => l.id === lane)) merge(lane);
+      else if (mode === 'group') text.textContent = 'Lanen er alt i gruppen. Klikk en lane utenfor den.';
     },
     draw(g, L) {
       if (from === null) return;
+      if (mode === 'group') {
+        // Hele gruppen slik den blir: én ramme rundt lanene, og den valgte lanen stiplet
+        const plan = o.getPlan();
+        const ids = plan ? (target ? groupPreview(plan, from, target) : groupOfLane(plan, from)?.lanes ?? [from]) : [];
+        const sel = L.lanes.filter((ln) => ids.includes(ln.id));
+        if (sel.length) {
+          const y0 = Math.min(...sel.map((ln) => ln.y0));
+          const y1 = Math.max(...sel.map((ln) => ln.y1));
+          rect(g, { x: L.laneTitleX + 0.35, y: y0 + 0.35, width: L.plot.x0 - L.laneTitleX - 0.7, height: y1 - y0 - 0.7, rx: 0.6, fill: o.accent, 'fill-opacity': target ? 0.12 : 0.06, stroke: o.accent, 'stroke-width': 0.7, ...(target ? {} : { 'stroke-dasharray': '1.6 1' }) });
+        }
+        return;
+      }
       for (const ln of L.lanes) {
         const src = ln.id === from;
         if (!src && ln.id !== target) continue;
@@ -129,3 +157,9 @@ export function createLanePick(o: {
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function rect(g: SVGGElement, attrs: Record<string, string | number>) {
+  const r = document.createElementNS(NS, 'rect');
+  for (const [k, v] of Object.entries(attrs)) r.setAttribute(k, String(v));
+  g.append(r);
+}
