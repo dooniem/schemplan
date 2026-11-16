@@ -17,7 +17,7 @@ import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, ke
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
-import { mergeLanes, mergeTargets } from './lanemerge';
+import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
 import { createNoteArrows } from './notearrow';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
@@ -368,6 +368,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     showArrangeBar(`${laneName(fromLane.name)} er slått sammen med ${laneName(toLane.name)}. ${words.charAt(0).toUpperCase() + words.slice(1)} flyttet.`, true);
     overlay();
   };
+  /** Skiller ut igjen en lane som er slått sammen med en annen, som ett angresteg. */
+  const splitLaneOut = (id: string) => {
+    const plan = host.getPlan();
+    const lane = plan && findLane(plan, id);
+    const home = plan && lane?.mergedInto ? findLane(plan, lane.mergedInto) : null;
+    if (!plan || !lane || !home) return;
+    endArrange();
+    let moved: string[] = [];
+    selected = null;
+    group = [];
+    selectedLane = id;
+    commit((pl) => (moved = (splitLane(pl, id) ?? []).map((b) => b.id)));
+    arrangeMoved = new Set(moved);
+    const n = moved.length;
+    showArrangeBar(`${laneName(lane.name)} er skilt ut fra ${laneName(home.name)} igjen. ${n ? `${n} ${n === 1 ? 'boks' : 'bokser'} flyttet tilbake` : 'Ingen bokser flyttet'}.`, true);
+    overlay();
+  };
+  /** Hjelpetekst for «Skill ut igjen». */
+  const SPLIT_HINT = 'Lanen vises igjen der den sto, og boksene fra Project som kom derfra, flyttes tilbake.';
   // ---- Grupper av lanes ----
   /** Starter «Grupper med …» for lanen. */
   const startLaneGroup = (id: string) => {
@@ -1020,6 +1039,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const merge = btn('Med en annen lane …', null, () => startLaneMerge(l.id), 'Bokser og milepæler flyttes til lanen du velger, og denne lanen blir borte. Angre med Ctrl+Z.');
     merge.disabled = !mergeTargets(plan, l.id).length;
     mw.append(el('span', { class: 'prop-label' }, 'Slå sammen'), merge);
+    // Lanes som er slått sammen hit, kan skilles ut igjen
+    const split = mergedInto(plan, l.id).map((m) => {
+      const w = el('div', { class: 'prop prop-inline' });
+      w.append(el('span', { class: 'prop-label' }, 'Skill ut'), btn(laneName(m.name), null, () => splitLaneOut(m.id), `Skill ut igjen. ${SPLIT_HINT}`));
+      return w;
+    });
     // Gruppe: grupper med en annen lane, eller endre gruppen lanen er i
     const gw = el('div', { class: 'prop prop-inline' });
     const own = groupOfLane(plan, l.id);
@@ -1028,7 +1053,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       : btn('Med en annen lane …', null, () => startLaneGroup(l.id), 'Klikk lanen den skal grupperes med. Lanene imellom blir også med.');
     gb.disabled = !own && !groupTargets(plan, l.id).length;
     gw.append(el('span', { class: 'prop-label' }, 'Grupper'), gb);
-    sp.append(ow, mw, gw, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
+    sp.append(ow, mw, ...split, gw, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const del = btn(l.manual ? 'Slett' : 'Skjul', l.manual ? 'trash' : 'hide', () => removeLaneById(l.id),
@@ -3784,7 +3809,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (lgr) {
       ctx.open(e.clientX, e.clientY, plainText(lgr.name.replace(/\|/g, ' ')) || 'Gruppe', laneGroupMenu(groupKit(), plan, lgr), 'Gruppe');
     } else if (onTitle) {
-      // Sammenslåtte lanes er borte for brukeren; de angres med Ctrl+Z, ikke vises igjen herfra
+      // Sammenslåtte lanes vises ikke igjen herfra. De skilles ut fra lanen de er slått sammen med.
       const hiddenLanes = plan.lanes.filter((x) => x.shown && x.hidden && !x.mergedInto);
       ctx.open(e.clientX, e.clientY, plainText(lane.name), [
         ...(L.compact ? [] : [{
@@ -3802,6 +3827,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             { label: 'Slå sammen med …', icon: 'merge', hint: 'Klikk lanen den skal slås sammen med. Bokser og milepæler flyttes dit, og denne lanen blir borte.', disabled: !mergeTargets(plan, ln.id).length, onSelect: () => startLaneMerge(ln.id) },
           ],
         },
+        { items: mergedInto(plan, ln.id).map((m) => ({ label: `Skill ut ${laneName(m.name)} igjen`, icon: 'merge' as const, hint: SPLIT_HINT, onSelect: () => splitLaneOut(m.id) })) },
         { items: laneGroupItems(groupKit(), plan, ln.id) },
         {
           items: [

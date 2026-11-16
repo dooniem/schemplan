@@ -67,6 +67,38 @@ export function mergeLanes(plan: PlanFile, fromId: string, toId: string, offset 
   return moved;
 }
 
+/** Lanes fra Project som er slått sammen til `id`, og som kan skilles ut igjen. */
+export const mergedInto = (plan: PlanFile, id: string) => plan.lanes.filter((l) => l.mergedInto === id);
+
+/**
+ * Skiller ut igjen en lane fra Project som er slått sammen med en annen: lanen vises der den sto, og
+ * boksene fra Project som kom derfra, flyttes tilbake. De løsnes, så lanen pakkes på nytt. Bokser som
+ * er flyttet videre til en tredje lane, og egne bokser, blir stående. Gir boksene som ble flyttet,
+ * eller null om lanen ikke er slått sammen.
+ */
+export function splitLane(plan: PlanFile, id: string): Box[] | null {
+  const lane = plan.lanes.find((l) => l.id === id);
+  const home = lane?.mergedInto ? plan.lanes.find((l) => l.id === lane.mergedInto) : null;
+  if (!lane || !lane.mergedInto) return null;
+  delete lane.mergedInto;
+  delete lane.hidden;
+  if (!home) return [];
+  const back = home.boxes.filter((b) => !b.manual && b.fromLane === id);
+  const ids = new Set(back.map((b) => b.id));
+  home.boxes = home.boxes.filter((b) => !ids.has(b.id));
+  if (home.order) home.order = home.order.filter((x) => !ids.has(x));
+  const laneAt = plan.lanes.indexOf(lane);
+  for (const b of back) {
+    delete b.fromLane;
+    delete b.top;
+    delete b.compactTop;
+    // En Multi Lane-boks går bare nedover: ligger lanen den gikk ned til ikke lenger under, blir den vanlig
+    if (b.spanTo !== undefined && plan.lanes.findIndex((l) => l.id === b.spanTo) <= laneAt) dropSpan(b);
+  }
+  lane.boxes.push(...back);
+  return back;
+}
+
 function dropSpan(b: Box) {
   delete b.spanTo;
   delete b.spanEnd;
