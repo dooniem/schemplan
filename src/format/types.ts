@@ -157,6 +157,8 @@ export interface PlanNote {
   bold?: boolean;
   /** Hvit bakgrunn med tynn ramme. */
   frame?: boolean;
+  /** Luft mellom rammen og teksten i mm, [sideveis, opp og ned]. Gjelder bare med ramme; uten den en halv skrifthøyde. */
+  pad?: [number, number];
   color?: string;
   /** Skrift; uten den brukes planens skrift. */
   font?: NoteFont;
