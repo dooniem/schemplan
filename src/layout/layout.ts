@@ -10,6 +10,7 @@ import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso } from './
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
+import { laneTint, type LaneTint } from './lanetint';
 import { statusLabel, type StatusMoment } from './status';
 import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
@@ -1148,7 +1149,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     strong: ny ? c.year !== axis.columns[i].year : c.monthYear !== axis.columns[i].monthYear,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
-  const bands: Band[] = monthBands(axis, ny, laneLayouts);
+  const bands: Band[] = monthBands(axis, ny, laneLayouts.map((ln, i) => ({ ...ln, tint: lanes[i].tintBackground ? laneTint(ln.fill, ny) : null })));
   const holidays = file.holidays
     .map((h) => ({ s: parseIso(h.start), e: parseIso(h.end) }))
     .filter((h) => h.e >= axis.start && h.s < axis.end)
@@ -1586,8 +1587,9 @@ const BAND_DARK_ALT = '#F2F2F2';
 const monthIndex = (label: string) => Math.max(0, MONTHS_NB.indexOf(label));
 
 /** Annenhver måned mørk (jan, mar, mai …) i planområdet, i ukesvisning annenhver uke (oddetallsukene).
-    Som i Excel er de mørke feltene lysere i annenhver lane, så lanene skiller seg fra hverandre. */
-function monthBands(axis: TimeAxis, ny: boolean, lanes: { y0: number; y1: number }[]): Band[] {
+    Som i Excel er de mørke feltene lysere i annenhver lane, så lanene skiller seg fra hverandre.
+    En lane med lanefargen som bakgrunn får de samme feltene i to nyanser av fargen. */
+function monthBands(axis: TimeAxis, ny: boolean, lanes: { y0: number; y1: number; tint: LaneTint | null }[]): Band[] {
   const dark = ny ? '#F3F3F3' : BAND_DARK;
   const light = ny ? '#FFFFFF' : BAND_LIGHT;
   const darkAlt = ny ? '#F9F9F9' : BAND_DARK_ALT;
@@ -1601,8 +1603,11 @@ function monthBands(axis: TimeAxis, ny: boolean, lanes: { y0: number; y1: number
     else bands.push({ x0: c.x0, x1: c.x1, fill });
   }
   for (const b of bands) if (b.fill === dark) darkCols.push(b);
+  const full = bands.slice();
   lanes.forEach((ln, i) => {
-    if (i % 2 === 1) for (const b of darkCols) bands.push({ x0: b.x0, x1: b.x1, fill: darkAlt, y0: ln.y0, y1: ln.y1 });
+    const t = ln.tint;
+    if (t) for (const b of full) bands.push({ x0: b.x0, x1: b.x1, fill: b.fill === dark ? (i % 2 === 1 ? t.darkAlt : t.dark) : t.light, y0: ln.y0, y1: ln.y1 });
+    else if (i % 2 === 1) for (const b of darkCols) bands.push({ x0: b.x0, x1: b.x1, fill: darkAlt, y0: ln.y0, y1: ln.y1 });
   });
   return bands;
 }

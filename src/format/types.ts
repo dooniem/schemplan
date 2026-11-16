@@ -285,6 +285,8 @@ export interface Lane {
   order?: string[];
   /** Lanen er slått sammen med denne lanen i appen (valgfritt). Bare lanes fra Project; de skjules. Nye bokser fra Project i lanen flyttes dit. */
   mergedInto?: string;
+  /** Lanefargen vises også dempet som bakgrunn bak boksene (valgfritt). */
+  tintBackground?: boolean;
 }
 
 export type Rotation = 0 | 90 | -90;
