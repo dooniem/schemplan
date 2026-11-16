@@ -6,7 +6,7 @@ import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
 import { criticalIds, criticalKeep, paintCriticalOnly, shownItems } from './criticalonly';
-import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
+import type { FitTextResult, FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
@@ -15,7 +15,8 @@ import type { NoteFont, PlanImage, PlanNote } from './format/types';
 import { loadNoteFont, NOTE_COLORS, NOTE_MAX_PAD, notePad, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
-import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
+import { type AreaEdge, createAreaEdit } from './areaedit';
+import { createArrangeUi } from './arrangeui';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
@@ -23,7 +24,7 @@ import { createNoteArrows } from './notearrow';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
-import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, samePlanApartFromImages, snapshotOf, type Swatch, unpinBox } from './editmodel';
+import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
@@ -141,9 +142,28 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Kalenderens omfang slik det tegnes, med start og slutt valgt i appen. */
   const calRange = (plan: PlanFile) => effectiveRange(plan, layoutNow?.calendarMode ?? plan.plan.calendar.mode);
   let redrawTimer = 0;
-  /** Bokser som ble flyttet av siste omplassering, markert til den godtas eller angres. */
-  let arrangeMoved = new Set<string>();
-  const arrangeBar = document.querySelector<HTMLElement>('#arrange-bar');
+  /** Omplasser og «Størst mulig tekst», med linjen der endringen beholdes eller angres. */
+  const arrangeUi = createArrangeUi({
+    getPlan: () => host.getPlan(),
+    setPlan: (p) => host.setPlan(p),
+    redraw: () => host.redraw(),
+    layout: () => layoutNow,
+    selection: () => ({ group, selected, selectedLane }),
+    arrange: (p, laneIds, how) => host.arrange(p, laneIds, how),
+    fitText: (p, scope) => host.fitText(p, scope),
+    beginStep: () => {
+      snapshot();
+      typingSession = false;
+    },
+    undo: () => undo(),
+    overlay: () => overlay(),
+    refresh: () => {
+      buildPanel();
+      syncTools();
+    },
+  });
+  const endArrange = () => arrangeUi.end();
+  const showArrangeBar = (text: string, canUndo: boolean) => arrangeUi.show(text, canUndo);
 
   const undoBtn = tools.querySelector<HTMLButtonElement>('#undo')!;
   const redoBtn = tools.querySelector<HTMLButtonElement>('#redo')!;
@@ -364,7 +384,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = [];
     selectedLane = to;
     commit((pl) => (moved = (mergeLanes(pl, from, to, offset) ?? []).map((b) => b.id)));
-    arrangeMoved = new Set(moved);
+    arrangeUi.mark(moved);
     showArrangeBar(`${laneName(fromLane.name)} er slått sammen med ${laneName(toLane.name)}. ${words.charAt(0).toUpperCase() + words.slice(1)} flyttet.`, true);
     overlay();
   };
@@ -380,7 +400,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = [];
     selectedLane = id;
     commit((pl) => (moved = (splitLane(pl, id) ?? []).map((b) => b.id)));
-    arrangeMoved = new Set(moved);
+    arrangeUi.mark(moved);
     const n = moved.length;
     showArrangeBar(`${laneName(lane.name)} er skilt ut fra ${laneName(home.name)} igjen. ${n ? `${n} ${n === 1 ? 'boks' : 'bokser'} flyttet tilbake` : 'Ingen bokser flyttet'}.`, true);
     overlay();
@@ -1809,7 +1829,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
-      if (arrangeMoved.has(it.id)) {
+      if (arrangeUi.moved.has(it.id)) {
         const rect = document.createElementNS(NS, 'rect');
         for (const [k, v] of Object.entries({ x: r.x0 - 0.4, y: r.y0 - 0.4, width: r.x1 - r.x0 + 0.8, height: r.y1 - r.y0 + 0.8, fill: ACCENT, 'fill-opacity': 0.1, stroke: ACCENT, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
           rect.setAttribute(k, String(v));
@@ -1876,7 +1896,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
     lanePick?.draw(g, L);
-    areaOverlay(g);
+    if (!criticalMode) areaEdit.draw(g);
     imageOverlay(g);
     svgNow.append(g);
   };
@@ -2616,11 +2636,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const i = Number(areaT.getAttribute('data-i'));
       if (areaT.classList.contains('area-pt') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        deleteAreaPoint(edge, i);
+        areaEdit.deletePoint(edge, i);
         swallowClick();
         return;
       }
-      d = startAreaDrag(edge, areaT.classList.contains('area-edge') ? 'edge' : areaT.classList.contains('area-mid') ? 'mid' : 'pt', i);
+      d = areaEdit.startDrag(edge, areaT.classList.contains('area-edge') ? 'edge' : areaT.classList.contains('area-mid') ? 'mid' : 'pt', i);
     } else if (imgHandle) {
       // Ctrl-klikk på et punkt sletter det, som i Office
       if (imgHandle.classList.contains('img-pt') && (e.ctrlKey || e.metaKey)) {
@@ -2700,6 +2720,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   // Høyreklikkmenyen følger det du høyreklikket: lane-navnet gir lanevalg, en boks gir
   // boksvalg, og tomt sted i lanen gir ny boks og skjulte bokser.
   const ctx = createCtxMenu();
+  const areaEdit = createAreaEdit({
+    accent: ACCENT,
+    getPlan: () => host.getPlan(),
+    layout: () => layoutNow,
+    commit: (fn) => commit(fn),
+    redraw: () => host.redraw(),
+    overlay: () => overlay(),
+    mmPerPx: () => mmPerPx(),
+    snapOff: () => snapOff,
+    openMenu: (x, y, title, groups, subtitle) => ctx.open(x, y, title, groups, subtitle),
+  });
 
   // ---- Bilder ----
   // Settes inn fra fildialogen (høyreklikk), utklippstavlen (Ctrl+V) eller ved å dra en fil inn på arket.
@@ -3140,177 +3171,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     changePlaced(id, (q) => ({ ...q, points: q.points!.filter((_, k) => k !== i) }));
   };
 
-  // ---- Egendefinert planområde ----
-  // Topp- og bunnkanten dras opp og ned. Punkter lager knekk, som punktbeskjæringen av bilder.
-  // Endepunktene står fast i hver side. Planen tegnes på nytt mens du drar.
-  type AreaEdge = 'top' | 'bottom';
-  let liveArea: { edge: AreaEdge; pts: AreaPt[] } | null = null;
-  const areaEdgeNow = (edge: AreaEdge): AreaPt[] => (liveArea?.edge === edge ? liveArea.pts : layoutNow?.area?.[edge] ?? []);
-  /** Lagrer kanten som andeler av arket. Den andre kanten beholdes som den er lagret. */
-  const storeArea = (edge: AreaEdge, pts: AreaPt[] | null) => {
-    const L = layoutNow;
-    if (!L) return;
-    const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
-    commit((pl) => {
-      const pa = { ...(pl.plan.layout.planArea ?? {}) };
-      if (pts) pa[edge] = pts.map(([x, y]) => [r5(x / L.width), r5(y / L.height)] as [number, number]);
-      else delete pa[edge];
-      if (pa.top || pa.bottom) pl.plan.layout.planArea = pa;
-      else delete pl.plan.layout.planArea;
-    });
-  };
-  /** Grensene for en kant: toppen går ikke over kalenderens plass, bunnen ikke under forklaringen. */
-  const areaBounds = (edge: AreaEdge): [number, number] => {
-    const A = layoutNow!.area!;
-    return edge === 'top'
-      ? [A.minTop, Math.min(...A.bottom.map((q) => q[1])) - MIN_AREA_H]
-      : [Math.max(...A.top.map((q) => q[1])) + MIN_AREA_H, A.maxBottom];
-  };
-  /** Snapping: x mot måneds-/ukeskillene og planens sider, y mot lanekantene. Alt slår det av. */
-  const snapArea = (v: number, targets: number[]) => {
-    if (snapOff) return v;
-    const tol = 6 * mmPerPx();
-    let best = v;
-    let dist = tol;
-    for (const t of targets)
-      if (Math.abs(t - v) < dist) {
-        dist = Math.abs(t - v);
-        best = t;
-      }
-    return best;
-  };
-  const areaXs = () => [layoutNow!.plot.x0, layoutNow!.plot.x1, ...layoutNow!.grid.map((g) => g.x)];
-  const areaYs = () => layoutNow!.lanes.flatMap((l) => [l.y0, l.y1]);
-
-  const startAreaDrag = (edge: AreaEdge, kind: 'edge' | 'pt' | 'mid', i: number): Drag | null => {
-    const A = layoutNow?.area;
-    if (!A) return null;
-    const pts0 = A[edge].map((q) => [q[0], q[1]] as AreaPt);
-    const [lo, hi] = areaBounds(edge);
-    let from: number | null = null;
-    let idx = kind === 'mid' ? i + 1 : i;
-    // Planen tegnes på nytt mens du drar, så lanene og beskjæringen følger med. Den lagrede kanten
-    // settes tilbake før endringen lagres, så angre går til der kanten sto før du begynte å dra.
-    const plan = host.getPlan();
-    const saved = plan?.plan.layout.planArea;
-    const W = layoutNow!.width;
-    const H = layoutNow!.height;
-    let frame = 0;
-    const restoreSaved = () => {
-      window.cancelAnimationFrame(frame);
-      if (!plan) return;
-      if (saved) plan.plan.layout.planArea = saved;
-      else delete plan.plan.layout.planArea;
-    };
-    const live = (pts: AreaPt[]) => {
-      liveArea = { edge, pts };
-      overlay();
-      if (!plan || frame) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        const now = liveArea?.edge === edge ? liveArea.pts : null;
-        if (!now) return;
-        plan.plan.layout.planArea = { ...(saved ?? {}), [edge]: now.map(([x, y]) => [x / W, y / H] as [number, number]) };
-        host.redraw();
-      });
-    };
-    return {
-      startY: 0,
-      startClient: 0,
-      moved: false,
-      move() {},
-      moveXY(x, y) {
-        if (kind === 'edge') {
-          // Hele kanten flyttes, formen beholdes
-          from ??= y;
-          const ys = pts0.map((q) => q[1]);
-          let dy = y - from;
-          // Rett kant snapper mot lanekantene
-          if (ys.every((v) => Math.abs(v - ys[0]) < 1e-6)) dy = snapArea(ys[0] + dy, areaYs()) - ys[0];
-          dy = Math.min(hi - Math.max(...ys), Math.max(lo - Math.min(...ys), dy));
-          live(pts0.map(([px, py]) => [px, py + dy]));
-          return;
-        }
-        const pts = pts0.map((q) => [q[0], q[1]] as AreaPt);
-        if (kind === 'mid' && pts.length < 40) pts.splice(idx, 0, [x, y]);
-        else if (kind === 'mid') idx = i;
-        const last = pts.length - 1;
-        // Endepunktene står i sidene; de andre holder seg mellom naboene
-        const nx = idx === 0 ? pts[0][0] : idx === last ? pts[last][0] : Math.min(pts[idx + 1][0], Math.max(pts[idx - 1][0], snapArea(x, [...areaXs(), pts[idx - 1][0], pts[idx + 1][0]])));
-        const ny = Math.min(hi, Math.max(lo, snapArea(y, [...areaYs(), ...(idx > 0 ? [pts[idx - 1][1]] : []), ...(idx < last ? [pts[idx + 1][1]] : [])])));
-        pts[idx] = [nx, ny];
-        activeAreaPt = { edge, i: idx };
-        live(pts);
-      },
-      end() {
-        const pts = liveArea?.edge === edge ? liveArea.pts : null;
-        liveArea = null;
-        restoreSaved();
-        if (pts) storeArea(edge, pts);
-        else host.redraw();
-      },
-    };
-  };
-  let activeAreaPt: { edge: AreaEdge; i: number } | null = null;
-  const deleteAreaPoint = (edge: AreaEdge, i: number) => {
-    const pts = layoutNow?.area?.[edge];
-    if (!pts || i <= 0 || i >= pts.length - 1) return;
-    activeAreaPt = null;
-    storeArea(edge, pts.filter((_, k) => k !== i));
-  };
-  const areaMenu = (e: MouseEvent, edge: AreaEdge, i: number) => {
-    const pts = layoutNow?.area?.[edge] ?? [];
-    const name = edge === 'top' ? 'Toppkanten' : 'Bunnkanten';
-    const inner = i > 0 && i < pts.length - 1;
-    const stored = !!host.getPlan()?.plan.layout.planArea?.[edge];
-    const groups: CtxGroup[] = [];
-    if (i >= 0)
-      groups.push({
-        items: [{ label: 'Slett punkt', icon: 'trash', kbd: 'Ctrl+klikk', disabled: !inner, hint: inner ? 'Kanten går rett mellom punktene på hver side.' : 'Punktene i sidene kan ikke slettes, bare dras opp og ned.', onSelect: () => deleteAreaPoint(edge, i) }],
-      });
-    groups.push({
-      items: [
-        { label: 'Rett ut kanten', icon: 'undo', disabled: pts.length <= 2, hint: pts.length > 2 ? 'Fjerner knekkpunktene. Kanten blir rett der den står i venstre side.' : 'Kanten er rett.', onSelect: () => storeArea(edge, [[pts[0][0], pts[0][1]], [pts[pts.length - 1][0], pts[0][1]]]) },
-        { label: edge === 'top' ? 'Toppkanten tilbake under kalenderen' : 'Bunnkanten tilbake over forklaringen', icon: 'undo', disabled: !stored, hint: stored ? 'Kanten går tilbake dit den står i «Fyll arket».' : 'Kanten står der den står i «Fyll arket».', onSelect: () => storeArea(edge, null) },
-      ],
-    });
-    ctx.open(e.clientX, e.clientY, name, groups, 'Planområde');
-  };
-  /** Kantene med punkter i markeringslaget. Kommer ikke med i PDF. */
-  const areaOverlay = (g: SVGGElement) => {
-    const A = layoutNow?.area;
-    if (!A || criticalMode) return;
-    const k = mmPerPx();
-    const add = (tag: string, attrs: Record<string, string | number>, parent: Element = g) => {
-      const e = document.createElementNS(NS, tag);
-      for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, String(v));
-      parent.append(e);
-      return e;
-    };
-    for (const edge of ['top', 'bottom'] as const) {
-      const pts = areaEdgeNow(edge);
-      if (pts.length < 2) continue;
-      const line = pts.map(([x, y]) => `${x},${y}`).join(' ');
-      add('polyline', { points: line, fill: 'none', stroke: ACCENT, 'stroke-width': 2, 'stroke-dasharray': '6 4', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' });
-      const hit = add('polyline', { points: line, fill: 'none', stroke: 'transparent', 'stroke-width': 10, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'stroke', cursor: 'ns-resize', class: 'edit-handle area-edge', 'data-edge': edge });
-      add('title', {}, hit).textContent = `Dra ${edge === 'top' ? 'toppkanten' : 'bunnkanten'} opp eller ned. Høyreklikk for flere valg.`;
-      // Hvite punkter midt på hver del lager et nytt knekkpunkt når de dras
-      pts.forEach((q, i) => {
-        const n = pts[i + 1];
-        if (!n || Math.hypot(n[0] - q[0], n[1] - q[1]) < 24 * k) return;
-        const s = 7 * k;
-        const m = add('rect', { x: (q[0] + n[0]) / 2 - s / 2, y: (q[1] + n[1]) / 2 - s / 2, width: s, height: s, rx: s / 2, fill: '#FFFFFF', stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'all', cursor: 'copy', class: 'edit-handle area-mid', 'data-edge': edge, 'data-i': i });
-        add('title', {}, m).textContent = 'Dra for å lage et nytt punkt';
-      });
-      pts.forEach((q, i) => {
-        const s = 9 * k;
-        const on = activeAreaPt?.edge === edge && activeAreaPt.i === i;
-        const r = add('rect', { x: q[0] - s / 2, y: q[1] - s / 2, width: s, height: s, fill: on ? ACCENT : '#FFFFFF', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'all', cursor: i === 0 || i === pts.length - 1 ? 'ns-resize' : 'move', class: 'edit-handle area-pt', 'data-edge': edge, 'data-i': i });
-        add('title', {}, r).textContent = i === 0 || i === pts.length - 1 ? 'Dra opp eller ned' : 'Dra punktet. Ctrl+klikk sletter det.';
-      });
-    }
-  };
-
   /** Rammen, håndtakene og beskjæringen for valgt bilde. Tegnes i markeringslaget, kommer ikke med i PDF. */
   const imageOverlay = (g: SVGGElement) => {
     const p = selectedImage ? placedOf(selectedImage) : null;
@@ -3722,7 +3582,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const areaT = (e.target as Element | null)?.closest?.('.area-pt, .area-mid, .area-edge');
     if (plan && areaT && L.area) {
       e.preventDefault();
-      areaMenu(e, areaT.getAttribute('data-edge') as AreaEdge, areaT.classList.contains('area-pt') ? Number(areaT.getAttribute('data-i')) : -1);
+      areaEdit.menu(e, areaT.getAttribute('data-edge') as AreaEdge, areaT.classList.contains('area-pt') ? Number(areaT.getAttribute('data-i')) : -1);
       return;
     }
     // Høyreklikk på et bilde eller et punkt i punktbeskjæringen
@@ -3986,171 +3846,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     buildPanel();
     syncTools();
   });
-  // ---- Omplasser ----
-  const arrangeMenu = document.querySelector<HTMLElement>('#menu-arrange');
-  const arrangeUnpin = document.querySelector<HTMLInputElement>('#arrange-unpin');
-
-  /** Lanene omplasseringen gjelder, og hvilke bokser som kan løsnes (null = alle i lanene).
-      titles: tekstknappene gjelder også lane-navnene (hele planen, eller når et lane-navn er valgt). */
-  const arrangeScope = (plan: PlanFile): { laneIds: string[]; boxIds: Set<string> | null; text: string; whole?: boolean; titles?: boolean } => {
-    const shownLanes = plan.lanes.filter((l) => l.shown && !l.hidden);
-    if (group.length > 1) {
-      const lanes = shownLanes.filter((l) => l.boxes.some((b) => group.includes(b.id)));
-      return { laneIds: lanes.map((l) => l.id), boxIds: new Set(group), text: `Gjelder ${lanes.length === 1 ? 'lanen' : `de ${lanes.length} lanene`} med de ${group.length} valgte boksene. Bare de valgte løsnes.` };
-    }
-    const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
-    // Lane-navnene har én felles størrelse, så med et lane-navn valgt gjelder tekstknappene alle navnene
-    if (lane && selectedLane)
-      return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}». Tekstknappene gjelder også navnene på alle lanes.`, titles: true };
-    if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
-    return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true, titles: true };
-  };
-
-  function endArrange() {
-    if (arrangeBar) arrangeBar.hidden = true;
-    if (!arrangeMoved.size) return;
-    arrangeMoved = new Set();
-    overlay();
-  }
-
-  const showArrangeBar = (text: string, canUndo: boolean) => {
-    if (!arrangeBar) return;
-    arrangeBar.querySelector('.arrange-text')!.textContent = text;
-    arrangeBar.querySelector<HTMLButtonElement>('#arrange-keep')!.textContent = canUndo ? 'Behold' : 'Lukk';
-    arrangeBar.querySelector<HTMLButtonElement>('#arrange-undo')!.hidden = !canUndo;
-    arrangeBar.hidden = false;
-  };
-
-  /** Plass i lanen, i tekstlinjer, så før og etter kan sammenlignes selv om teksten har endret størrelse. */
-  const placeOf = (L: Layout) => {
-    const out = new Map<string, { lane: string; y: number; side: string }>();
-    for (const it of L.items) {
-      const r = bounds(it);
-      const ln = L.lanes.find((l) => r.y0 >= l.y0 - 1e-6 && r.y0 < l.y1 + 1e-6);
-      // Callout eller milepælstekst på den andre siden regnes også som flyttet
-      const side = it.kind === 'box' ? (it.callout ? (it.callout.box.x < it.x0 ? 'v' : 'h') : '') : it.labelBox.x < it.x ? 'v' : 'h';
-      if (ln) out.set(it.id, { lane: ln.id, y: (r.y0 - ln.top) / L.unit, side });
-    }
-    return out;
-  };
-  // Litt slingringsmonn: teksten kan bli større etter omplassering og bryte annerledes
-  const samePlace = (a: { lane: string; y: number; side: string } | undefined, b: { lane: string; y: number; side: string }) =>
-    !!a && a.lane === b.lane && a.side === b.side && Math.abs(a.y - b.y) < 0.5;
-  const contentLines = (L: Layout, ids: Set<string>) => L.lanes.filter((l) => ids.has(l.id)).reduce((s, l) => s + l.minH / L.unit, 0);
-
-  const arrange = (mode: 'tight' | 'chrono') => {
-    const plan = host.getPlan();
-    const before = layoutNow;
-    if (!plan || !before) return;
-    endArrange();
-    const { laneIds, boxIds } = arrangeScope(plan);
-    const next = snapshotOf(plan);
-    const unpin = !!arrangeUnpin?.checked;
-    // Overskriftsbokser flyttes med boksene som ligger inni dem
-    const groups = new Map<string, { id: string; dy: number }[]>();
-    if (unpin)
-      for (const id of laneIds) {
-        const l = findLane(next, id);
-        for (const b of l?.boxes ?? []) {
-          if (!b.header || (boxIds && !boxIds.has(b.id))) continue;
-          const it = before.items.find((x) => x.id === b.id);
-          if (!it) continue;
-          const r = bounds(it);
-          const kids = l!.boxes
-            .filter((k) => k.id !== b.id)
-            .map((k) => before.items.find((x) => x.id === k.id))
-            .filter((o): o is Item => !!o)
-            .filter((o) => inHeaderBox(it, o))
-            .map((o) => ({ id: o.id, dy: lines(bounds(o).y0 - r.y0, before.unit) }));
-          groups.set(b.id, kids);
-        }
-      }
-    // En overskriftsboks inne i en annen følger den ytterste
-    for (const kids of [...groups.values()]) for (const k of kids) groups.delete(k.id);
-    const inGroup = new Set([...groups.keys(), ...[...groups.values()].flat().map((k) => k.id)]);
-    for (const id of laneIds) {
-      const l = findLane(next, id);
-      if (!l) continue;
-      delete l.order;
-      if (unpin) for (const b of l.boxes) if (inGroup.has(b.id) || (!b.header && (!boxIds || boxIds.has(b.id)))) unpinBox(b);
-    }
-    if (mode === 'tight' || groups.size) {
-      const res = host.arrange(next, laneIds, { mode, groups });
-      for (const [id, order] of res.orders) {
-        const l = findLane(next, id);
-        if (l && order) l.order = order;
-      }
-      for (const [id, top] of res.pins) {
-        const b = findBox(next, id);
-        if (b) b.top = top;
-      }
-    }
-    if (samePlanApartFromImages(next, plan)) {
-      showArrangeBar(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede tidligst først.', false);
-      return;
-    }
-    snapshot();
-    typingSession = false;
-    host.setPlan(next);
-    host.redraw();
-    const after = layoutNow!;
-    const p0 = placeOf(before);
-    const p1 = placeOf(after);
-    const ids = new Set(laneIds);
-    const laneOfItem = new Map(next.lanes.flatMap((l) => l.boxes.map((b) => [b.id, l.id] as const)));
-    arrangeMoved = new Set([...p1].filter(([id, pos]) => ids.has(laneOfItem.get(id) ?? '') && !samePlace(p0.get(id), pos)).map(([id]) => id));
-    const saved = contentLines(before, ids) - contentLines(after, ids);
-    const n = arrangeMoved.size;
-    const moved = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} flyttet` : 'Ingen bokser flyttet';
-    const lower = saved > 0.05 ? `, ${saved.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} ${saved < 1.05 && saved > 0.95 ? 'linje' : 'linjer'} lavere` : '';
-    const grew = after.textSizePt > before.textSizePt + 1e-6 ? `. Teksten ble ${after.textSizePt.toLocaleString('nb-NO')} pt` : '';
-    showArrangeBar(`${moved}${lower}${grew}.`, true);
-    overlay();
-    buildPanel();
-    syncTools();
-  };
-
-  // ---- Størst mulig tekst ----
-  const ptText = (v: number) => `${v.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt`;
-  const fitText = (reset: boolean) => {
-    const plan = host.getPlan();
-    if (!plan || !layoutNow) return;
-    endArrange();
-    const s = arrangeScope(plan);
-    const scope: FitTextScope = { laneIds: s.laneIds, boxIds: s.boxIds, laneTitles: !!s.titles };
-    const res = reset ? null : host.fitText(plan, scope);
-    const next = res ? res.plan : resetTextSizes(plan, scope);
-    if (samePlanApartFromImages(next, plan)) {
-      showArrangeBar(reset ? 'Teksten har allerede standard størrelse.' : 'Fant ikke plass til større tekst uten at planens tekst krymper. Gjør planen mindre tett, eller boksene bredere, først.', false);
-      return;
-    }
-    snapshot();
-    typingSession = false;
-    host.setPlan(next);
-    host.redraw();
-    if (res) {
-      const n = res.grown;
-      const boxes = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} fikk større tekst, opptil ${ptText(res.maxPt)}` : 'Ingen bokser hadde plass til større tekst';
-      const lanes = res.laneTitlePt && res.laneTitlePt > res.planPt + 1e-6 ? `. Lane-titlene er ${ptText(res.laneTitlePt)}` : '';
-      showArrangeBar(`${boxes}${lanes}. Resten av planen har ${ptText(res.planPt)}.`, true);
-    } else showArrangeBar('Teksten har standard størrelse igjen: boksene som planen, lane-navnene litt større.', true);
-    buildPanel();
-    syncTools();
-  };
-  document.querySelector('#fit-text')?.addEventListener('click', () => fitText(false));
-  document.querySelector('#fit-text-reset')?.addEventListener('click', () => fitText(true));
-
-  arrangeMenu?.addEventListener('toggle', (e) => {
-    if ((e as ToggleEvent).newState !== 'open') return;
-    const plan = host.getPlan();
-    const scope = document.querySelector('#arrange-scope');
-    if (plan && scope) scope.textContent = arrangeScope(plan).text;
-  });
-  document.querySelector('#arrange-tight')?.addEventListener('click', () => arrange('tight'));
-  document.querySelector('#arrange-chrono')?.addEventListener('click', () => arrange('chrono'));
   followBar?.querySelector('#follow-cancel')?.addEventListener('click', () => endFollowPick());
-  arrangeBar?.querySelector('#arrange-keep')?.addEventListener('click', () => endArrange());
-  arrangeBar?.querySelector('#arrange-undo')?.addEventListener('click', () => undo());
 
   document.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
