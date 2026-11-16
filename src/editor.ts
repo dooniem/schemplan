@@ -11,32 +11,38 @@ import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
-import type { NoteFont, PlanImage, PlanNote } from './format/types';
-import { loadNoteFont, NOTE_COLORS, NOTE_MAX_PAD, notePad, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
-import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
-import { drawImage } from './render/svg';
+import type { PlanImage } from './format/types';
 import { type AreaEdge, createAreaEdit } from './areaedit';
 import { createArrangeUi } from './arrangeui';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
-import { createNoteArrows } from './notearrow';
+import { createImageEdit } from './imageedit';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
-import { imageFiles, readImage, type ReadImage } from './imagefile';
+import { imageFiles } from './imagefile';
 import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
 
-type ImageMode = 'none' | 'crop' | 'points';
-
-/** Musepekeren for et håndtak, vridd med bildet. */
-const cursorFor = (h: Handle, rotation: number) => {
-  const dirs = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
-  const i = (dirs.indexOf(h) + Math.round(rotation / 45) + 80) % 8;
-  return ['ns', 'nesw', 'ew', 'nwse'][i % 4] + '-resize';
-};
+/** En dragning i tegningen, fra knappen trykkes ned til den slippes. */
+export interface Drag {
+  startY: number;
+  startClient: number;
+  moved: boolean;
+  /** dx er bare med for dra som kan gå sidelengs (egne bokser). */
+  move(dy: number, dx: number): void;
+  startX?: number;
+  /** Dra som også følger musen sidelengs (rektangelvalg). Får punktet i mm. */
+  moveXY?(x: number, y: number): void;
+  startClientX?: number;
+  end(): void;
+}
+/** Fargeprøving: se editor.trial. */
+export type Trial = { key: string; run: (fn: () => void, live?: boolean) => void; pick: (fill: string, live?: boolean) => void };
+/** Knapp tilbake til fargen noe ellers ville hatt. */
+export type Back = { text: string; disabled: boolean; onClick: () => void; title?: string };
 
 const NS = 'http://www.w3.org/2000/svg';
 const MAX_HISTORY = 100;
@@ -106,11 +112,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selectedLaneGroup: string | null = null;
   /** Flere valgte bokser (Shift-klikk eller rektangel). Når den har to eller flere, er `selected` null. */
   let group: string[] = [];
-  /** Valgt bilde, og om det beskjæres. Bare én ting er valgt om gangen. */
-  let selectedImage: string | null = null;
-  let imageMode: ImageMode = 'none';
-  /** Punktet som sist ble dratt i punktbeskjæringen (Delete sletter det). */
-  let activePoint = -1;
   /** Valgt fag (klikk i legenden). */
   let selectedTrade: string | null = null;
   /** Nytt fag: navnefeltet i panelet får fokus én gang. */
@@ -558,7 +559,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
     if (selectedLaneGroup && !findGroup(prev, selectedLaneGroup)) selectedLaneGroup = null;
     group = group.filter((id) => findBox(prev, id));
-    if (selectedImage && !findImage(prev, selectedImage)) clearImage();
+    if (images.selected && !findImage(prev, images.selected)) clearImage();
     host.redraw();
     buildPanel();
     syncTools();
@@ -584,7 +585,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * Fargevalg for én ting (key). Alle farger som prøves etter hverandre blir ett angresteg.
    * live: fargevelgeren er fortsatt åpen, så bare planen tegnes på nytt.
    */
-  type Trial = { key: string; run: (fn: () => void, live?: boolean) => void; pick: (fill: string, live?: boolean) => void };
   const trial = (key: string, now: string, set: (fill: string) => void): Trial => {
     const run = (fn: () => void, live = false) => {
       const same = trialOn(key);
@@ -679,7 +679,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     return sw;
   };
   /** Egen farge, og eventuelt en knapp tilbake til fargen den ellers ville hatt. */
-  type Back = { text: string; disabled: boolean; onClick: () => void; title?: string };
   const colorRow = (value: string, t: Trial, back?: Back | Back[]) => {
     const out = document.createDocumentFragment();
     const row = el('div', { class: 'row color-row' });
@@ -1497,7 +1496,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.replaceChildren();
     if (!plan || !active) return;
     if (criticalMode) return buildCriticalPanel(plan);
-    const imSel = selectedImage ? findImage(plan, selectedImage) : null;
+    const imSel = images.selected ? findImage(plan, images.selected) : null;
     if (imSel) return buildImagePanel(plan, imSel);
     if (!b && group.length > 1) return buildGroupPanel(plan);
     if (!b && selectedHeader) return buildHeaderPanel(plan);
@@ -1911,18 +1910,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const laneAt = (y: number): LaneLayout | undefined => layoutNow?.lanes.find((l) => y >= l.y0 - 1e-6 && y < l.y1 + 1e-6);
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-  interface Drag {
-    startY: number;
-    startClient: number;
-    moved: boolean;
-    /** dx er bare med for dra som kan gå sidelengs (egne bokser). */
-    move(dy: number, dx: number): void;
-    startX?: number;
-    /** Dra som også følger musen sidelengs (rektangelvalg). Får punktet i mm. */
-    moveXY?(x: number, y: number): void;
-    startClientX?: number;
-    end(): void;
-  }
   let drag: Drag | null = null;
   let suppressClick = false;
   /** Sluker klikket som følger et trykk. Slippes knappen uten at det blir et klikk, gjelder det ikke neste. */
@@ -2623,12 +2610,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const areaT = t.closest('.area-pt, .area-mid, .area-edge');
     const tipT = t.closest('.note-tip');
     const arrowG = t.closest('g.note-arrows > g[data-arrow]');
-    if (tipT && selectedImage) d = tipDrag(selectedImage);
+    if (tipT && images.selected) d = tipDrag(images.selected);
     else if (arrowG) {
       // Et klikk på pilen velger teksten den kommer fra
       e.preventDefault();
       const id = arrowG.getAttribute('data-arrow')!;
-      if (id !== selectedImage) selectImage(id);
+      if (id !== images.selected) selectImage(id);
       swallowClick();
       return;
     } else if (areaT && !imgHandle) {
@@ -2652,7 +2639,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       d = startImageHandle(imgHandle);
     } else if (imgG) {
       const id = imgG.getAttribute('data-image')!;
-      if (id !== selectedImage) selectImage(id);
+      if (id !== images.selected) selectImage(id);
       // Et symbol drar milepælen med seg, som flagget og ruteren gjør. Med Alt flyttes bare bildet.
       const ms = host.getPlan() && findImage(host.getPlan()!, id)?.milestone;
       const msItem = ms && !e.altKey ? layoutNow.items.find((i) => i.id === ms.id) : undefined;
@@ -2698,7 +2685,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
     snapOff = e.altKey;
-    shiftNow = e.shiftKey;
+    images.shift = e.shiftKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
     else drag.move(p.y - drag.startY, p.x - (drag.startX ?? p.x));
@@ -2732,806 +2719,31 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     openMenu: (x, y, title, groups, subtitle) => ctx.open(x, y, title, groups, subtitle),
   });
 
-  // ---- Bilder ----
-  // Settes inn fra fildialogen (høyreklikk), utklippstavlen (Ctrl+V) eller ved å dra en fil inn på arket.
-  // Valgt bilde får håndtak for størrelse og rotasjon. «Beskjær» gir kanthåndtak, «Rediger punkter» en mangekant.
-  /** Siste punkt musen var over arket, i mm. Bilder fra utklippstavlen havner der. */
-  let lastPointer: Pt | null = null;
-  /** Bildet slik det dras akkurat nå, før det lagres i planen. */
-  let livePlaced: PlacedImage | null = null;
-  let shiftNow = false;
-  const imagesOf = (plan: PlanFile) => plan.plan.layout.images ?? [];
-  const findImage = (plan: PlanFile, id: string) => imagesOf(plan).find((im) => im.id === id) ?? null;
-  const placedOf = (id: string) => (livePlaced?.id === id ? livePlaced : layoutNow?.images.find((p) => p.id === id) ?? null);
-  const noteArrows = createNoteArrows(
-    {
-      accent: ACCENT,
-      getPlan: () => host.getPlan(),
-      layout: () => layoutNow,
-      svg: () => svgNow,
-      findImage,
-      placedOf,
-      commit,
-      mmPerPx: () => mmPerPx(),
-      snapOff: () => snapOff,
-      overlay: () => overlay(),
+  // ---- Bilder og fritekst ----
+  const imageKit = { el, calRange, syncTools, snapshot, commit, trial, panelHead, section, segmented, switchRow, btn, swatches, colorRow, lockedRow, textField, buildPanel, overlay, toMm, clamp };
+  const images = createImageEdit({
+    accent: ACCENT,
+    host,
+    sheet,
+    panel,
+    ctx,
+    snapOff: () => snapOff,
+    clearSelection: () => {
+      group = [];
+      selected = null;
+      selectedLane = null;
+      selectedHeader = false;
+      selectedLaneGroup = null;
+      selectedTrade = null;
+      typingSession = false;
     },
-    (plan, id) => {
-      const b = findBox(plan, id);
-      return `«${(b && plainText(b.text)) || (b?.resolved?.isMilestone ? 'milepæl' : 'boks')}»`;
-    },
-  );
-  /** Dra i pilspissen til en fritekst. */
-  const tipDrag = (id: string): Drag | null => {
-    const d = noteArrows.startTipDrag(id);
-    return d && { startY: 0, startClient: 0, moved: false, move() {}, moveXY: d.moveXY, end: d.end };
-  };
-  const milestonePt = (id: string): Pt | null => {
-    const it = layoutNow?.items.find((i) => i.id === id);
-    return it?.kind === 'milestone' ? { x: it.x, y: it.y } : null;
-  };
-  /** Punktet bildet er festet til: milepælen, eller midten av datoen. */
-  const anchorOf = (im: PlanImage): Pt | null => {
-    if (im.milestone) return milestonePt(im.milestone.id);
-    if (im.date) {
-      const x = layoutNow?.xOfDate(im.date.day);
-      return x == null ? null : { x, y: 0 };
-    }
-    return null;
-  };
-  const storePlaced = (plan: PlanFile, p: PlacedImage) => {
-    const im = findImage(plan, p.id);
-    if (!im || !layoutNow) return;
-    storeImage(im, p, layoutNow.width, layoutNow.height, anchorOf(im));
-    // Dras en fritekst større eller mindre, blir skriftstørrelsen det den ser ut som
-    fitNote(im, layoutNow.width);
-  };
-  const imageId = () => `img${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const changeImage = (id: string, fn: (im: PlanImage, plan: PlanFile) => void) =>
-    commit((pl) => {
-      const im = findImage(pl, id);
-      if (im) fn(im, pl);
-    });
-  /** Endrer bildet slik det står på arket (størrelse, rotasjon, beskjæring) og lagrer det. */
-  const changePlaced = (id: string, fn: (p: PlacedImage) => PlacedImage, nudgeKey?: string) => {
-    const p = placedOf(id);
-    if (p) commit((pl) => storePlaced(pl, fn(p)), nudgeKey);
-  };
-
-  function clearImage() {
-    selectedImage = null;
-    imageMode = 'none';
-    activePoint = -1;
-  }
-  const selectImage = (id: string | null, mode: ImageMode = 'none') => {
-    group = [];
-    selected = null;
-    selectedLane = null;
-    selectedHeader = false;
-    selectedLaneGroup = null;
-    selectedTrade = null;
-    typingSession = false;
-    selectedImage = id;
-    imageMode = id ? mode : 'none';
-    activePoint = -1;
-    buildPanel();
-    overlay();
-  };
-  /** Vanlig beskjæring, punktbeskjæring eller ingen av dem. Punktene starter som det som vises nå. */
-  const setImageMode = (mode: ImageMode) => {
-    const id = selectedImage;
-    const plan = host.getPlan();
-    const im = id && plan ? findImage(plan, id) : null;
-    if (!id || !im) return;
-    if (mode === 'points' && !im.points) {
-      const p = placedOf(id);
-      if (p)
-        changePlaced(id, (q) => ({ ...q, points: rectPoints(q.crop), crop: FULL }));
-    }
-    imageMode = imageMode === mode ? 'none' : mode;
-    activePoint = -1;
-    buildPanel();
-    overlay();
-  };
-
-  const fileInput = el('input', { type: 'file', accept: 'image/*', multiple: '', hidden: '', 'aria-hidden': 'true' }) as HTMLInputElement;
-  document.body.append(fileInput);
-  /** Hvor neste bilde fra fildialogen settes inn, og eventuelt milepælene det blir symbol for. */
-  let pickFor: { at: Pt | null; milestones?: string[] } = { at: null };
-  const pickImage = (at: Pt | null, milestones?: string[]) => {
-    pickFor = { at, milestones };
-    fileInput.multiple = !milestones;
-    fileInput.click();
-  };
-  fileInput.addEventListener('change', () => {
-    const files = imageFiles(fileInput.files);
-    fileInput.value = '';
-    if (files.length) void insertImages(files, pickFor.at, pickFor.milestones);
+    typing: () => typingSession,
+    setTyping: (on) => (typingSession = on),
+    redrawSoon: (ms) => (redrawTimer = window.setTimeout(() => host.redraw(), ms)),
+    cancelRedraw: () => window.clearTimeout(redrawTimer),
+    kit: imageKit,
   });
-
-  /** Midten av det som vises av arket, så et bilde fra utklippstavlen havner der du ser. */
-  const visibleCenter = (): Pt | null => {
-    if (!svgNow) return null;
-    const r = svgNow.getBoundingClientRect();
-    const v = sheet.getBoundingClientRect();
-    const x0 = Math.max(r.left, v.left, 0);
-    const x1 = Math.min(r.right, v.right, window.innerWidth);
-    const y0 = Math.max(r.top, v.top, 0);
-    const y1 = Math.min(r.bottom, v.bottom, window.innerHeight);
-    if (x1 <= x0 || y1 <= y0) return null;
-    return toMm((x0 + x1) / 2, (y0 + y1) / 2);
-  };
-
-  /** Symbolstørrelse for en milepæl: litt større enn flagget, så bildet er lett å se. */
-  const symbolSize = (id: string, px: [number, number]) => {
-    const it = layoutNow?.items.find((i) => i.id === id);
-    const side = it?.kind === 'milestone' ? it.size * 1.6 : 6;
-    const k = side / Math.max(px[0], px[1]);
-    return { w: px[0] * k, h: px[1] * k };
-  };
-
-  const insertImages = async (files: Blob[], at: Pt | null, milestones?: string[]) => {
-    const L = layoutNow;
-    if (!L || !host.getPlan()) return;
-    const read: ReadImage[] = [];
-    for (const f of files) {
-      try {
-        read.push(await readImage(f));
-      } catch {
-        host.notify(`Kunne ikke lese ${f instanceof File ? f.name : 'bildet'}. Bruk PNG, JPEG, GIF, WebP eller SVG.`);
-      }
-    }
-    if (!read.length) return;
-    const W = L.width;
-    const H = L.height;
-    const made: string[] = [];
-    commit((pl) => {
-      const list = (pl.plan.layout.images ??= []);
-      if (milestones?.length) {
-        // Symbol for milepælene: bytter ut et bilde milepælen alt har
-        for (const ms of milestones) {
-          const old = list.findIndex((x) => x.milestone?.id === ms);
-          const s = symbolSize(ms, read[0].px);
-          const im: PlanImage = { id: imageId(), data: read[0].data, px: read[0].px, x: 0, y: 0, w: s.w / W, h: s.h / W, rotation: 0, milestone: { id: ms, dx: 0, dy: 0 } };
-          const pt = milestonePt(ms);
-          if (pt) {
-            im.x = pt.x / W;
-            im.y = pt.y / H;
-          }
-          if (old >= 0) list.splice(old, 1, im);
-          else list.push(im);
-          made.push(im.id);
-        }
-        return;
-      }
-      const c = at ?? lastPointer ?? visibleCenter() ?? { x: W / 2, y: H / 2 };
-      read.forEach((r, i) => {
-        // Flere bilder samtidig legges litt forskjøvet, så alle kan ses
-        const im = newImage(imageId(), r.data, r.px, { x: c.x + i * 6, y: c.y + i * 6 }, W, H);
-        list.push(im);
-        made.push(im.id);
-      });
-    });
-    if (made.length) selectImage(made[made.length - 1]);
-  };
-
-  /** Ny fritekst der du høyreklikket (eller midt i det du ser), valgt med tekstfeltet klart. */
-  const insertNote = (at: Pt | null) => {
-    const L = layoutNow;
-    if (!L || !host.getPlan()) return;
-    const note: PlanNote = { ...NOTE_DEFAULT };
-    const r = renderNote(note);
-    const W = L.width;
-    const H = L.height;
-    const c = at ?? lastPointer ?? visibleCenter() ?? { x: W / 2, y: H / 2 };
-    let id = '';
-    commit((pl) => {
-      const im: PlanImage = { id: imageId(), data: r.data, px: r.px, x: c.x / W, y: c.y / H, w: r.px[0] / PX_PER_MM / W, h: r.px[1] / PX_PER_MM / W, rotation: 0, note };
-      (pl.plan.layout.images ??= []).push(im);
-      id = im.id;
-    });
-    if (!id) return;
-    selectImage(id);
-    const ta = document.getElementById('note-text') as HTMLTextAreaElement | null;
-    ta?.focus();
-    ta?.select();
-  };
-  /**
-   * Tegner friteksten på nytt i størrelsen den har på arket, så skriftstørrelsen og det du ser alltid
-   * stemmer. Midten blir stående. Endrer ingenting når den allerede stemmer, så flytting ikke lager nye bilder.
-   */
-  const fitNote = (im: PlanImage, W: number, change: Partial<PlanNote> = {}) => {
-    if (!im.note) return;
-    const sizePt = change.sizePt ?? shownPt(im.note, im.px, im.w, W);
-    const note = { ...im.note, ...change, sizePt };
-    // Dras teksten større eller mindre, følger luften i rammen med, så rammen blir der den ble sluppet
-    if (change.sizePt === undefined && change.pad === undefined && note.pad && sizePt !== im.note.sizePt) {
-      const k = sizePt / im.note.sizePt;
-      note.pad = note.pad.map((v) => Math.min(NOTE_MAX_PAD, Math.round(v * k * 10) / 10)) as [number, number];
-    }
-    const w = im.px[0] / PX_PER_MM / W;
-    const same = !Object.keys(change).length && sizePt === im.note.sizePt;
-    if (same && Math.abs(im.w - w) < 1e-9) return;
-    // Bare litt ved siden av (avrunding): rett størrelsen uten å tegne på nytt
-    if (same) {
-      Object.assign(im, { w, h: im.px[1] / PX_PER_MM / W });
-      return;
-    }
-    const r = renderNote(note);
-    Object.assign(im, { note, data: r.data, px: r.px, w: r.px[0] / PX_PER_MM / W, h: r.px[1] / PX_PER_MM / W });
-  };
-  /** Endrer friteksten og tegner bildet på nytt. En ny skrift lastes først, så den ikke tegnes med en annen. */
-  const setNote = (id: string, change: Partial<PlanNote>, typing = false, waited = false) => {
-    const plan = host.getPlan();
-    const L = layoutNow;
-    const im = plan ? findImage(plan, id) : null;
-    if (!plan || !L || !im?.note) return;
-    const next = { ...im.note, ...change };
-    if (!waited && !noteFontReady(next)) {
-      void loadNoteFont(next).then(() => setNote(id, change, typing, true));
-      return;
-    }
-    if (!typing || !typingSession) snapshot();
-    if (typing) typingSession = true;
-    fitNote(im, L.width, change);
-    window.clearTimeout(redrawTimer);
-    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else {
-      host.redraw();
-      buildPanel();
-    }
-    syncTools();
-  };
-
-  /** Bruker et bilde som allerede er symbol for en milepæl på andre milepæler: samme bilde, størrelse, rotasjon og beskjæring. */
-  const copySymbol = (fromId: string, milestones: string[]) => {
-    const plan = host.getPlan();
-    const src = plan ? findImage(plan, fromId) : null;
-    if (!src?.milestone) return;
-    const made: string[] = [];
-    commit((pl) => {
-      const list = (pl.plan.layout.images ??= []);
-      for (const ms of milestones) {
-        if (ms === src.milestone!.id) continue;
-        const im: PlanImage = { ...structuredClone(src), id: imageId(), milestone: { ...src.milestone!, id: ms } };
-        const old = list.findIndex((x) => x.milestone?.id === ms);
-        if (old >= 0) list.splice(old, 1, im);
-        else list.push(im);
-        made.push(im.id);
-      }
-    });
-    if (made.length === 1) selectImage(made[0]);
-  };
-
-  /** Bilder som er symbol for en milepæl, ett per ulikt bilde, med navnet på milepælen. */
-  const symbolChoices = (plan: PlanFile) => {
-    const seen = new Set<string>();
-    const out: { id: string; name: string }[] = [];
-    for (const im of imagesOf(plan)) {
-      if (!im.milestone) continue;
-      const key = `${im.data.length}:${im.data.slice(-40)}:${im.w}:${im.h}:${im.rotation}:${JSON.stringify(im.crop ?? null)}:${JSON.stringify(im.points ?? null)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const b = findBox(plan, im.milestone.id);
-      out.push({ id: im.id, name: b ? plainText(b.text) || 'Milepæl' : 'Milepæl' });
-    }
-    return out;
-  };
-
-  const removeImage = (id: string) => {
-    if (selectedImage === id) clearImage();
-    commit((pl) => {
-      pl.plan.layout.images = imagesOf(pl).filter((im) => im.id !== id);
-      if (!pl.plan.layout.images.length) delete pl.plan.layout.images;
-    });
-    overlay();
-  };
-  const duplicateImage = (id: string) => {
-    const plan = host.getPlan();
-    const src = plan ? findImage(plan, id) : null;
-    if (!src || !layoutNow) return;
-    const copy: PlanImage = structuredClone(src);
-    copy.id = imageId();
-    // Kopien står litt nedenfor og til høyre, og er ikke festet
-    const p = placedOf(id);
-    if (p) {
-      copy.x = (p.cx + 5) / layoutNow.width;
-      copy.y = (p.cy + 5) / layoutNow.height;
-    }
-    delete copy.milestone;
-    delete copy.date;
-    commit((pl) => (pl.plan.layout.images ??= []).push(copy));
-    selectImage(copy.id);
-  };
-  const moveImageInOrder = (id: string, front: boolean) =>
-    commit((pl) => {
-      const list = imagesOf(pl);
-      const i = list.findIndex((im) => im.id === id);
-      if (i < 0) return;
-      const [im] = list.splice(i, 1);
-      if (front) list.push(im);
-      else list.unshift(im);
-    });
-  /** Fest til datoen midt i det synlige, uten at bildet flytter seg. Eller løsne, også fra en milepæl. */
-  const pinImage = (id: string, on: boolean) => {
-    const p = placedOf(id);
-    if (!p || !layoutNow) return;
-    const L = layoutNow;
-    const c = frameCenter(p);
-    changeImage(id, (im) => {
-      storeImage(im, p, L.width, L.height);
-      delete im.milestone;
-      if (!on) {
-        delete im.date;
-        return;
-      }
-      const day = L.dateAt(clamp(c.x, L.plot.x0, L.plot.x1 - 1e-6));
-      const x = L.xOfDate(day) ?? c.x;
-      im.date = { day, dx: Math.round(((c.x - x) / L.width) * 10000) / 10000 };
-    });
-  };
-  /** Ny dato for et festet bilde: det flyttes sidelengs til datoen. */
-  const setImageDate = (id: string, day: string) =>
-    changeImage(id, (im) => {
-      im.date = { day, dx: 0 };
-    });
-
-  /** Viser bildet slik det dras, uten å tegne hele planen på nytt. */
-  const showLive = (p: PlacedImage) => {
-    livePlaced = p;
-    const g = svgNow?.querySelector(`g.images > g[data-image="${CSS.escape(p.id)}"]`);
-    if (g) {
-      const fresh = drawImage(p, g.parentElement!);
-      g.replaceWith(fresh);
-    }
-    noteArrows.redraw(p.id);
-    overlay();
-  };
-  /** Festet til dato: midten av det synlige blir stående på samme x. */
-  const keepX = (p: PlacedImage, x: number): PlacedImage => (p.date ? { ...p, cx: p.cx + x - frameCenter(p).x } : p);
-  /** Millimeter per skjermpunkt, så håndtakene er like store uansett zoom. */
-  const mmPerPx = () => 1 / (svgNow?.getScreenCTM()?.a || 1);
-
-  const imageDrag = (id: string, update: (p0: PlacedImage, q: Pt, from: Pt) => PlacedImage, onEnd?: () => void): Drag | null => {
-    const p0 = placedOf(id);
-    if (!p0) return null;
-    let from: Pt | null = null;
-    let last: PlacedImage | null = null;
-    return {
-      startY: 0,
-      startClient: 0,
-      moved: false,
-      move() {},
-      moveXY(x, y) {
-        from ??= { x, y };
-        last = update(p0, { x, y }, from);
-        showLive(last);
-      },
-      end() {
-        livePlaced = null;
-        if (last) {
-          const p = last;
-          commit((pl) => storePlaced(pl, p));
-        } else overlay();
-        onEnd?.();
-      },
-    };
-  };
-  const startImageMove = (id: string) =>
-    imageDrag(id, (p0, q, from) => ({ ...p0, cx: p0.date ? p0.cx : p0.cx + q.x - from.x, cy: p0.cy + q.y - from.y }));
-
-  const startImageHandle = (t: Element): Drag | null => {
-    const id = selectedImage;
-    if (!id) return null;
-    const p0 = placedOf(id);
-    if (!p0) return null;
-    const x0 = frameCenter(p0).x;
-    const h = t.getAttribute('data-h') as Handle | null;
-    if (t.classList.contains('img-rot')) return imageDrag(id, (p, q) => keepX(rotateTo(p, q, shiftNow), x0));
-    if (t.classList.contains('img-size') && h) {
-      const plan = host.getPlan();
-      const im = plan ? findImage(plan, id) : null;
-      const note = im?.note;
-      if (!note || !im) return imageDrag(id, (p, q) => keepX(resizeBy(p, h, q, shiftNow), x0));
-      // Fritekst beholder formen, og feltet viser skriftstørrelsen den får
-      const field = document.getElementById('note-size') as HTMLInputElement | null;
-      const W = layoutNow?.width ?? 1;
-      return imageDrag(id, (p, q) => {
-        const r = keepX(resizeBy(p, h, q, false), x0);
-        if (field) field.value = String(shownPt(note, im.px, r.w / W, W));
-        return r;
-      });
-    }
-    if (t.classList.contains('img-crop') && h) return imageDrag(id, (p, q) => ({ ...p, crop: cropTo(p, h, q) }));
-    const i = Number(t.getAttribute('data-i'));
-    if (t.classList.contains('img-pt') && p0.points) {
-      activePoint = i;
-      return imageDrag(id, (p, q) => {
-        const pts = [...p.points!];
-        pts[i] = movePoint(p, q, snapOff ? 0 : 6 * mmPerPx());
-        return { ...p, points: pts };
-      });
-    }
-    if (t.classList.contains('img-mid') && p0.points) {
-      // Nytt punkt midt på kanten, som dras med en gang
-      activePoint = i + 1;
-      return imageDrag(id, (p, q) => {
-        const pts = [...p.points!];
-        pts.splice(i + 1, 0, movePoint(p, q, snapOff ? 0 : 6 * mmPerPx()));
-        return { ...p, points: pts };
-      });
-    }
-    return null;
-  };
-  const deletePoint = (i: number) => {
-    const id = selectedImage;
-    const p = id ? placedOf(id) : null;
-    if (!id || !p?.points || p.points.length <= 3) return;
-    activePoint = -1;
-    changePlaced(id, (q) => ({ ...q, points: q.points!.filter((_, k) => k !== i) }));
-  };
-
-  /** Rammen, håndtakene og beskjæringen for valgt bilde. Tegnes i markeringslaget, kommer ikke med i PDF. */
-  const imageOverlay = (g: SVGGElement) => {
-    const p = selectedImage ? placedOf(selectedImage) : null;
-    if (!p || !layoutNow) return;
-    const k = mmPerPx();
-    const add = (tag: string, attrs: Record<string, string | number>) => {
-      const e = document.createElementNS(NS, tag);
-      for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, String(v));
-      g.append(e);
-      return e;
-    };
-    const poly = (pts: Pt[]) => pts.map((q) => `${q.x},${q.y}`).join(' ');
-    const square = (q: Pt, size: number, attrs: Record<string, string | number>) =>
-      add('rect', { x: q.x - size / 2, y: q.y - size / 2, width: size, height: size, transform: `rotate(${p.rotation} ${q.x} ${q.y})`, 'vector-effect': 'non-scaling-stroke', 'stroke-width': 1, 'pointer-events': 'all', ...attrs });
-    const at = (u: number, v: number) => toSheet(p, u, v);
-    if (imageMode !== 'none') {
-      // Hele bildet svakt bak, og det som blir igjen i full styrke oppå
-      drawImage(p, g, '-ghost', { full: true, opacity: 0.35 });
-      drawImage(p, g, '-sel');
-      add('polygon', { points: poly([at(0, 0), at(1, 0), at(1, 1), at(0, 1)]), fill: 'none', stroke: '#7F7F7F', 'stroke-width': 1, 'stroke-dasharray': '4 3', 'vector-effect': 'non-scaling-stroke' });
-    }
-    if (imageMode === 'crop') {
-      const [u0, v0, u1, v1] = p.crop;
-      add('polygon', { points: poly([at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)]), fill: 'none', stroke: '#000000', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
-      for (const h of HANDLES) {
-        const [hu, hv] = handleAt(h);
-        const q = at(u0 + hu * (u1 - u0), v0 + hv * (v1 - v0));
-        // Svarte vinkler i hjørnene og streker på kantene, som beskjæring i Office
-        const corner = hu !== 0.5 && hv !== 0.5;
-        const len = (corner ? 14 : 18) * k;
-        const thick = 5 * k;
-        const sx = hu === 0 ? 1 : hu === 1 ? -1 : 0;
-        const sy = hv === 0 ? 1 : hv === 1 ? -1 : 0;
-        const tr = `rotate(${p.rotation} ${q.x} ${q.y})`;
-        const mk = (x: number, y: number, w: number, hh: number) => add('rect', { x, y, width: w, height: hh, transform: tr, fill: '#000000', stroke: '#FFFFFF', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
-        if (corner) {
-          mk(sx > 0 ? q.x : q.x - len, sy > 0 ? q.y : q.y - thick, len, thick);
-          mk(sx > 0 ? q.x : q.x - thick, sy > 0 ? q.y : q.y - len, thick, len);
-        } else if (sx) mk(sx > 0 ? q.x : q.x - thick, q.y - len / 2, thick, len);
-        else mk(q.x - len / 2, sy > 0 ? q.y : q.y - thick, len, thick);
-        square(q, 22 * k, { class: 'edit-handle img-crop', 'data-h': h, fill: 'transparent', stroke: 'none', cursor: cursorFor(h, p.rotation) });
-      }
-      return;
-    }
-    if (imageMode === 'points' && p.points) {
-      const pts = p.points.map(([u, v]) => at(u, v));
-      add('polygon', { points: poly(pts), fill: 'none', stroke: '#D0021B', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke' });
-      pts.forEach((q, i) => {
-        const n = pts[(i + 1) % pts.length];
-        square({ x: (q.x + n.x) / 2, y: (q.y + n.y) / 2 }, 7 * k, { class: 'edit-handle img-mid', 'data-i': i, fill: '#FFFFFF', stroke: '#000000', cursor: 'copy' });
-      });
-      pts.forEach((q, i) => square(q, 8 * k, { class: 'edit-handle img-pt', 'data-i': i, fill: i === activePoint ? ACCENT : '#000000', stroke: '#FFFFFF', cursor: 'move' }));
-      return;
-    }
-    const c = frameCorners(p);
-    add('polygon', { points: poly(c), fill: 'none', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke' });
-    // Hva bildet er festet til: stiplet strek til milepælen, eller ned til datoen
-    const fc = frameCenter(p);
-    const im = host.getPlan() ? findImage(host.getPlan()!, p.id) : null;
-    const anchor = im ? anchorOf(im) : null;
-    if (im?.milestone && anchor)
-      add('line', { x1: anchor.x, y1: anchor.y, x2: fc.x, y2: fc.y, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
-    if (im?.date && anchor)
-      add('line', { x1: anchor.x, y1: layoutNow.plot.y0, x2: anchor.x, y2: layoutNow.plot.y1, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
-    const f = frameUv(p.crop, p.points);
-    // Fritekst skaleres bare i hjørnene, så teksten ikke strekkes
-    for (const h of im?.note ? HANDLES.filter((x) => x.length === 2) : HANDLES) {
-      const [hu, hv] = handleAt(h);
-      const q = at(f[0] + hu * (f[2] - f[0]), f[1] + hv * (f[3] - f[1]));
-      square(q, 9 * k, { class: 'edit-handle img-size', 'data-h': h, fill: '#FFFFFF', stroke: ACCENT, cursor: cursorFor(h, p.rotation) });
-    }
-    // Rund knott over rammen for å rotere
-    const top = at((f[0] + f[2]) / 2, f[1]);
-    const up = { x: top.x - (fc.x - top.x), y: top.y - (fc.y - top.y) };
-    const dist = Math.hypot(up.x - top.x, up.y - top.y) || 1;
-    const knob = { x: top.x + ((up.x - top.x) / dist) * 22 * k, y: top.y + ((up.y - top.y) / dist) * 22 * k };
-    add('line', { x1: top.x, y1: top.y, x2: knob.x, y2: knob.y, stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
-    const rc = add('circle', { cx: knob.x, cy: knob.y, r: 6 * k, fill: '#FFFFFF', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle img-rot', 'pointer-events': 'all', cursor: 'grab' });
-    rc.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra for å rotere. Shift: trinn på 15°.' }));
-    if (im?.note) noteArrows.draw(g, im);
-  };
-
-  // ---- Panelet for bilder ----
-  const buildImagePanel = (plan: PlanFile, im: PlanImage) => {
-    const p = placedOf(im.id);
-    const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
-    const where = ms ? `Symbol for «${plainText(ms.text) || 'milepæl'}»` : im.date ? `Festet til ${formatLong(im.date.day)}` : 'Fritt på arket';
-    panelHead(im.note ? 'Tekst' : 'Bilde', im.note ? where : `${im.px[0]} × ${im.px[1]} px · ${where}`);
-    const cm = (mm: number) => Math.round(mm) / 10;
-    /** Tallfelt med navnet over, som datofeltene. */
-    const numField = (label: string, value: number, step: number, onSet: (v: number) => void, id?: string) => {
-      const lab = el('label', {}, label);
-      const inp = el('input', { type: 'number', step: String(step), value: String(value), inputmode: 'decimal', ...(id ? { id } : {}) }) as HTMLInputElement;
-      inp.addEventListener('change', () => {
-        const v = Number(inp.value.replace(',', '.'));
-        if (Number.isFinite(v)) onSet(v);
-      });
-      lab.append(inp);
-      return lab;
-    };
-
-    if (im.note) {
-      const sn = section('Tekst');
-      const n = im.note;
-      sn.append(textField('note-text', 'Tekst', n.text, '3', (v) => setNote(im.id, { text: v }, true)));
-      const row = el('div', { class: 'row dates' });
-      // Viser størrelsen teksten har på arket, også i eldre filer der den er dratt uten å tegnes på nytt
-      const pt = layoutNow ? shownPt(n, im.px, im.w, layoutNow.width) : n.sizePt;
-      row.append(numField('Størrelse, pt', pt, 1, (v) => v >= NOTE_MIN_PT && v <= NOTE_MAX_PT && setNote(im.id, { sizePt: v }), 'note-size'));
-      sn.append(row);
-      // Skriften lastes nå, så den er klar hvis teksten dras større eller mindre
-      if (!noteFontReady(n)) void loadNoteFont(n);
-      const fontWrap = el('label', { class: 'prop prop-inline' });
-      fontWrap.append(el('span', { class: 'prop-label' }, 'Skrift'));
-      const fontSel = el('select', { id: 'note-font' }) as HTMLSelectElement;
-      for (const [key, name, css] of NOTE_FONTS) {
-        const o = el('option', { value: key }, name) as HTMLOptionElement;
-        o.style.fontFamily = css;
-        o.selected = key === (n.font ?? '');
-        fontSel.append(o);
-      }
-      fontSel.addEventListener('change', () => setNote(im.id, { font: (fontSel.value || undefined) as NoteFont | undefined }));
-      fontWrap.append(fontSel);
-      sn.append(fontWrap);
-      // Fet, kursiv og understreket kan kombineres, så de er av/på-knapper hver for seg
-      const styleWrap = el('div', { class: 'prop prop-inline' });
-      styleWrap.append(el('span', { class: 'prop-label' }, 'Stil'));
-      const styles = el('div', { class: 'group note-style', role: 'group', 'aria-label': 'Stil' });
-      for (const [key, label, title] of [['bold', 'F', 'Fet'], ['italic', 'K', 'Kursiv'], ['underline', 'U', 'Understreket']] as const) {
-        const b = el('button', { type: 'button', title, 'aria-label': title, 'aria-pressed': String(!!n[key]), class: `ns-${key}` }, label);
-        b.addEventListener('click', () => setNote(im.id, { [key]: !n[key] }));
-        styles.append(b);
-      }
-      styleWrap.append(styles);
-      sn.append(styleWrap);
-      sn.append(
-        segmented<'left' | 'center' | 'right'>('Justering', n.align ?? 'left', [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
-          setNote(im.id, { align: v === 'left' ? undefined : v }),
-        ),
-      );
-      const color = (n.color ?? '#000000').toUpperCase();
-      const tc = trial(`note:${im.id}`, color, (fill) => setNote(im.id, { color: fill === '#000000' ? undefined : fill }));
-      const colorWrap = el('div', { class: 'prop' });
-      colorWrap.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(color, NOTE_COLORS, tc), colorRow(color, tc));
-      sn.append(colorWrap);
-      sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
-      if (n.frame) {
-        // Luft inni rammen: sideveis og opp/ned hver for seg, så teksten kan stå løst i en stor ramme
-        const [px, py] = notePad(n);
-        const mm = (v: number) => Math.round(v * 10) / 10;
-        const setPad = (i: 0 | 1, v: number) => {
-          if (!(v >= 0 && v <= NOTE_MAX_PAD)) return;
-          const pad: [number, number] = [mm(px), mm(py)];
-          pad[i] = mm(v);
-          setNote(im.id, { pad });
-        };
-        const padRow = el('div', { class: 'row dates' });
-        padRow.append(numField('Luft sideveis, mm', mm(px), 0.5, (v) => setPad(0, v), 'note-pad-x'), numField('Luft opp/ned, mm', mm(py), 0.5, (v) => setPad(1, v), 'note-pad-y'));
-        sn.append(padRow);
-        if (n.pad) sn.append(lockedRow('Egen luft i rammen', 'Standard', 'En halv skrifthøyde på alle sider', () => setNote(im.id, { pad: undefined })));
-      }
-      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Justeringen gjelder når teksten har flere linjer. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
-
-      const sa = section('Pil');
-      sa.append(switchRow('Pil fra teksten', !!n.arrow, (v) => noteArrows.toggle(im.id, v), 'En strek med pilspiss fra kanten av teksten, som kan peke hvor som helst'));
-      if (n.arrow) {
-        const to = noteArrows.targetOf(plan, im);
-        if (to) sa.append(lockedRow(`Peker på ${to}`, 'Løsne', 'Pilspissen blir stående der den er, og følger ikke boksen lenger', () => noteArrows.detach(im.id)));
-        sa.append(el('p', { class: 'hint' }, to
-          ? 'Pilen følger boksen når planen endres. Dra den runde knotten på pilspissen for å peke et annet sted.'
-          : 'Dra den runde knotten på pilspissen dit pilen skal peke. Slipper du den på en boks eller milepæl, følger pilen den når planen endres; hold Alt for å la være. Pilen har samme farge som teksten.'));
-      }
-    }
-    const ss = section('Størrelse og rotasjon');
-    if (p) {
-      const f = frameUv(p.crop, p.points);
-      const fw = (f[2] - f[0]) * p.w;
-      const fh = (f[3] - f[1]) * p.h;
-      // Bredde og høyde gjelder det som vises; formen beholdes
-      const scaleTo = (k: number) => changePlaced(im.id, (q) => keepX(keepPoint({ ...q, w: q.w * k, h: q.h * k }, q, [(f[0] + f[2]) / 2, (f[1] + f[3]) / 2]), frameCenter(q).x));
-      const fields = el('div', { class: 'row dates' });
-      fields.append(
-        numField('Bredde, cm', cm(fw), 0.1, (v) => v > 0 && scaleTo((v * 10) / fw), 'image-width'),
-        numField('Høyde, cm', cm(fh), 0.1, (v) => v > 0 && scaleTo((v * 10) / fh)),
-        numField('Rotasjon, °', Math.round(p.rotation * 10) / 10, 1, (v) => changePlaced(im.id, (q) => keepX(rotateBy(q, normDeg(v) - q.rotation), frameCenter(q).x))),
-      );
-      const row = el('div', { class: 'row img-actions' });
-      const nat = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
-      const natBtn = btn('Opprinnelig størrelse', 'resize', () => changePlaced(im.id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), frameCenter(q).x)), 'Bildets egen størrelse og form, med midten på samme sted. Rotasjon og beskjæring beholdes.', 'button small');
-      natBtn.disabled = Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05;
-      const rl = btn('', 'rotateLeft', () => changePlaced(im.id, (q) => keepX(rotateBy(q, -90), frameCenter(q).x)), 'Roter 90° mot klokken', 'button small icon-only');
-      const rr = btn('', 'rotate', () => changePlaced(im.id, (q) => keepX(rotateBy(q, 90), frameCenter(q).x)), 'Roter 90° med klokken', 'button small icon-only');
-      rl.setAttribute('aria-label', 'Roter 90° mot klokken');
-      rr.setAttribute('aria-label', 'Roter 90° med klokken');
-      row.append(rl, rr, ...(im.note ? [] : [natBtn]));
-      ss.append(fields, row, el('p', { class: 'hint' }, im.note ? 'Dra i den runde knotten for å rotere; Shift gir trinn på 15°.' : 'Dra i hjørnene for å endre størrelsen; Shift gir fri form. Dra i den runde knotten for å rotere; Shift gir trinn på 15°.'));
-    }
-
-    // Fritekst beskjæres ikke
-    if (!im.note) {
-      const sc = section('Beskjæring');
-      sc.append(
-        segmented<ImageMode>('Verktøy', imageMode, [['none', 'Av'], ['crop', 'Kanter'], ['points', 'Punkter']], (v) => setImageMode(v === 'none' ? imageMode : v)),
-      );
-      if (im.crop || im.points)
-        sc.append(lockedRow(im.points ? 'Beskåret langs punkter' : 'Beskåret', 'Vis hele', 'Fjern beskjæringen og vis hele bildet', () => {
-          imageMode = 'none';
-          changeImage(im.id, (x) => {
-            delete x.crop;
-            delete x.points;
-          });
-        }));
-      sc.append(
-        el(
-          'p',
-          { class: 'hint' },
-          imageMode === 'crop'
-            ? 'Dra i de svarte vinklene og strekene. Enter eller Esc når du er ferdig.'
-            : imageMode === 'points'
-              ? 'Dra de svarte punktene. Dra et hvitt punkt midt på en kant for å lage et nytt. Ctrl-klikk eller høyreklikk et punkt for å slette det. Punktene fanges av bildets kanter; hold Alt for å dra fritt. Enter eller Esc når du er ferdig.'
-              : 'Kanter skjærer bort rett inn fra hver side. Punkter former en mangekant, som «Rediger punkt» i PowerPoint. De kan brukes sammen. Dobbeltklikk bildet for å beskjære kantene.',
-        ),
-      );
-    }
-
-    const sp = section('Plassering');
-    if (im.milestone) {
-      sp.append(lockedRow('Følger milepælen', 'Løsne', 'Bildet blir stående der det er, og milepælen får sitt eget symbol igjen', () => pinImage(im.id, false)));
-      const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
-      sp.append(el('p', { class: 'hint' }, `Dra bildet for å flytte milepælen opp eller ned. Hold Alt mens du drar, eller bruk piltastene, for å flytte bare bildet. Kopierer du milepælen, får kopien samme bilde.${others.length ? ' Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke bildet der også.' : ''}`));
-    } else {
-      sp.append(switchRow('Fest til dato', !!im.date, (v) => pinImage(im.id, v), 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned'));
-      if (im.date) {
-        const wrap = el('label', { class: 'prop prop-inline' });
-        wrap.append(el('span', { class: 'prop-label' }, 'Dato'));
-        const d = el('input', { type: 'date', value: im.date.day, min: calRange(plan).start, max: calRange(plan).end }) as HTMLInputElement;
-        d.addEventListener('change', () => d.value && setImageDate(im.id, d.value));
-        wrap.append(d);
-        sp.append(wrap);
-      }
-      sp.append(el('p', { class: 'hint' }, im.date ? 'Midten av bildet står på datoen. Dra bildet opp eller ned; løsne det for å flytte sidelengs.' : 'Dra bildet hvor du vil. Fest det til en dato for at det skal følge tidslinjen.'));
-    }
-    if (imagesOf(plan).length > 1) {
-      const row = el('div', { class: 'row img-actions' });
-      row.append(btn('Fremst', 'front', () => moveImageInOrder(im.id, true), 'Legg bildet over de andre bildene', 'button small'), btn('Bakerst', 'front', () => moveImageInOrder(im.id, false), 'Legg bildet under de andre bildene', 'button small'));
-      sp.append(row);
-    }
-
-    const foot = el('div', { class: 'panel-foot' });
-    const reset = im.note
-      ? btn('Tilbakestill', 'undo', () => {
-          const L = layoutNow;
-          if (!L) return;
-          commit((pl) => {
-            const x = findImage(pl, im.id);
-            if (!x) return;
-            x.rotation = 0;
-            fitNote(x, L.width, { sizePt: NOTE_DEFAULT.sizePt });
-          });
-        }, `Standard skriftstørrelse (${NOTE_DEFAULT.sizePt} pt), uten rotasjon. Teksten og midten blir stående.`, 'button push')
-      : btn('Tilbakestill', 'undo', () => {
-          imageMode = 'none';
-          const q = placedOf(im.id);
-          if (!q) return;
-          changePlaced(im.id, (x) => keepX(resetSize({ ...x, rotation: 0, crop: FULL, points: null }, im.px, layoutNow!.width, layoutNow!.height), frameCenter(x).x));
-        }, 'Opprinnelig størrelse, uten rotasjon og beskjæring', 'button push');
-    reset.disabled = im.note
-      ? !im.rotation && !!layoutNow && shownPt(im.note, im.px, im.w, layoutNow.width) === NOTE_DEFAULT.sizePt
-      : !!p && !im.crop && !im.points && !im.rotation && (() => {
-          const n = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
-          return Math.abs(p.w - n.w) < 0.05 && Math.abs(p.h - n.h) < 0.05;
-        })();
-    foot.append(
-      btn('Dupliser', 'copy', () => duplicateImage(im.id), 'Lag en kopi (Ctrl+D)'),
-      btn('Slett', 'trash', () => removeImage(im.id), 'Slett bildet (Delete)'),
-      reset,
-    );
-    panel.append(foot);
-  };
-
-  /** Menyen for et bilde. */
-  const imageMenu = (e: MouseEvent, id: string) => {
-    const plan = host.getPlan();
-    const im = plan ? findImage(plan, id) : null;
-    const p = placedOf(id);
-    if (!plan || !im || !p) return;
-    if (selectedImage !== id) selectImage(id);
-    const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
-    const nat = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
-    const x0 = frameCenter(p).x;
-    ctx.open(e.clientX, e.clientY, 'Bilde', [
-      {
-        heading: 'Beskjæring',
-        items: [
-          { label: 'Beskjær', icon: 'crop', checked: imageMode === 'crop' ? true : undefined, hint: 'Svarte kanter du drar inn for å skjære bort, som i Office. Enter når du er ferdig.', onSelect: () => setImageMode('crop') },
-          { label: 'Rediger punkter', icon: 'points', checked: imageMode === 'points' ? true : undefined, hint: 'Beskjær langs en mangekant: dra punktene, dra et hvitt punkt for å lage et nytt.', onSelect: () => setImageMode('points') },
-          { label: 'Fjern beskjæring', icon: 'undo', disabled: !im.crop && !im.points, hint: im.crop || im.points ? 'Viser hele bildet igjen.' : 'Bildet er ikke beskåret.', onSelect: () => changeImage(id, (x) => { delete x.crop; delete x.points; }) },
-        ],
-      },
-      {
-        items: [
-...(im.note
-            ? [{ label: 'Standard skriftstørrelse', icon: 'resize' as const, disabled: shownPt(im.note, im.px, im.w, layoutNow!.width) === NOTE_DEFAULT.sizePt, hint: `${NOTE_DEFAULT.sizePt} pt, med midten på samme sted.`, onSelect: () => setNote(id, { sizePt: NOTE_DEFAULT.sizePt }) }]
-            : [{ label: 'Opprinnelig størrelse', icon: 'resize' as const, disabled: Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05, hint: 'Bildets egen størrelse og form. Rotasjon og beskjæring beholdes.', onSelect: () => changePlaced(id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), x0)) }]),
-          { label: 'Roter 90° med klokken', icon: 'rotate', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, 90), x0)) },
-          { label: 'Roter 90° mot klokken', icon: 'rotateLeft', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -90), x0)) },
-          ...(im.note
-            ? [{ label: 'Pil fra teksten', icon: 'arrow' as const, checked: !!im.note.arrow, hint: im.note.arrow ? 'Fjerner pilen. Angre med Ctrl+Z.' : 'En strek med pilspiss fra kanten av teksten. Dra spissen dit den skal peke.', onSelect: () => noteArrows.toggle(id, !im.note!.arrow) }]
-            : []),
-          { label: 'Rett opp', icon: 'undo', disabled: !im.rotation, hint: im.rotation ? 'Fjerner rotasjonen.' : 'Bildet er ikke rotert.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -q.rotation), x0)) },
-        ],
-      },
-      {
-        items: ms
-          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) }]
-          : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${formatLong(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
-      },
-      {
-        items: [
-          { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi litt nedenfor.', onSelect: () => duplicateImage(id) },
-          ...(imagesOf(plan).length > 1
-            ? [
-                { label: 'Fremst', icon: 'front' as const, hint: 'Legger bildet over de andre bildene.', onSelect: () => moveImageInOrder(id, true) },
-                { label: 'Bakerst', icon: 'front' as const, hint: 'Legger bildet under de andre bildene.', onSelect: () => moveImageInOrder(id, false) },
-              ]
-            : []),
-        ],
-      },
-      { items: [{ label: 'Slett', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Angre med Ctrl+Z.', onSelect: () => removeImage(id) }] },
-    ], ms ? `Symbol for ${plainText(ms.text) || 'milepæl'}` : im.date ? `Festet til ${formatLong(im.date.day)}` : im.note ? 'Tekst' : `${im.px[0]} × ${im.px[1]} px`);
-  };
-
-  /** «Sett inn tekst» i høyreklikkmenyene. */
-  const insertNoteItem = (at: Pt) => ({
-    label: 'Sett inn tekst',
-    icon: 'pencil' as const,
-    hint: 'Fritekst hvor som helst på arket, for merknader eller forbehold.',
-    onSelect: () => insertNote(at),
-  });
-
-  /** «Sett inn bilde» i høyreklikkmenyene, med hint om utklippstavlen. */
-  const insertItem = (at: Pt) => ({
-    label: 'Sett inn bilde …',
-    icon: 'image' as const,
-    kbd: 'Ctrl+V',
-    hint: 'Velg en bildefil. Ctrl+V setter inn et bilde fra utklippstavlen, og du kan også dra en fil inn på arket.',
-    onSelect: () => pickImage(at),
-  });
-
-  /** Valg for milepæler: bilde som symbol, eller samme bilde som en annen milepæl har. */
-  const milestoneImageGroup = (plan: PlanFile, ids: string[]) => {
-    const has = ids.map((id) => imagesOf(plan).find((im) => im.milestone?.id === id)).filter((x): x is PlanImage => !!x);
-    const choices = symbolChoices(plan).filter((c) => !ids.includes(findImage(plan, c.id)?.milestone?.id ?? ''));
-    const n = ids.length;
-    const items: CtxItem[] = [
-      { label: has.length ? 'Bytt bilde …' : 'Bruk bilde som symbol …', icon: 'image', hint: `Bildet erstatter flagget eller ruteren og følger milepælen${n > 1 ? 'e' : ''} når ${n > 1 ? 'de' : 'den'} flyttes.`, onSelect: () => pickImage(null, ids) },
-      ...choices.slice(0, 6).map((c) => ({ label: `Bruk samme bilde som «${c.name.length > 28 ? `${c.name.slice(0, 27)}…` : c.name}»`, icon: 'copy' as const, hint: 'Samme bilde, størrelse, rotasjon og beskjæring.', onSelect: () => copySymbol(c.id, ids) })),
-    ];
-    if (has.length) items.push({ label: 'Fjern bildet', icon: 'trash', hint: 'Milepælen får flagget eller ruteren igjen.', onSelect: () => commit((pl) => { pl.plan.layout.images = imagesOf(pl).filter((im) => !im.milestone || !ids.includes(im.milestone.id)); if (!pl.plan.layout.images.length) delete pl.plan.layout.images; }) });
-    return { heading: 'Symbol', items };
-  };
+  const { findImage, placedOf, tipDrag, imageId, changePlaced, clearImage, selectImage, setImageMode, pickImage, visibleCenter, insertImages, removeImage, duplicateImage, mmPerPx, startImageMove, startImageHandle, deletePoint, imageOverlay, buildImagePanel, imageMenu, insertNoteItem, insertItem, milestoneImageGroup } = images;
 
   // Lim inn: et bilde på utklippstavlen settes inn, ellers limes kopierte bokser inn
   let pasteTimer = 0;
@@ -3541,7 +2753,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const files = imageFiles([...(e.clipboardData?.items ?? [])].filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter((f): f is File => !!f));
     if (files.length) {
       e.preventDefault();
-      void insertImages(files, lastPointer ?? visibleCenter());
+      void insertImages(files, images.lastPointer ?? visibleCenter());
       return;
     }
     if (clipboard.length) {
@@ -3552,10 +2764,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   sheet.addEventListener('pointermove', (e) => {
     if (!active || !layoutNow) return;
     const q = toMm(e.clientX, e.clientY);
-    lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
+    images.lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
     if (lanePick?.from && lanePick.hover(laneAt(q.y)?.id ?? null)) overlay();
   });
-  sheet.addEventListener('pointerleave', () => (lastPointer = null));
+  sheet.addEventListener('pointerleave', () => (images.lastPointer = null));
   // Nettleserens egen dra-og-slipp av bilder i tegningen skal ikke starte: den ville lagt inn en kopi
   sheet.addEventListener('dragstart', (e) => {
     if (active) e.preventDefault();
@@ -3591,12 +2803,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       if (imgT.classList.contains('img-pt')) {
         const i = Number(imgT.getAttribute('data-i'));
-        const n = placedOf(selectedImage!)?.points?.length ?? 0;
+        const n = placedOf(images.selected!)?.points?.length ?? 0;
         ctx.open(e.clientX, e.clientY, 'Punkt', [
           { items: [{ label: 'Slett punkt', icon: 'trash', kbd: 'Ctrl+klikk', disabled: n <= 3, hint: n <= 3 ? 'Mangekanten må ha minst tre punkter.' : 'Kantene på hver side slås sammen.', onSelect: () => deletePoint(i) }] },
           { items: [{ label: 'Ferdig med punktene', icon: 'check', kbd: 'Enter', hint: 'Avslutter punktbeskjæringen. Bildet er fortsatt valgt.', onSelect: () => setImageMode('points') }] },
         ], 'Rediger punkter');
-      } else imageMenu(e, imgT.getAttribute('data-image') ?? imgT.getAttribute('data-arrow') ?? selectedImage!);
+      } else imageMenu(e, imgT.getAttribute('data-image') ?? imgT.getAttribute('data-arrow') ?? images.selected!);
       return;
     }
     // Utenfor lanene (marger, kalender, forklaring): bare bilder kan settes inn
@@ -3878,34 +3090,34 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       else if (followPick) endFollowPick();
       else if (lanePick?.from) lanePick.end();
       else if (criticalMode) setCriticalMode(false);
-      else if (selectedImage && imageMode !== 'none') setImageMode(imageMode);
+      else if (images.selected && images.mode !== 'none') setImageMode(images.mode);
       else select(null);
       return;
     }
-    if (!inField && selectedImage) {
-      if (e.key === 'Enter' && imageMode !== 'none') {
+    if (!inField && images.selected) {
+      if (e.key === 'Enter' && images.mode !== 'none') {
         e.preventDefault();
-        setImageMode(imageMode);
+        setImageMode(images.mode);
         return;
       }
       if (!mod && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault();
-        if (imageMode === 'points' && activePoint >= 0) deletePoint(activePoint);
-        else removeImage(selectedImage);
+        if (images.mode === 'points' && images.activePoint >= 0) deletePoint(images.activePoint);
+        else removeImage(images.selected);
         return;
       }
       if (mod && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        duplicateImage(selectedImage);
+        duplicateImage(images.selected);
         return;
       }
       // Piltaster flytter bildet 1 mm, med Shift 5 mm. Festet til dato: bare opp og ned.
       const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       const a = arrows[e.key];
-      if (a && !mod && imageMode === 'none') {
+      if (a && !mod && images.mode === 'none') {
         e.preventDefault();
         const step = e.shiftKey ? 5 : 1;
-        const id = selectedImage;
+        const id = images.selected;
         changePlaced(id, (q) => ({ ...q, cx: q.date ? q.cx : q.cx + a[0] * step, cy: q.cy + a[1] * step }), `image:${id}`);
         return;
       }
@@ -3981,6 +3193,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     afterDraw(svg, layout) {
       svgNow = svg;
       layoutNow = layout;
+      images.afterDraw(svg, layout);
       if (selected && !layout.items.some((i) => i.id === selected)) {
         // Boksen tegnes ikke lenger (f.eks. skjult), men kan fortsatt redigeres i panelet
       }
