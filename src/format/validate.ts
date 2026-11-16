@@ -106,6 +106,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
         const edgeOk = (e: unknown) => e === undefined || (Array.isArray(e) && e.length >= 2 && e.length <= 40 && e.every((q) => Array.isArray(q) && q.length === 2 && q.every((v) => typeof v === 'number' && v >= 0 && v <= 1)));
         if (!isObj(pa) || !edgeOk(pa.top) || !edgeOk(pa.bottom)) err('plan.layout.planArea', 'må ha top og/eller bottom med 2–40 punkter [x, y] mellom 0 og 1');
       }
+      if (lay.laneGroups !== undefined) {
+        const gs = lay.laneGroups;
+        const ok = (g: unknown) =>
+          isObj(g) && typeof g.id === 'string' && typeof g.name === 'string' && typeof g.fill === 'string' && HEX.test(g.fill) && Array.isArray(g.lanes) && g.lanes.every((x) => typeof x === 'string');
+        if (!Array.isArray(gs) || !gs.every(ok)) err('plan.layout.laneGroups', 'må være en liste med id, name, fill (#RRGGBB) og lanes (lane-id-er)');
+      }
       needNum(lay, 'textSize', 'plan.layout');
       if (typeof lay.textSize === 'number' && lay.textSize <= 0) err('plan.layout.textSize', 'må være større enn 0');
       needNum(lay, 'calloutMaxWidthCm', 'plan.layout');

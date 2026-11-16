@@ -624,3 +624,12 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .note-style .ns-underline { text-decoration: underline; }
 /* Datovelgerens ikon følger mørk modus */
 @media (prefers-color-scheme: dark) { input[type='date'] { color-scheme: dark; } }
+
+/* Grupper av lanes: lanene i gruppen, hver med «Ta ut» */
+.group-lanes { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; }
+.group-lanes li { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 2px 4px 2px 8px; }
+.group-lanes li + li { border-top: 1px solid var(--border); }
+.group-lane-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.group-lane-name:hover { color: var(--accent); }
+.group-lane-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.group-lanes + .row { margin-top: 8px; gap: 6px; flex-wrap: wrap; }

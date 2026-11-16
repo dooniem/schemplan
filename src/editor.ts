@@ -18,6 +18,8 @@ import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergeLanes, mergeTargets } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
+import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
+import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
 import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, samePlanApartFromImages, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
@@ -93,6 +95,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let selectedLane: string | null = null;
   /** Toppfeltet med overskrift og tekst til høyre er valgt. */
   let selectedHeader = false;
+  /** Valgt gruppe av lanes (klikk på baren). */
+  let selectedLaneGroup: string | null = null;
   /** Flere valgte bokser (Shift-klikk eller rektangel). Når den har to eller flere, er `selected` null. */
   let group: string[] = [];
   /** Valgt bilde, og om det beskjæres. Bare én ting er valgt om gangen. */
@@ -152,6 +156,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     accent: ACCENT,
     getPlan: () => host.getPlan(),
     onMerge: (from, to) => mergeLaneInto(from, to),
+    onGroup: (from, to) => groupWith(from, to),
     onChange: () => {
       overlay();
       syncTools();
@@ -283,7 +288,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const addLane = (afterId: string | null) => {
     let made: Lane | null = null;
-    commit((pl) => (made = newLane(pl, afterId)));
+    commit((pl) => {
+      made = newLane(pl, afterId);
+      settleLaneGroups(pl, made.id);
+    });
     if (made) {
       selectLane((made as Lane).id);
       const inp = panel.querySelector<HTMLTextAreaElement>('#lane-name');
@@ -333,6 +341,56 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     showArrangeBar(`${laneName(fromLane.name)} er slått sammen med ${laneName(toLane.name)}. ${words.charAt(0).toUpperCase() + words.slice(1)} flyttet.`, true);
     overlay();
   };
+  // ---- Grupper av lanes ----
+  /** Starter «Grupper med …» for lanen. */
+  const startLaneGroup = (id: string) => {
+    endFollowPick();
+    if (criticalMode) setCriticalMode(false);
+    lanePick?.start(id, 'group');
+  };
+  const groupWith = (from: string, to: string) => {
+    let made: string | null = null;
+    commit((pl) => (made = groupLanes(pl, from, to)?.id ?? null));
+    if (made) selectLaneGroup(made);
+  };
+  const changeLaneGroup = (id: string, fn: (g: import('./format/types').LaneGroup) => void, opts: { typing?: boolean; rebuild?: boolean } = {}) => {
+    const plan = host.getPlan();
+    const g = plan && findGroup(plan, id);
+    if (!g) return;
+    if (!opts.typing || !typingSession) snapshot();
+    if (opts.typing) typingSession = true;
+    fn(g);
+    window.clearTimeout(redrawTimer);
+    if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else host.redraw();
+    if (opts.rebuild !== false) buildPanel();
+    syncTools();
+  };
+  const dissolveGroup = (id: string) => {
+    if (selectedLaneGroup === id) selectedLaneGroup = null;
+    commit((pl) => dissolveLaneGroup(pl, id));
+    overlay();
+  };
+  const groupKit = (): GroupKit => ({
+    el,
+    panel,
+    panelHead: (t, sub) => panelHead(t, sub),
+    section,
+    textField,
+    btn,
+    swatches,
+    colorRow: (v, t) => colorRow(v, t),
+    trial,
+    change: changeLaneGroup,
+    commit,
+    grow: (id, dir) => commit((pl) => growLaneGroup(pl, id, dir)),
+    dissolve: dissolveGroup,
+    ungroupLane: (laneId) => commit((pl) => removeFromLaneGroup(pl, laneId)),
+    pick: startLaneGroup,
+    selectGroup: (id) => selectLaneGroup(id),
+    selectLane: (id) => selectLane(id),
+  });
+
   /** Flytter lanen ett hakk opp eller ned blant lanene som vises. */
   const stepLane = (id: string, dir: -1 | 1) =>
     commit((pl) => {
@@ -342,6 +400,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (i < 0 || !other) return;
       const j = pl.lanes.indexOf(other);
       moveLane(pl, id, j);
+      settleLaneGroups(pl, id);
     });
 
   /** Bokser kopiert med Ctrl+C. Ligger bare i minnet så lenge siden er åpen. */
@@ -430,6 +489,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     colorTrial = null;
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
+    if (selectedLaneGroup && !findGroup(prev, selectedLaneGroup)) selectedLaneGroup = null;
     group = group.filter((id) => findBox(prev, id));
     if (selectedImage && !findImage(prev, selectedImage)) clearImage();
     host.redraw();
@@ -923,7 +983,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const merge = btn('Med en annen lane …', null, () => startLaneMerge(l.id), 'Bokser og milepæler flyttes til lanen du velger, og denne lanen blir borte. Angre med Ctrl+Z.');
     merge.disabled = !mergeTargets(plan, l.id).length;
     mw.append(el('span', { class: 'prop-label' }, 'Slå sammen'), merge);
-    sp.append(ow, mw, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
+    // Gruppe: grupper med en annen lane, eller endre gruppen lanen er i
+    const gw = el('div', { class: 'prop prop-inline' });
+    const own = groupOfLane(plan, l.id);
+    const gb = own
+      ? btn('Endre gruppen', null, () => selectLaneGroup(own.id), 'Tekst, farge og lanene i gruppen')
+      : btn('Med en annen lane …', null, () => startLaneGroup(l.id), 'Klikk lanen den skal grupperes med. Lanene imellom blir også med.');
+    gb.disabled = !own && !groupTargets(plan, l.id).length;
+    gw.append(el('span', { class: 'prop-label' }, 'Grupper'), gb);
+    sp.append(ow, mw, gw, el('p', { class: 'hint' }, layoutNow?.compact ? 'Du kan også dra lane-navnet opp eller ned.' : 'Du kan også dra lane-navnet opp eller ned, eller dra i nederste kant av lanen for å endre høyden.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const del = btn(l.manual ? 'Slett' : 'Skjul', l.manual ? 'trash' : 'hide', () => removeLaneById(l.id),
@@ -1065,6 +1133,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     selectedTrade = null;
     group = [];
@@ -1327,6 +1396,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (imSel) return buildImagePanel(plan, imSel);
     if (!b && group.length > 1) return buildGroupPanel(plan);
     if (!b && selectedHeader) return buildHeaderPanel(plan);
+    const lg = !b && selectedLaneGroup ? findGroup(plan, selectedLaneGroup) : null;
+    if (lg) return buildLaneGroupPanel(groupKit(), plan, lg);
     const lane = !b && selectedLane ? findLane(plan, selectedLane) : null;
     if (lane) return buildLanePanel(plan, lane);
     if (!b && selectedTrade === FERIE_KEY) {
@@ -1349,6 +1420,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Klikk et lane-navn for å endre navn og farge. Dra navnet opp eller ned for ny rekkefølge.',
           'Dra i nederste kant av en lane for å gi den fast høyde.',
           'Høyreklikk et lane-navn for ny lane, skjulte lanes og for å slå lanen sammen med en annen. Høyreklikk tomt sted i en lane for ny boks og skjulte bokser.',
+          'Høyreklikk et lane-navn og velg «Grupper med …» for å samle lanes under en smal bar med tekst. Klikk baren for å endre tekst og farge, ta med flere lanes eller ta dem ut.',
           'Lanes: Egendefinert i Innstillinger gir en stiplet topp- og bunnkant du kan dra, f.eks. for å gi plass til et kart. Dra et hvitt punkt for å lage et knekkpunkt.',
         ]],
         ['Arket', [
@@ -1688,7 +1760,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const pl = plan ? findLane(plan, ln.id) : null;
       if (ln.id === selectedLane) {
         const rect = document.createElementNS(NS, 'rect');
-        for (const [k, v] of Object.entries({ x: L.laneTitleX + 0.3, y: ln.y0 + 0.3, width: L.plot.x0 - L.laneTitleX - 0.6, height: ln.y1 - ln.y0 - 0.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.6 }))
+        for (const [k, v] of Object.entries({ x: ln.titleX0 + 0.3, y: ln.y0 + 0.3, width: L.plot.x0 - ln.titleX0 - 0.6, height: ln.y1 - ln.y0 - 0.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.6 }))
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
@@ -1697,6 +1769,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         for (const [k, v] of Object.entries({ cx: L.plot.x0 - 1.4, cy: ln.y0 + 1.4, r: 0.9, fill: ACCENT, stroke: '#FFFFFF', 'stroke-width': 0.3 })) c.setAttribute(k, String(v));
         g.append(c);
       }
+    }
+    for (const gb of L.laneGroups) {
+      if (gb.id !== selectedLaneGroup) continue;
+      const rect = document.createElementNS(NS, 'rect');
+      for (const [k, v] of Object.entries({ x: gb.x0 + 0.3, y: gb.y0 + 0.3, width: gb.x1 - gb.x0 - 0.6, height: gb.y1 - gb.y0 - 0.6, fill: 'none', stroke: ACCENT, 'stroke-width': 0.6 }))
+        rect.setAttribute(k, String(v));
+      g.append(rect);
     }
     for (const ln of layoutNow.lanes) {
       if (ln.manual) line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { stroke: ACCENT, 'stroke-width': 3 });
@@ -2138,6 +2217,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           const [lane] = plan.lanes.splice(i, 1);
           const j = before ? plan.lanes.findIndex((x) => x.id === before) : plan.lanes.findIndex((x) => x.id === last) + 1;
           plan.lanes.splice(Math.max(0, j), 0, lane);
+          settleLaneGroups(plan, lane.id);
         });
       },
     };
@@ -2149,6 +2229,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     group = [];
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     selectedTrade = null;
     typingSession = false;
@@ -2161,6 +2242,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     selectedTrade = t;
     typingSession = false;
@@ -2173,6 +2255,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selectedTrade = null;
     selectedLane = id;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     typingSession = false;
     buildPanel();
@@ -2185,8 +2268,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selectedLane = null;
     selectedTrade = null;
     selectedHeader = true;
+    selectedLaneGroup = null;
     clearImage();
     typingSession = false;
+    buildPanel();
+    overlay();
+  };
+  const selectLaneGroup = (id: string) => {
+    selectLane(null);
+    selectedLaneGroup = id;
     buildPanel();
     overlay();
   };
@@ -2205,6 +2295,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     else cur.push(id);
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     selectedTrade = null;
     typingSession = false;
@@ -2224,6 +2315,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     clearImage();
     selectedTrade = null;
     buildPanel();
@@ -2269,11 +2361,19 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   // ---- Hendelser ----
   const itemOf = (e: Event) => (active ? ((e.target as Element | null)?.closest?.('g[data-id]') as SVGGElement | null) : null);
+  /** Gruppebaren under markøren, om noen. */
+  const groupBarOf = (e: MouseEvent): string | null => {
+    if (!active || !layoutNow || (e.target as Element | null)?.closest?.('.edit-handle')) return null;
+    const p = toMm(e.clientX, e.clientY);
+    return layoutNow.laneGroups.find((g) => p.x >= g.x0 && p.x < g.x1 && p.y >= g.y0 && p.y < g.y1)?.id ?? null;
+  };
   /** Lanen hvis hendelsen er i lane-kolonnen (navnet), ellers ingenting. */
   const titleLaneOf = (e: MouseEvent): LaneLayout | null => {
     if (!active || !layoutNow || (e.target as Element | null)?.closest?.('.edit-handle')) return null;
     const p = toMm(e.clientX, e.clientY);
     if (p.x < layoutNow.laneTitleX || p.x >= layoutNow.plot.x0) return null;
+    // I «Grupper med …» og «Slå sammen med …» treffer baren lanen bak den
+    if (!lanePick?.from && groupBarOf(e)) return null;
     return laneAt(p.y) ?? null;
   };
   /**
@@ -2358,6 +2458,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!g && inHeader(e)) return selectHeader();
     const id = boxAt(e);
     if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleInGroup(id);
+    const gb = id || lanePick?.from ? null : groupBarOf(e);
+    if (gb) return selectLaneGroup(gb);
     const ln = id ? null : titleLaneOf(e);
     if (ln) selectLane(ln.id);
     else if (!(e.shiftKey && !id)) select(id);
@@ -2375,6 +2477,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const ta = panel.querySelector<HTMLTextAreaElement>('#header-title');
       ta?.focus();
       ta?.select();
+      return;
+    }
+    const gb = g ? null : groupBarOf(e);
+    if (gb) {
+      selectLaneGroup(gb);
+      const inp = panel.querySelector<HTMLTextAreaElement>('#group-name');
+      inp?.focus();
+      inp?.select();
       return;
     }
     const ln = g ? null : titleLaneOf(e);
@@ -2542,6 +2652,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = null;
     selectedLane = null;
     selectedHeader = false;
+    selectedLaneGroup = null;
     selectedTrade = null;
     typingSession = false;
     selectedImage = id;
@@ -3533,7 +3644,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const hitId = boxAt(e);
     const box = hitId ? findBox(plan, hitId) : null;
     const onTitle = p.x < L.plot.x0;
-    if (onTitle) {
+    const gb = onTitle ? L.laneGroups.find((x) => p.x >= x.x0 && p.x < x.x1 && p.y >= x.y0 && p.y < x.y1) : undefined;
+    const lgr = gb && findGroup(plan, gb.id);
+    if (lgr) {
+      ctx.open(e.clientX, e.clientY, plainText(lgr.name.replace(/\|/g, ' ')) || 'Gruppe', laneGroupMenu(groupKit(), plan, lgr), 'Gruppe');
+    } else if (onTitle) {
       // Sammenslåtte lanes er borte for brukeren; de angres med Ctrl+Z, ikke vises igjen herfra
       const hiddenLanes = plan.lanes.filter((x) => x.shown && x.hidden && !x.mergedInto);
       ctx.open(e.clientX, e.clientY, plainText(lane.name), [
@@ -3552,6 +3667,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             { label: 'Slå sammen med …', icon: 'merge', hint: 'Klikk lanen den skal slås sammen med. Bokser og milepæler flyttes dit, og denne lanen blir borte.', disabled: !mergeTargets(plan, ln.id).length, onSelect: () => startLaneMerge(ln.id) },
           ],
         },
+        { items: laneGroupItems(groupKit(), plan, ln.id) },
         {
           items: [
             lane.manual
@@ -3674,6 +3790,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+      selectedLaneGroup = null;
     clearImage();
       group = [];
     }
@@ -3954,6 +4071,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         return;
       }
     }
+    if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && selectedLaneGroup) {
+      e.preventDefault();
+      dissolveGroup(selectedLaneGroup);
+      return;
+    }
     if (!inField && !mod && (e.key === 'Delete' || e.key === 'Backspace') && (selected || selectedLane || group.length)) {
       e.preventDefault();
       if (group.length) removeGroup();
@@ -4016,6 +4138,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+      selectedLaneGroup = null;
     clearImage();
       group = [];
       buildPanel();
@@ -4050,6 +4173,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       selected = null;
       selectedLane = null;
       selectedHeader = false;
+      selectedLaneGroup = null;
     clearImage();
       group = [];
       typingSession = false;

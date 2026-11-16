@@ -13,6 +13,7 @@ import { statusLabel, type StatusMoment } from './status';
 import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
 import { boxTrade, tradeColors } from '../trades';
+import { groupRuns } from '../lanegroup';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -154,6 +155,19 @@ export interface LaneLayout {
   minH: number;
   /** Høyden er valgt i appen (og gjelder: Kompakt ser bort fra den). */
   manual: boolean;
+  /** Venstre kant av navnefeltet. Lanes i en gruppe har baren til venstre for seg. */
+  titleX0: number;
+}
+
+/** Baren til en gruppe av lanes: smal, med rotert tekst, til venstre for lane-navnene. */
+export interface LaneGroupLayout {
+  id: string;
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  fill: string;
+  title: TextBlock;
 }
 
 /** Bakgrunnsstriper i planområdet: annenhver måned litt mørkere. */
@@ -239,6 +253,8 @@ export interface Layout {
   calendarTop: CalendarRow[];
   calendarBottom: CalendarRow[];
   lanes: LaneLayout[];
+  /** Barene til gruppene av lanes. */
+  laneGroups: LaneGroupLayout[];
   grid: { x: number; strong: boolean; month: boolean }[];
   bands: Band[];
   holidays: { x0: number; x1: number }[];
@@ -626,6 +642,16 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, laneSize, true))));
   const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, laneSize, true)));
   const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
+  // Grupper av lanes: baren tar plass fra navnene i gruppen, så kolonnen blir ikke bredere.
+  // Like bred som linjene i teksten, men aldri mer enn en tredjedel av kolonnen.
+  const runs = groupRuns(file.plan.layout.laneGroups, lanes.map((l) => l.id)).map((r) => {
+    const lines = splitLines(r.group.name);
+    const w = Math.min(LANE_TITLE_W / 3, Math.max(1, lines.length) * laneLh + 1.2);
+    const len = Math.max(0, ...lines.map((t) => measure(t, laneSize, true)));
+    return { ...r, lines, w, len };
+  });
+  const barW = lanes.map(() => 0);
+  for (const r of runs) for (let i = r.start; i <= r.end; i++) barW[i] = r.w;
   // Luft i lanene følger tekststørrelsen
   const LANE_PAD = Math.max(0.5, base * 0.3);
 
@@ -655,7 +681,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny, compact));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = laneRaw.map((raw) => wrapLines(raw, LANE_TITLE_W - titlePad, laneSize, measure, true));
+  const titleLines = laneRaw.map((raw, i) => wrapLines(raw, LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, true));
   // Plasseringen uten egendefinert planområde, så lanene som ikke berøres av kantene slipper ny pakking
   const basePlace: { k: number[]; ys: number[] }[] = [];
   const contentH = lanes.map((lane, i) => {
@@ -703,6 +729,17 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const inner = pieces.reduce((m, p, j) => Math.max(m, ys[j] + p.h), 0);
     return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
   });
+  // Teksten i en gruppebar må få plass i høyden: det som mangler, legges på den nederste lanen i gruppen
+  const floor = lanes.map(() => 0);
+  for (const r of runs) {
+    const need = r.len + 2 * LANE_PAD + 1.5;
+    let have = 0;
+    for (let i = r.start; i < r.end; i++) have += contentH[i];
+    if (have + contentH[r.end] < need) {
+      floor[r.end] = need - have;
+      contentH[r.end] = floor[r.end];
+    }
+  }
   // Lane med høyde valgt i appen: aldri lavere enn innholdet krever. Kompakt ser bort fra den.
   const minH = contentH.slice();
   lanes.forEach((l, i) => {
@@ -887,7 +924,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         const inner = pieces.reduce((m, p, j) => Math.max(m, pl.ys[j] + (p.alts ?? [p])[pl.k[j]].h), 0);
         // Lane-tittelen står i det synlige av lanen i tittelkolonnen
         const tTop = Math.max(0, edgeRange(E.top, E.left, titleX1, 'max') - y0);
-        const need = Math.max(inner + 2 * LANE_PAD, tTop + titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
+        const need = Math.max(inner + 2 * LANE_PAD, tTop + titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5, floor[i]);
         const h = Math.max(need, lanes[i].height ? lanes[i].height! * lh : 0) + add[i];
         if (y0 + tTop + titleLines[i].length * laneLh + 2 * LANE_PAD > edgeRange(E.bottom, E.left, titleX1, 'min') + 1e-6) ok = false;
         contentHAt[i] = need;
@@ -982,8 +1019,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       top: y0 + LANE_PAD,
       minH: minH[i],
       manual: fixed,
+      titleX0: laneTitleX + barW[i],
       title: {
-        x: laneTitleX + LANE_TITLE_W / 2,
+        x: laneTitleX + barW[i] + (LANE_TITLE_W - barW[i]) / 2,
         y: (tTop + tBot) / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
         size: laneSize,
@@ -993,6 +1031,22 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       },
     });
     y += h;
+  });
+  // Gruppebarene: rotert tekst midt i den synlige delen, lest nedenfra og opp
+  const laneGroups: LaneGroupLayout[] = runs.map((r) => {
+    const gy0 = laneLayouts[r.start].y0;
+    const gy1 = laneLayouts[r.end].y1;
+    const tTop = edges ? Math.max(gy0, edgeRange(edges.top, edges.left, laneTitleX + r.w, 'max')) : gy0;
+    const tBot = edges ? Math.max(tTop, Math.min(gy1, edgeRange(edges.bottom, edges.left, laneTitleX + r.w, 'min'))) : gy1;
+    return {
+      id: r.group.id,
+      x0: laneTitleX,
+      x1: laneTitleX + r.w,
+      y0: gy0,
+      y1: gy1,
+      fill: r.group.fill,
+      title: { x: laneTitleX + r.w / 2, y: (tTop + tBot) / 2, lines: r.lines, size: laneSize, color: autoTextColor(r.group.fill), anchor: 'middle', bold: true, rotate: -90 },
+    };
   });
   // Multi Lane-bokser går ned til bunnen av lanen de er satt til. Er den lanen skjult eller ligger
   // over boksen, brukes den nærmeste synlige lanen før den (minst boksens egen).
@@ -1124,6 +1178,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     calendarTop,
     calendarBottom,
     lanes: laneLayouts,
+    laneGroups,
     grid,
     bands,
     holidays,
