@@ -5,7 +5,7 @@ import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
-import { criticalIds, paintCriticalOnly, shownItems } from './criticalonly';
+import { criticalKeep, paintCriticalOnly, shownItems } from './criticalonly';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
@@ -57,6 +57,8 @@ export interface EditorHost {
   /** Viser en feilmelding i appen (ikke i nettleserens varselboks). */
   notify(message: string): void;
   setSettings(s: unknown): void;
+  /** Lagrer en PDF for deling med bare boksene i `keep` (filteret for kritisk linje). */
+  saveCriticalPdf(keep: Set<string>, btn: HTMLButtonElement): void;
 }
 
 export interface Editor {
@@ -79,6 +81,8 @@ export interface Editor {
    * Samme nøkkel flere ganger på rad (skriving i ett felt) blir ett angre-steg.
    */
   record(key?: string): void;
+  /** Boksene som vises med «Vis bare kritiske aktiviteter», eller null når filteret er av. */
+  criticalView(): Set<string> | null;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string) => {
@@ -149,10 +153,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let criticalMode = false;
   /** «Vis bare kritiske aktiviteter»: bare på skjermen, og bare så lenge tegnemodusen er på. */
   let criticalOnly = false;
+  /** Ta med overskriftsboksene de kritiske boksene ligger i. Huskes til appen lukkes. */
+  let criticalHeaders = true;
   /** Boksene som vises når filteret er på, ellers null. */
-  const criticalKeep = (): Set<string> | null => {
+  const criticalView = (): Set<string> | null => {
     const plan = host.getPlan();
-    return active && criticalMode && criticalOnly && plan ? criticalIds(plan) : null;
+    return active && criticalMode && criticalOnly && plan && layoutNow ? criticalKeep(plan, layoutNow.items, criticalHeaders) : null;
   };
   /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
   let followPick: { id: string; edge: Edge } | null = null;
@@ -1037,6 +1043,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }, 'Skjuler de andre boksene og milepælene på skjermen. Planen og PDF-en endres ikke, og filteret slås av når du trykker Ferdig.');
     only.querySelector('input')!.disabled = !marked.length;
     vs.append(only);
+    if (criticalOnly) {
+      vs.append(switchRow('Ta med overskriftsboksene', criticalHeaders, (v) => {
+        criticalHeaders = v;
+        overlay();
+      }, 'Viser overskriftsboksene som de kritiske boksene ligger i'));
+      const save = btn('Lagre PDF', 'share', () => {
+        const keep = criticalView();
+        if (keep) host.saveCriticalPdf(keep, save);
+      }, 'Lagrer en PDF for deling med bare det som vises nå', 'button push crit-save');
+      vs.append(save);
+    }
     const style = plan.plan.layout.criticalLine ?? CRITICAL_DEFAULT;
     const setStyle = (v: Partial<typeof style>) => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), ...v }));
 
@@ -1711,7 +1728,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const overlay = () => {
     if (!svgNow || !layoutNow) return;
     svgNow.querySelector('g.edit-overlay.edit-marks')?.remove();
-    paintCriticalOnly(svgNow, criticalKeep());
+    paintCriticalOnly(svgNow, criticalView());
     if (!active) return;
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'edit-overlay edit-marks');
@@ -2413,7 +2430,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const px = 1 / (svgNow?.getScreenCTM()?.a || 4);
     type R = { x: number; y: number; w: number; h: number };
     // Skjulte bokser kan ikke treffes
-    const items = shownItems(layoutNow.items, criticalKeep());
+    const items = shownItems(layoutNow.items, criticalView());
     const body = (it: Item): R => (it.kind === 'box' ? { x: it.x0, y: it.y, w: it.x1 - it.x0, h: it.h } : { x: it.x - it.size / 2, y: it.y - it.size / 2, w: it.size, h: it.size });
     const text = (it: Item): R | null => (it.kind === 'box' ? (it.callout?.box ?? null) : it.labelBox);
     const behind = (it: Item) => it.kind === 'box' && !!(it.header || it.span);
@@ -4181,6 +4198,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (!active) toggle.click();
       select(id);
     },
+    criticalView,
     record(key) {
       if (key && key === recordKey) return;
       snapshot();

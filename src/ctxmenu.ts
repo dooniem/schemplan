@@ -43,6 +43,7 @@ const ICONS = {
   link: 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1 M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1',
   unlink: 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1 M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1 M3 3l18 18',
   unpin: 'M12 16v5 M8 3h8 M9 3v5l-3 5h12l-3-5V3 M3 3l18 18',
+  share: 'M12 15V3 M8 7l4-4 4 4 M5 12v8h14v-8',
 } as const;
 export type IconName = keyof typeof ICONS;
 
