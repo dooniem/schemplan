@@ -4,8 +4,7 @@ import { effectiveRange } from './layout/range';
 import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
-import { CRITICAL_DEFAULT } from './layout/critical';
-import { criticalIds, criticalKeep, paintCriticalOnly, shownItems } from './criticalonly';
+import { paintCriticalOnly, shownItems } from './criticalonly';
 import type { FitTextResult, FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
@@ -18,13 +17,15 @@ import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './li
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
 import { createImageEdit } from './imageedit';
+import { createTradeUi } from './tradeui';
+import { createCriticalUi } from './criticalui';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles } from './imagefile';
 import { addDaysIso, bounds, BOX_PALETTE, copyBox, daysBetween, findBox, findLane, inHeaderBox, isEdited, isLaneEdited, keepLaneOriginal, keepOriginal, LANE_PALETTE, laneOf, lines, moveBox, moveLane, newBox, newLane, newMilestone, pasteBoxes, pinned, removeBox, removeLane, resetBoxInPlan, resetLane, snapshotOf, type Swatch, unpinBox } from './editmodel';
 import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
-import { addTrade, boxTrade, currentFill, deleteTrade, isAppTrade, NO_TRADE, projectFill, renameTrade, setBoxTrade, setProjectColor, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
+import { addTrade, boxTrade, currentFill, isAppTrade, NO_TRADE, projectFill, setBoxTrade, setProjectColor, tradeColors } from './trades';
 
 /** En dragning i tegningen, fra knappen trykkes ned til den slippes. */
 export interface Drag {
@@ -173,23 +174,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Blå prikk på bokser brukeren har endret. Kan skjules for å se planen slik den blir. */
   let showMarks = true;
   const criticalBtn = tools.querySelector<HTMLButtonElement>('#critical-mode');
-  /** Kritisk linje: klikk på en boks tar den med i linjen eller ut av den. */
-  let criticalMode = false;
-  /** «Vis bare kritiske aktiviteter»: bare på skjermen, og bare så lenge tegnemodusen er på. */
-  let criticalOnly = false;
-  /** Ta med overskriftsboksene de kritiske boksene ligger i. Huskes til appen lukkes. */
-  let criticalHeaders = true;
-  /** Boksene som vises når filteret er på, ellers null. */
-  const criticalView = (): Set<string> | null => {
-    const plan = host.getPlan();
-    if (!active || !criticalMode || !criticalOnly || !plan || !layoutNow) return null;
-    // Uten bokser i linjen er det ingenting å vise, så filteret slås av
-    if (!criticalIds(plan).size) {
-      criticalOnly = false;
-      return null;
-    }
-    return criticalKeep(plan, layoutNow.items, criticalHeaders);
-  };
   /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
   let followPick: { id: string; edge: Edge } | null = null;
   const followBar = document.querySelector<HTMLElement>('#follow-bar');
@@ -218,8 +202,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
-    criticalBtn?.setAttribute('aria-pressed', String(criticalMode));
-    sheet.classList.toggle('critical-mode', active && criticalMode);
+    criticalBtn?.setAttribute('aria-pressed', String(critical.mode));
+    sheet.classList.toggle('critical-mode', active && critical.mode);
     sheet.classList.toggle('follow-mode', active && (!!followPick || !!lanePick?.from));
   };
 
@@ -240,18 +224,27 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     plan.plan.layout.editedAt = todayIso();
   };
 
+  /** Ett angresteg per endring, men skriving i samme felt samles i ett steg. */
+  const stepFor = (typing?: boolean) => {
+    if (!typing || !typingSession) snapshot();
+    if (typing) typingSession = true;
+  };
+  /** Tegner planen på nytt: straks, eller litt etter siste tastetrykk mens det skrives. */
+  const redrawFor = (typing?: boolean) => {
+    window.clearTimeout(redrawTimer);
+    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
+    else host.redraw();
+  };
+
   const change = (fn: (b: Box) => void, opts: { typing?: boolean; rebuild?: boolean } = {}) => {
     const plan = host.getPlan();
     const b = plan && selected ? findBox(plan, selected) : null;
     if (!b) return;
-    if (!opts.typing || !typingSession) snapshot();
-    if (opts.typing) typingSession = true;
+    stepFor(opts.typing);
     fn(b);
     applyFollows(plan!);
     // Under skriving tegnes planen litt etterpå, så store planer ikke henger etter tastetrykkene
-    window.clearTimeout(redrawTimer);
-    if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else host.redraw();
+    redrawFor(opts.typing);
     if (opts.rebuild !== false) buildPanel();
     syncTools();
   };
@@ -260,12 +253,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const l = plan && selectedLane ? findLane(plan, selectedLane) : null;
     if (!l) return;
-    if (!opts.typing || !typingSession) snapshot();
-    if (opts.typing) typingSession = true;
+    stepFor(opts.typing);
     fn(l);
-    window.clearTimeout(redrawTimer);
-    if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else host.redraw();
+    redrawFor(opts.typing);
     if (opts.rebuild !== false) buildPanel();
     syncTools();
   };
@@ -364,7 +354,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Starter «Slå sammen med …» for lanen. */
   const startLaneMerge = (id: string) => {
     endFollowPick();
-    if (criticalMode) setCriticalMode(false);
+    if (critical.mode) setCriticalMode(false);
     lanePick?.start(id);
   };
   /** Slår sammen lanene som ett angresteg, og merker boksene som ble flyttet til de godtas eller angres. */
@@ -412,7 +402,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Starter «Grupper med …» for lanen. */
   const startLaneGroup = (id: string) => {
     endFollowPick();
-    if (criticalMode) setCriticalMode(false);
+    if (critical.mode) setCriticalMode(false);
     lanePick?.start(id, 'group');
   };
   const groupWith = (from: string, to: string) => {
@@ -424,12 +414,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const plan = host.getPlan();
     const g = plan && findGroup(plan, id);
     if (!g) return;
-    if (!opts.typing || !typingSession) snapshot();
-    if (opts.typing) typingSession = true;
+    stepFor(opts.typing);
     fn(g);
-    window.clearTimeout(redrawTimer);
-    if (opts.typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else host.redraw();
+    redrawFor(opts.typing);
     if (opts.rebuild !== false) buildPanel();
     syncTools();
   };
@@ -891,13 +878,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const changeHeader = (fn: (lay: PlanFile['plan']['layout']) => void, typing: boolean) => {
     const plan = host.getPlan();
     if (!plan) return;
-    if (!typing || !typingSession) snapshot();
-    if (typing) typingSession = true;
+    stepFor(typing);
     fn(plan.plan.layout);
-    window.clearTimeout(redrawTimer);
-    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else {
-      host.redraw();
+    redrawFor(typing);
+    if (!typing) {
       buildPanel();
     }
     syncTools();
@@ -1084,82 +1068,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
-  const setCritical = (ids: string[], on: boolean) =>
-    commit((pl) => ids.forEach((id) => {
-      const x = findBox(pl, id);
-      if (!x) return;
-      if (on) x.critical = true;
-      else delete x.critical;
-    }));
-
-  const CRITICAL_COLORS: [string, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#C000C0', 'Lilla'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
-  const buildCriticalPanel = (plan: PlanFile) => {
-    const marked = plan.lanes.flatMap((l) => l.boxes.filter((x) => x.critical));
-    panelHead('Kritisk linje', marked.length ? `${marked.length} ${marked.length === 1 ? 'boks' : 'bokser'} i linjen` : 'Ingen bokser ennå', () => setCriticalMode(false), 'Ferdig');
-    if (!marked.length) criticalOnly = false;
-    panel.append(el('p', { class: 'panel-note' }, criticalOnly
-      ? 'Bare boksene i linjen vises. Slå av filteret under for å se og merke de andre igjen.'
-      : marked.length
-      ? 'Klikk en boks for å ta den med eller ut. Linjen følger datoene, så rekkefølgen du klikker i spiller ingen rolle.'
-      : 'Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge og går utenom teksten.'));
-    const vs = section('Visning');
-    const only = switchRow('Vis bare kritiske aktiviteter', criticalOnly, (v) => {
-      criticalOnly = v;
-      buildPanel();
-      overlay();
-    }, 'Skjuler de andre boksene og milepælene på skjermen. Planen og PDF-en endres ikke, og filteret slås av når du trykker Ferdig.');
-    only.querySelector('input')!.disabled = !marked.length;
-    vs.append(only);
-    if (criticalOnly) {
-      vs.append(switchRow('Ta med overskriftsboksene', criticalHeaders, (v) => {
-        criticalHeaders = v;
-        overlay();
-      }, 'Viser overskriftsboksene som de kritiske boksene ligger i'));
-      const save = btn('Lagre PDF', 'share', () => {
-        const keep = criticalView();
-        if (keep) host.saveCriticalPdf(keep, save);
-      }, 'Lagrer en PDF for deling med bare det som vises nå', 'button push crit-save');
-      vs.append(save);
-    }
-    const style = plan.plan.layout.criticalLine ?? CRITICAL_DEFAULT;
-    const setStyle = (v: Partial<typeof style>) => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), ...v }));
-
-    const s = section('Utseende');
-    const ww = el('div', { class: 'prop prop-inline' });
-    const wl = el('label', { class: 'prop-label', for: 'critical-width' }, 'Tykkelse');
-    const wv = el('span', { class: 'range-value' }, `${style.width.toFixed(1).replace('.', ',')} mm`);
-    const wr = el('div', { class: 'row' });
-    const range = el('input', { type: 'range', id: 'critical-width', min: '0.2', max: '3', step: '0.1', value: String(style.width) }) as HTMLInputElement;
-    // Ett angre-steg per dra i glideren; linjen tegnes på nytt mens du drar
-    let sliding = false;
-    range.addEventListener('input', () => {
-      const pl = host.getPlan();
-      if (!pl) return;
-      if (!sliding) snapshot();
-      sliding = true;
-      pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), width: Number(range.value) };
-      wv.textContent = `${Number(range.value).toFixed(1).replace('.', ',')} mm`;
-      host.redraw();
-    });
-    range.addEventListener('change', () => {
-      sliding = false;
-      syncTools();
-    });
-    wr.append(range, wv);
-    ww.append(wl, wr);
-    s.append(ww);
-    const cw = el('div', { class: 'prop prop-inline' });
-    cw.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(style.color.toUpperCase(), CRITICAL_COLORS, (c) => setStyle({ color: c })));
-    s.append(cw);
-    s.append(segmented('Strek', style.dash ?? 'solid', [['solid', 'Hel'], ['dashed', 'Stiplet'], ['dotted', 'Prikket']], (v) => setStyle({ dash: v })));
-
-    const foot = el('div', { class: 'panel-foot' });
-    const clear = btn('Fjern linjen', 'trash', () => setCritical(marked.map((x) => x.id), false), 'Tar alle boksene ut av linjen', 'button push');
-    clear.disabled = !marked.length;
-    foot.append(btn('Ferdig', 'check', () => setCriticalMode(false), undefined, 'button primary'), clear);
-    panel.append(foot);
-  };
-
   // ---- Følg datoene til en annen boks ----
   const edgeWord = (edge: Edge) => (edge === 'start' ? 'startdatoen' : 'sluttdatoen');
   const boxName = (b: Box | null | undefined) => (b ? `«${plainText(b.text) || (b.resolved?.isMilestone ? 'Milepæl' : 'Boks')}»` : 'boksen');
@@ -1167,7 +1075,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const startFollowPick = (id: string, edge: Edge) => {
     const plan = host.getPlan();
     if (!plan || !followBar) return;
-    if (criticalMode) setCriticalMode(false);
+    if (critical.mode) setCriticalMode(false);
     followPick = { id, edge };
     selected = id;
     group = [];
@@ -1230,21 +1138,6 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
   const stopFollowing = (id: string) => commit((pl) => delete findBox(pl, id)!.follows);
-
-  const setCriticalMode = (on: boolean) => {
-    criticalMode = on;
-    criticalOnly = false;
-    selected = null;
-    selectedLane = null;
-    selectedHeader = false;
-    selectedLaneGroup = null;
-    clearImage();
-    selectedTrade = null;
-    group = [];
-    buildPanel();
-    overlay();
-    syncTools();
-  };
 
   const buildGroupPanel = (plan: PlanFile) => {
     const boxes = group.map((id) => findBox(plan, id)).filter((x): x is Box => !!x);
@@ -1326,166 +1219,46 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.append(foot);
   };
 
-  /** Endrer fargen for et helt fag. undefined fjerner fargen fra appen. */
-  const setTradeColor = (trade: string, v: { fill: string; text?: string } | undefined) =>
-    commit((pl) => {
-      const all = { ...pl.plan.layout.tradeColors };
-      if (v) all[trade] = v;
-      else delete all[trade];
-      if (Object.keys(all).length) pl.plan.layout.tradeColors = all;
-      else delete pl.plan.layout.tradeColors;
-    });
+  // ---- Kritisk linje ----
+  const critical = createCriticalUi({
+    host,
+    panel,
+    active: () => active,
+    layout: () => layoutNow,
+    clearSelection: () => {
+      selected = null;
+      selectedLane = null;
+      selectedHeader = false;
+      selectedLaneGroup = null;
+      clearImage();
+      selectedTrade = null;
+      group = [];
+    },
+    kit: { el, syncTools, snapshot, commit, panelHead, section, segmented, switchRow, btn, swatches, buildPanel: () => buildPanel(), overlay: () => overlay() },
+  });
+  const { setCritical, buildCriticalPanel } = critical;
+  const setCriticalMode = (on: boolean) => critical.setMode(on);
+  const criticalView = () => critical.view();
 
-  /** Oppføring i forklaringen: skjult eller egen tekst. Tomt valg fjernes, så filen holdes ren. */
-  const setLegendItem = (key: string, patch: { hidden?: boolean; text?: string }, typing = false) => {
-    const plan = host.getPlan();
-    if (!plan) return;
-    if (!typing || !typingSession) snapshot();
-    if (typing) typingSession = true;
-    const all = { ...plan.plan.layout.legendItems };
-    const v = { ...all[key], ...patch };
-    if (!v.hidden) delete v.hidden;
-    if (!v.text?.trim()) delete v.text;
-    if (Object.keys(v).length) all[key] = v;
-    else delete all[key];
-    if (Object.keys(all).length) plan.plan.layout.legendItems = all;
-    else delete plan.plan.layout.legendItems;
-    window.clearTimeout(redrawTimer);
-    if (typing) redrawTimer = window.setTimeout(() => host.redraw(), 120);
-    else {
-      host.redraw();
-      buildPanel();
-    }
-    syncTools();
-  };
-  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
-  /** Vis eller skjul i forklaringen, og teksten som står der. */
-  const legendSection = (plan: PlanFile, key: string, ownText = true) => {
-    const item = plan.plan.layout.legendItems?.[key] ?? {};
-    const s = section('I forklaringen');
-    const inp = el('input', { type: 'text', id: 'legend-text', 'aria-label': 'Tekst i forklaringen', placeholder: legendName(key), value: item.text ?? '' }) as HTMLInputElement;
-    inp.addEventListener('focus', () => (typingSession = false));
-    inp.addEventListener('input', () => setLegendItem(key, { text: inp.value }, true));
-    inp.addEventListener('blur', () => {
-      typingSession = false;
-      syncTools();
-    });
-    const lab = el('label', { class: 'prop', for: 'legend-text' });
-    lab.append(el('span', { class: 'prop-label' }, 'Tekst'), inp);
-    s.append(switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })));
-    // Et fag laget i appen står med navnet sitt, som endres over, så det trenger ingen egen tekst
-    if (ownText || item.text)
-      s.append(lab, el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'));
-    // Forklaringen har én felles størrelse, som lane-navnene
-    if (layoutNow) {
-      const base = layoutNow.legendBasePt;
-      s.append(
-        ...sizeStepper(plan.plan.layout.legendScale, base, (v) =>
-          commit((pl) => {
-            if (v === undefined) delete pl.plan.layout.legendScale;
-            else pl.plan.layout.legendScale = v;
-          }), {
-          note: 'Egen størrelse for hele forklaringen',
-          std: `standard er ${base.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} pt`,
-          resetLabel: 'Standard',
-          resetTitle: 'Standardstørrelsen for forklaringen',
-        }),
-        el('p', { class: 'hint' }, 'Størrelsen gjelder hele forklaringen og datoen nederst, så alt er like stort. Blir den for bred, går den over flere rader.'),
-      );
-    }
-  };
-
-  const buildTradePanel = (plan: PlanFile, trade: string) => {
-    const app = isAppTrade(plan, trade);
-    const own = plan.plan.layout.tradeColors?.[trade];
-    const fill = tradeFill(plan, trade);
-    const ids = plan.lanes.flatMap((l) => l.boxes.filter((b) => boxTrade(b) === trade && !b.resolved?.isMilestone && b.shown && !b.hidden).map((b) => b.id));
-    const count = tradeCount(plan, trade);
-    const own1 = plan.lanes.reduce((n, l) => n + l.boxes.filter((b) => boxTrade(b) === trade && b.fill).length, 0);
-    panelHead(tradeName(trade), `${app ? 'Fag laget i appen' : 'Fag'} · ${count} ${count === 1 ? 'boks' : 'bokser'}`);
-    if (own1) panel.append(el('p', { class: 'panel-note' }, `${own1} av boksene har egen farge og endres ikke.`));
-
-    if (app) {
-      // Navnet på et fag fra appen kan endres. Boksene, fargen og forklaringen følger med.
-      const sn = section('Navn');
-      const inp = el('input', { type: 'text', id: 'trade-name', 'aria-label': 'Navn på faget', value: trade, spellcheck: 'true' }) as HTMLInputElement;
-      const msg = el('p', { class: 'hint field-error', role: 'alert' });
-      msg.hidden = true;
-      const save = () => {
-        const v = inp.value.trim();
-        if (v === trade) return;
-        const problem = tradeNameProblem(plan, trade, v);
-        if (problem) {
-          msg.textContent = problem;
-          msg.hidden = false;
-          inp.setAttribute('aria-invalid', 'true');
-          return;
-        }
-        commit((pl) => renameTrade(pl, trade, v));
-        selectTrade(v);
-      };
-      inp.addEventListener('input', () => {
-        msg.hidden = true;
-        inp.removeAttribute('aria-invalid');
-      });
-      inp.addEventListener('change', save);
-      inp.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          inp.blur();
-        }
-        if (e.key === 'Escape') {
-          inp.value = trade;
-          msg.hidden = true;
-          inp.blur();
-        }
-      });
-      sn.append(inp, msg);
-      if (focusTradeName) {
-        focusTradeName = false;
-        requestAnimationFrame(() => {
-          inp.focus();
-          inp.select();
-        });
-      }
-    }
-
-    const s = section('Farge for hele faget');
-    const keepText = own?.text ? { text: own.text } : {};
-    const tt = trial(`trade:${trade}`, fill, (f) => setTradeColor(trade, { fill: f, ...keepText }));
-    s.append(
-      swatches(fill, [
-        ...BOX_PALETTE,
-        ...tradeColors(plan).filter((c) => c.fill && c.name !== trade).map((c): [string, string] => [c.fill!, tradeName(c.name)]),
-      ], tt),
-      colorRow(fill, tt, app ? undefined : { text: 'Fargen fra Project', disabled: !own, onClick: () => setTradeColor(trade, undefined) }),
-      segmented('Tekstfarge', textColorKey(own?.text), TEXT_COLORS, (v) =>
-        setTradeColor(trade, { fill, ...(v === 'auto' ? {} : { text: v === 'black' ? '#000000' : '#FFFFFF' }) }),
-      ),
-      el('p', { class: 'hint' }, app
-        ? 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Faget følger med når du oppdaterer fra Project.'
-        : 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
-    );
-
-    const sb = section('Bokser');
-    const pick = btn(`Velg boksene i faget`, null, () => setGroup(ids), 'Velger alle synlige bokser i faget, så du kan gi dem et annet fag eller endre dem samlet', 'button');
-    pick.disabled = !ids.length;
-    sb.append(pick);
-    sb.append(el('p', { class: 'hint' }, count
-      ? 'Da kan du gi dem et annet fag samlet.'
-      : 'Ingen bokser har faget ennå, så det står ikke i forklaringen. Velg bokser og velg faget under Fag i panelet.'));
-
-    legendSection(plan, trade, !app);
-
-    if (app) {
-      const foot = el('div', { class: 'panel-foot' });
-      foot.append(btn('Slett faget', 'trash', () => {
-        commit((pl) => deleteTrade(pl, trade));
-        select(null);
-      }, count ? `Boksene i faget får faget fra Project igjen (${count})` : 'Sletter faget', 'button push'));
-      panel.append(foot);
-    }
-  };
+  // ---- Fag og forklaringen ----
+  const { setLegendItem, legendName, legendSection, buildTradePanel } = createTradeUi({
+    host,
+    panel,
+    layout: () => layoutNow,
+    takeNameFocus: () => {
+      const on = focusTradeName;
+      focusTradeName = false;
+      return on;
+    },
+    kit: {
+      el, syncTools, commit, trial, panelHead, section, segmented, switchRow, btn, swatches, colorRow, sizeStepper, stepFor, redrawFor, textColorKey, TEXT_COLORS, tradeName,
+      endTyping: () => (typingSession = false),
+      select: (id) => select(id),
+      selectTrade: (t) => selectTrade(t),
+      setGroup: (ids) => setGroup(ids),
+      buildPanel: () => buildPanel(),
+    },
+  });
 
   const buildPanel = () => {
     if (holdPanel) return;
@@ -1495,7 +1268,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     panel.hidden = !active || !plan;
     panel.replaceChildren();
     if (!plan || !active) return;
-    if (criticalMode) return buildCriticalPanel(plan);
+    if (critical.mode) return buildCriticalPanel(plan);
     const imSel = images.selected ? findImage(plan, images.selected) : null;
     if (imSel) return buildImagePanel(plan, imSel);
     if (!b && group.length > 1) return buildGroupPanel(plan);
@@ -1822,7 +1595,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
-      if (criticalMode && b?.critical) {
+      if (critical.mode && b?.critical) {
         const rect = document.createElementNS(NS, 'rect');
         for (const [k, v] of Object.entries({ x: r.x0 - 0.5, y: r.y0 - 0.5, width: r.x1 - r.x0 + 1, height: r.y1 - r.y0 + 1, fill: '#E00000', 'fill-opacity': 0.08, stroke: '#E00000', 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
           rect.setAttribute(k, String(v));
@@ -1889,13 +1662,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
     const sel = layoutNow.items.find((i) => i.id === selected);
     // Ikke i kritisk linje-modus: der skal et klikk like under boksen treffe naboen
-    if (sel?.kind === 'box' && !criticalMode) {
+    if (sel?.kind === 'box' && !critical.mode) {
       const w = sel.x1 - sel.x0;
       line(sel.x0 + w * 0.25, sel.x1 - w * 0.25, sel.y + sel.h, { stroke: ACCENT, 'stroke-width': 3, 'stroke-linecap': 'round' });
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
     lanePick?.draw(g, L);
-    if (!criticalMode) areaEdit.draw(g);
+    if (!critical.mode) areaEdit.draw(g);
     imageOverlay(g);
     svgNow.append(g);
   };
@@ -2544,7 +2317,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const g = itemOf(e);
     if (followPick) return pickFollowTarget(boxAt(e));
     if (lanePick?.from) return lanePick.click(laneAt(toMm(e.clientX, e.clientY).y)?.id ?? null);
-    if (criticalMode) {
+    if (critical.mode) {
       const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
       if (b) setCritical([b.id], !b.critical);
@@ -2602,7 +2375,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.select();
   });
   sheet.addEventListener('pointerdown', (e) => {
-    if (!active || e.button !== 0 || !layoutNow || criticalMode || followPick || lanePick?.from) return;
+    if (!active || e.button !== 0 || !layoutNow || critical.mode || followPick || lanePick?.from) return;
     const t = e.target as Element;
     let d: Drag | null = null;
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
@@ -3019,8 +2792,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       endArrange();
       endFollowPick();
       lanePick?.end();
-      criticalMode = false;
-      criticalOnly = false;
+      critical.stop();
       selected = null;
       selectedLane = null;
       selectedHeader = false;
@@ -3032,7 +2804,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     overlay();
     syncTools();
   });
-  criticalBtn?.addEventListener('click', () => setCriticalMode(!criticalMode));
+  criticalBtn?.addEventListener('click', () => setCriticalMode(!critical.mode));
   marksBtn?.addEventListener('click', () => {
     showMarks = !showMarks;
     marksBtn.setAttribute('aria-pressed', String(showMarks));
@@ -3089,7 +2861,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (inField) t.blur();
       else if (followPick) endFollowPick();
       else if (lanePick?.from) lanePick.end();
-      else if (criticalMode) setCriticalMode(false);
+      else if (critical.mode) setCriticalMode(false);
       else if (images.selected && images.mode !== 'none') setImageMode(images.mode);
       else select(null);
       return;
@@ -3211,7 +2983,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       nudge = null;
       typingSession = false;
       colorTrial = null;
-      criticalOnly = false;
+      critical.clearFilter();
       selectedTrade = null;
       selected = null;
       selectedLane = null;
