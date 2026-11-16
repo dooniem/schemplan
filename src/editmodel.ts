@@ -274,13 +274,18 @@ export function moveLane(plan: PlanFile, id: string, to: number): void {
   plan.lanes.splice(Math.max(0, Math.min(plan.lanes.length, to)), 0, l);
 }
 
-/** Lanes laget i appen slettes; bokser som er flyttet dit, flyttes tilbake. Lanes fra Project skjules. */
+/** Lanes laget i appen slettes; bokser fra Project som ligger der, flyttes tilbake til lanen sin. Lanes fra Project skjules. */
 export function removeLane(plan: PlanFile, id: string): void {
   const lane = plan.lanes.find((l) => l.id === id);
   if (!lane) return;
   if (!lane.manual) {
     lane.hidden = true;
     return;
+  }
+  // Lanes fra Project som er slått sammen hit, vises igjen og får boksene sine tilbake
+  for (const l of plan.lanes) if (l.mergedInto === lane.id) {
+    delete l.mergedInto;
+    delete l.hidden;
   }
   for (const b of [...lane.boxes]) {
     const home = !b.manual && b.fromLane ? homeLane(plan, b.fromLane) : null;

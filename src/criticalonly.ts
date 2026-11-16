@@ -32,16 +32,23 @@ export function shownItems<T extends { id: string }>(items: readonly T[], keep: 
   return keep ? items.filter((it) => keep.has(it.id)) : [...items];
 }
 
+/** Boksene, og det som hører til dem andre steder i tegningen (linjer, fremdrift, endringsmerker, symbolbilder). */
+const parts = (svg: SVGSVGElement): [Element, string][] => [
+  ...[...svg.querySelectorAll('g.items > g[data-id]')].map((g): [Element, string] => [g, g.getAttribute('data-id')!]),
+  ...[...svg.querySelectorAll('[data-for]')].map((g): [Element, string] => [g, g.getAttribute('data-for')!]),
+];
+
 /** Skjuler eller viser boksene i den tegnede planen. `keep` er null når filteret er av. */
 export function paintCriticalOnly(svg: SVGSVGElement, keep: Set<string> | null): void {
-  svg.querySelectorAll<SVGGElement>('g.items > g[data-id]').forEach((g) => {
-    g.classList.toggle('crit-out', !!keep && !keep.has(g.getAttribute('data-id')!));
-  });
+  for (const [g, id] of parts(svg)) g.classList.toggle('crit-out', !!keep && !keep.has(id));
 }
 
 /** Tar bort boksene som ikke vises, fra en plan som er tegnet for PDF. */
 export function dropHidden(svg: SVGSVGElement, keep: Set<string>): void {
-  svg.querySelectorAll<SVGGElement>('g.items > g[data-id]').forEach((g) => {
-    if (!keep.has(g.getAttribute('data-id')!)) g.remove();
-  });
+  for (const [g, id] of parts(svg)) if (!keep.has(id)) g.remove();
+}
+
+/** Bildene som tegnes med filteret på: symbolet til en milepæl som er skjult, er ikke med. */
+export function shownImages<T extends { milestone: string | null }>(images: readonly T[], keep: Set<string>): T[] {
+  return images.filter((im) => !im.milestone || keep.has(im.milestone));
 }

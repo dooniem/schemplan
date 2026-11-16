@@ -5,7 +5,7 @@ import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
-import { criticalKeep, paintCriticalOnly, shownItems } from './criticalonly';
+import { criticalIds, criticalKeep, paintCriticalOnly, shownItems } from './criticalonly';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
@@ -123,6 +123,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   let dirty = false;
   /** Skriving i tekstfeltet samles til ett angre-steg per økt i feltet. */
   let typingSession = false;
+  /** Piltastene: trykk etter hverandre på det samme blir ett angre-steg, som skriving. */
+  let nudge: { key: string; step: number } | null = null;
   /** Teller angrestegene, så vi vet om noe annet er gjort siden fargeprøvingen startet. */
   let stepCount = 0;
   /**
@@ -159,7 +161,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   /** Boksene som vises når filteret er på, ellers null. */
   const criticalView = (): Set<string> | null => {
     const plan = host.getPlan();
-    return active && criticalMode && criticalOnly && plan && layoutNow ? criticalKeep(plan, layoutNow.items, criticalHeaders) : null;
+    if (!active || !criticalMode || !criticalOnly || !plan || !layoutNow) return null;
+    // Uten bokser i linjen er det ingenting å vise, så filteret slås av
+    if (!criticalIds(plan).size) {
+      criticalOnly = false;
+      return null;
+    }
+    return criticalKeep(plan, layoutNow.items, criticalHeaders);
   };
   /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
   let followPick: { id: string; edge: Edge } | null = null;
@@ -242,10 +250,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
 
   /** Endring som ikke gjelder bare valgt boks (dra, lanehøyde). */
-  const commit = (fn: (plan: PlanFile) => void) => {
+  const commit = (fn: (plan: PlanFile) => void, nudgeKey?: string) => {
     const plan = host.getPlan();
     if (!plan) return;
-    snapshot();
+    // Samme piltast-økt så lenge ingenting annet er endret imellom
+    if (!nudgeKey || nudge?.key !== nudgeKey || nudge.step !== stepCount) {
+      snapshot();
+      nudge = nudgeKey ? { key: nudgeKey, step: stepCount } : null;
+    }
     typingSession = false;
     fn(plan);
     applyFollows(plan);
@@ -501,6 +513,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     dirty = true;
     typingSession = false;
     recordKey = null;
+    nudge = null;
     colorTrial = null;
     if (selected && !findBox(prev, selected)) selected = null;
     if (selectedLane && !findLane(prev, selectedLane)) selectedLane = null;
@@ -1867,6 +1880,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   }
   let drag: Drag | null = null;
   let suppressClick = false;
+  /** Sluker klikket som følger et trykk. Slippes knappen uten at det blir et klikk, gjelder det ikke neste. */
+  const swallowClick = () => {
+    suppressClick = true;
+    window.addEventListener('pointerup', () => window.setTimeout(() => (suppressClick = false), 0), { once: true });
+  };
 
   const ghostLayer = () => {
     svgNow?.querySelector('g.edit-ghost')?.remove();
@@ -2566,7 +2584,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       const id = arrowG.getAttribute('data-arrow')!;
       if (id !== selectedImage) selectImage(id);
-      suppressClick = true;
+      swallowClick();
       return;
     } else if (areaT && !imgHandle) {
       const edge = areaT.getAttribute('data-edge') as AreaEdge;
@@ -2574,7 +2592,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (areaT.classList.contains('area-pt') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         deleteAreaPoint(edge, i);
-        suppressClick = true;
+        swallowClick();
         return;
       }
       d = startAreaDrag(edge, areaT.classList.contains('area-edge') ? 'edge' : areaT.classList.contains('area-mid') ? 'mid' : 'pt', i);
@@ -2583,7 +2601,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (imgHandle.classList.contains('img-pt') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         deletePoint(Number(imgHandle.getAttribute('data-i')));
-        suppressClick = true;
+        swallowClick();
         return;
       }
       d = startImageHandle(imgHandle);
@@ -2719,9 +2737,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (im) fn(im, pl);
     });
   /** Endrer bildet slik det står på arket (størrelse, rotasjon, beskjæring) og lagrer det. */
-  const changePlaced = (id: string, fn: (p: PlacedImage) => PlacedImage) => {
+  const changePlaced = (id: string, fn: (p: PlacedImage) => PlacedImage, nudgeKey?: string) => {
     const p = placedOf(id);
-    if (p) commit((pl) => storePlaced(pl, fn(p)));
+    if (p) commit((pl) => storePlaced(pl, fn(p)), nudgeKey);
   };
 
   function clearImage() {
@@ -4166,7 +4184,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         e.preventDefault();
         const step = e.shiftKey ? 5 : 1;
         const id = selectedImage;
-        changePlaced(id, (q) => ({ ...q, cx: q.date ? q.cx : q.cx + a[0] * step, cy: q.cy + a[1] * step }));
+        changePlaced(id, (q) => ({ ...q, cx: q.date ? q.cx : q.cx + a[0] * step, cy: q.cy + a[1] * step }), `image:${id}`);
         return;
       }
     }
@@ -4185,7 +4203,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           if (!b) return;
           if (L.compact) b.compactTop = at;
           else b.top = at;
-        });
+        }, `box:${id}`);
         return;
       }
     }
@@ -4253,6 +4271,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       past = [];
       future = [];
       dirty = false;
+      // Ingenting fra forrige plan følger med til den neste
+      recordKey = null;
+      nudge = null;
+      typingSession = false;
+      colorTrial = null;
+      criticalOnly = false;
+      selectedTrade = null;
       selected = null;
       selectedLane = null;
       selectedHeader = false;

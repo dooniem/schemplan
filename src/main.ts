@@ -16,7 +16,7 @@ import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
-import { dropHidden } from './criticalonly';
+import { dropHidden, shownImages } from './criticalonly';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { setupSubmenus } from './submenu';
@@ -98,8 +98,17 @@ const editor = createEditor(
     getPlan: () => plan,
     setPlan: (p) => (plan = p),
     redraw: () => draw(),
-    arrange: (p, laneIds, how) => arrangeLanes(p, opts, measure, laneIds, how),
-    fitText: (p, scope) => fitTextIntoLaneSpace(p, viewOf(p).opts, measure, scope),
+    // Begge regner på planen slik den vises, med tidsaksen valgt i Kalender
+    arrange: (p, laneIds, how) => {
+      const v = viewOf(p);
+      return arrangeLanes(v.plan, v.opts, measure, laneIds, how);
+    },
+    fitText: (p, scope) => {
+      const v = viewOf(p);
+      const res = fitTextIntoLaneSpace(v.plan, v.opts, measure, scope);
+      // Planen som lagres, beholder kalenderen fra Project
+      return v.plan === p ? res : { ...res, plan: { ...res.plan, plan: { ...res.plan.plan, calendar: p.plan.calendar } } };
+    },
     layoutOf: (p) => {
       const v = viewOf(p);
       return computeLayout(v.plan, v.opts, measure);
@@ -858,8 +867,9 @@ for (const menu of [$<HTMLElement>('#menu-sheet'), $<HTMLElement>('#menu-lookahe
     'click',
     (e) => {
       const b = (e.target as Element).closest('button');
-      // En knapp som allerede er valgt, endrer ingenting
-      if (plan && b && !b.disabled && (b.getAttribute('aria-pressed') === 'false' || b.id === 'logo-remove')) editor.record();
+      // En knapp som allerede er valgt, endrer ingenting. Knapper som ikke er av/på-valg, men endrer
+      // planen, er merket med data-undo.
+      if (plan && b && !b.disabled && (b.getAttribute('aria-pressed') === 'false' || b.hasAttribute('data-undo'))) editor.record();
     },
     true,
   );
@@ -1068,7 +1078,9 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
   // Bare kritiske aktiviteter: alt står der det står på skjermen, de andre boksene er tatt bort
   if (critical) {
     const v = viewOf(saved);
-    const layout = computeLayout(v.plan, v.opts, measure);
+    const full = computeLayout(v.plan, v.opts, measure);
+    // Bildene tegnes for seg i PDF-en, så symbolene til skjulte milepæler tas ut her
+    const layout = { ...full, images: shownImages(full.images, critical) };
     const svg = renderPlan(layout);
     dropHidden(svg, critical);
     target = { layout, svg };
@@ -1246,6 +1258,7 @@ async function openFromAddress() {
   const data = params.get('plan');
   if (!data) return;
   history.replaceState(null, '', location.pathname); // også ?t=…, som bare tvinger fram ny henting av appen
+  if (unsaved() && !confirm('Planen har endringer som ikke er lagret. Vil du åpne en annen plan likevel?')) return;
   // Navnet kan være hele adressen til Project-filen (for eksempel i SharePoint); bare filnavnet brukes
   const name = lastPart(params.get('navn') ?? '') || 'Plan fra Project.json';
   try {

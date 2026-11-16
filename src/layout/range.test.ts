@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testplan } from '../test/testplaner';
 import { validatePlan } from '../format/validate';
 import { mergePlans } from '../merge';
-import { computeLayout, type BoxItem } from './layout';
+import { arrangeLanes, computeLayout, type BoxItem } from './layout';
 import { approxMeasure } from './text';
 import { boxesOutside, columnCount, columnEnd, columnLabel, columnStart, effectiveRange, readCalendarRange, stepColumn, withCalendarRange } from './range';
 
@@ -102,4 +102,17 @@ describe('tidsakse: omfang valgt i appen', () => {
     p.plan.layout.calendarRange = { start: '2027-05-01' };
     expect(effectiveRange(p, 'month')).toEqual({ start: '2027-05-01', end: '2027-05-31' });
   });
+
+  it('Omplasser på innsnevret tidsakse: bokser utenfor beholder plassen når aksen åpnes igjen', () => {
+    const p = testplan();
+    p.plan.layout.calendarRange = { start: '2026-03-01', end: '2026-04-30' };
+    const v = withCalendarRange(p, 'month');
+    const res = arrangeLanes(v, o, approxMeasure, p.lanes.map((l) => l.id));
+    for (const [id, order] of res.orders) if (order) p.lanes.find((l) => l.id === id)!.order = order;
+    // Rekkefølgen gjelder bare boksene som ble tegnet; resten er fortsatt med i planen
+    delete p.plan.layout.calendarRange;
+    expect(ids(p).sort()).toEqual(ids(testplan()).sort());
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
 });
+
