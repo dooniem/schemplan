@@ -2,6 +2,7 @@ import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../
 import { parseBoxText, splitLines } from '../format/text';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
+import { placeArrows, type PlacedArrow, type Rect } from './arrow';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
@@ -131,6 +132,10 @@ export interface MilestoneItem {
 }
 
 export type Item = BoxItem | MilestoneItem;
+
+/** Boksen, eller symbolet til milepælen, som rektangel. Brukes der en pil fra en fritekst kan peke. */
+export const itemRect = (it: Item): Rect =>
+  it.kind === 'box' ? { x: it.x0, y: it.y, w: it.x1 - it.x0, h: it.h } : { x: it.x - it.size / 2, y: it.y - it.size / 2, w: it.size, h: it.size };
 
 export interface CalendarRow {
   y: number;
@@ -271,6 +276,8 @@ export interface Layout {
   dateAt(x: number): string;
   /** Bilder satt inn i appen, i mm. Bilder festet til en dato utenfor kalenderen er ikke med. */
   images: PlacedImage[];
+  /** Piler fra fritekst, i samme rekkefølge som bildene. */
+  arrows: PlacedArrow[];
   changes: ChangeMark[];
   /** Fremdrift i boksene og baseline under dem, når det er slått på. */
   progress: ProgressMark[];
@@ -1159,6 +1166,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     if (!(t >= axis.start && t < axis.end)) return null;
     return (axis.xStart(t) + axis.xEnd(t)) / 2;
   };
+  const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
   return {
     width: W,
     height: H,
@@ -1192,7 +1200,11 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     changes: changeMarks(items, changeOf, axis),
     todayX: opts.today ? xOfDate(opts.today) : null,
     progress: progressMarks(items, file, axis),
-    images: (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p),
+    images,
+    arrows: placeArrows(file.plan.layout.images ?? [], images, W, H, (id) => {
+      const it = items.find((i) => i.id === id);
+      return it ? itemRect(it) : null;
+    }),
     xOfDate,
     critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
     unit: lh,

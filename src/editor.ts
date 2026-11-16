@@ -19,6 +19,7 @@ import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergeLanes, mergeTargets } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
+import { createNoteArrows } from './notearrow';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles, readImage, type ReadImage } from './imagefile';
@@ -2463,7 +2464,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     // Bilder velges når knappen trykkes ned
-    if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid')) return;
+    if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, g.note-arrows > g[data-arrow]')) return;
     const g = itemOf(e);
     if (followPick) return pickFollowTarget(boxAt(e));
     if (lanePick?.from) return lanePick.click(laneAt(toMm(e.clientX, e.clientY).y)?.id ?? null);
@@ -2531,7 +2532,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
     const imgG = t.closest('g.images > g[data-image]');
     const areaT = t.closest('.area-pt, .area-mid, .area-edge');
-    if (areaT && !imgHandle) {
+    const tipT = t.closest('.note-tip');
+    const arrowG = t.closest('g.note-arrows > g[data-arrow]');
+    if (tipT && selectedImage) d = tipDrag(selectedImage);
+    else if (arrowG) {
+      // Et klikk på pilen velger teksten den kommer fra
+      e.preventDefault();
+      const id = arrowG.getAttribute('data-arrow')!;
+      if (id !== selectedImage) selectImage(id);
+      suppressClick = true;
+      return;
+    } else if (areaT && !imgHandle) {
       const edge = areaT.getAttribute('data-edge') as AreaEdge;
       const i = Number(areaT.getAttribute('data-i'));
       if (areaT.classList.contains('area-pt') && (e.ctrlKey || e.metaKey)) {
@@ -2632,6 +2643,29 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const imagesOf = (plan: PlanFile) => plan.plan.layout.images ?? [];
   const findImage = (plan: PlanFile, id: string) => imagesOf(plan).find((im) => im.id === id) ?? null;
   const placedOf = (id: string) => (livePlaced?.id === id ? livePlaced : layoutNow?.images.find((p) => p.id === id) ?? null);
+  const noteArrows = createNoteArrows(
+    {
+      accent: ACCENT,
+      getPlan: () => host.getPlan(),
+      layout: () => layoutNow,
+      svg: () => svgNow,
+      findImage,
+      placedOf,
+      commit,
+      mmPerPx: () => mmPerPx(),
+      snapOff: () => snapOff,
+      overlay: () => overlay(),
+    },
+    (plan, id) => {
+      const b = findBox(plan, id);
+      return `«${(b && plainText(b.text)) || (b?.resolved?.isMilestone ? 'milepæl' : 'boks')}»`;
+    },
+  );
+  /** Dra i pilspissen til en fritekst. */
+  const tipDrag = (id: string): Drag | null => {
+    const d = noteArrows.startTipDrag(id);
+    return d && { startY: 0, startClient: 0, moved: false, move() {}, moveXY: d.moveXY, end: d.end };
+  };
   const milestonePt = (id: string): Pt | null => {
     const it = layoutNow?.items.find((i) => i.id === id);
     return it?.kind === 'milestone' ? { x: it.x, y: it.y } : null;
@@ -2945,6 +2979,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const fresh = drawImage(p, g.parentElement!);
       g.replaceWith(fresh);
     }
+    noteArrows.redraw(p.id);
     overlay();
   };
   /** Festet til dato: midten av det synlige blir stående på samme x. */
@@ -3281,6 +3316,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     add('line', { x1: top.x, y1: top.y, x2: knob.x, y2: knob.y, stroke: ACCENT, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
     const rc = add('circle', { cx: knob.x, cy: knob.y, r: 6 * k, fill: '#FFFFFF', stroke: ACCENT, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle img-rot', 'pointer-events': 'all', cursor: 'grab' });
     rc.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra for å rotere. Shift: trinn på 15°.' }));
+    if (im?.note) noteArrows.draw(g, im);
   };
 
   // ---- Panelet for bilder ----
@@ -3348,6 +3384,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       sn.append(colorWrap);
       sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
       sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Justeringen gjelder når teksten har flere linjer. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
+
+      const sa = section('Pil');
+      sa.append(switchRow('Pil fra teksten', !!n.arrow, (v) => noteArrows.toggle(im.id, v), 'En strek med pilspiss fra kanten av teksten, som kan peke hvor som helst'));
+      if (n.arrow) {
+        const to = noteArrows.targetOf(plan, im);
+        if (to) sa.append(lockedRow(`Peker på ${to}`, 'Løsne', 'Pilspissen blir stående der den er, og følger ikke boksen lenger', () => noteArrows.detach(im.id)));
+        sa.append(el('p', { class: 'hint' }, to
+          ? 'Pilen følger boksen når planen endres. Dra den runde knotten på pilspissen for å peke et annet sted.'
+          : 'Dra den runde knotten på pilspissen dit pilen skal peke. Slipper du den på en boks eller milepæl, følger pilen den når planen endres; hold Alt for å la være. Pilen har samme farge som teksten.'));
+      }
     }
     const ss = section('Størrelse og rotasjon');
     if (p) {
@@ -3482,6 +3528,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             : [{ label: 'Opprinnelig størrelse', icon: 'resize' as const, disabled: Math.abs(p.w - nat.w) < 0.05 && Math.abs(p.h - nat.h) < 0.05, hint: 'Bildets egen størrelse og form. Rotasjon og beskjæring beholdes.', onSelect: () => changePlaced(id, (q) => keepX(resetSize(q, im.px, layoutNow!.width, layoutNow!.height), x0)) }]),
           { label: 'Roter 90° med klokken', icon: 'rotate', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, 90), x0)) },
           { label: 'Roter 90° mot klokken', icon: 'rotateLeft', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -90), x0)) },
+          ...(im.note
+            ? [{ label: 'Pil fra teksten', icon: 'arrow' as const, checked: !!im.note.arrow, hint: im.note.arrow ? 'Fjerner pilen. Angre med Ctrl+Z.' : 'En strek med pilspiss fra kanten av teksten. Dra spissen dit den skal peke.', onSelect: () => noteArrows.toggle(id, !im.note!.arrow) }]
+            : []),
           { label: 'Rett opp', icon: 'undo', disabled: !im.rotation, hint: im.rotation ? 'Fjerner rotasjonen.' : 'Bildet er ikke rotert.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -q.rotation), x0)) },
         ],
       },
@@ -3588,7 +3637,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     // Høyreklikk på et bilde eller et punkt i punktbeskjæringen
-    const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid');
+    const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, g.note-arrows > g[data-arrow]');
     if (plan && imgT) {
       e.preventDefault();
       if (imgT.classList.contains('img-pt')) {
@@ -3598,7 +3647,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           { items: [{ label: 'Slett punkt', icon: 'trash', kbd: 'Ctrl+klikk', disabled: n <= 3, hint: n <= 3 ? 'Mangekanten må ha minst tre punkter.' : 'Kantene på hver side slås sammen.', onSelect: () => deletePoint(i) }] },
           { items: [{ label: 'Ferdig med punktene', icon: 'check', kbd: 'Enter', hint: 'Avslutter punktbeskjæringen. Bildet er fortsatt valgt.', onSelect: () => setImageMode('points') }] },
         ], 'Rediger punkter');
-      } else imageMenu(e, imgT.getAttribute('data-image') ?? selectedImage!);
+      } else imageMenu(e, imgT.getAttribute('data-image') ?? imgT.getAttribute('data-arrow') ?? selectedImage!);
       return;
     }
     // Utenfor lanene (marger, kalender, forklaring): bare bilder kan settes inn
@@ -4167,7 +4216,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       buildPanel();
       syncTools();
     },
-    owns: (e) => (active && !!(e.target as Element | null)?.closest?.('g.images > g[data-image]')) || !!itemOf(e) || (e instanceof MouseEvent && !!boxAt(e)) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
+    owns: (e) => (active && !!(e.target as Element | null)?.closest?.('g.images > g[data-image], g.note-arrows > g[data-arrow]')) || !!itemOf(e) || (e instanceof MouseEvent && !!boxAt(e)) || (active && e instanceof MouseEvent && e.shiftKey) || (active && !!(e.target as Element | null)?.closest?.('g[data-trade], g[data-legend]')) || (active && !!(e.target as Element | null)?.closest?.('.edit-handle')) || (e instanceof MouseEvent && (!!titleLaneOf(e) || inHeader(e))),
     get active() {
       return active;
     },
