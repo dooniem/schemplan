@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { criticalIds, criticalKeep, shownItems } from './criticalonly';
+import { criticalIds, criticalKeep, shownImages, shownItems } from './criticalonly';
 import type { Item } from './layout/layout';
 import { testplan } from './test/testplaner';
 
@@ -12,6 +12,10 @@ describe('vis bare kritiske aktiviteter', () => {
     const keep = criticalIds(p);
     expect([...keep]).toEqual([all[0].id, all[2].id]);
     expect(shownItems(all, keep).map((b) => b.id)).toEqual([all[0].id, all[2].id]);
+  });
+  it('symbolbildet til en skjult milepæl tas ikke med, andre bilder blir stående', () => {
+    const images = [{ id: 'a', milestone: null }, { id: 'b', milestone: '3_3' }, { id: 'c', milestone: '5_1' }];
+    expect(shownImages(images, new Set(['3_3'])).map((i) => i.id)).toEqual(['a', 'b']);
   });
   it('viser alt når filteret er av', () => {
     const all = testplan().lanes.flatMap((l) => l.boxes);

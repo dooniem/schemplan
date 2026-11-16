@@ -56,7 +56,7 @@ function text(t: TextBlock, parent: Element) {
  * bildets egne mål. suffix skiller klippene når samme bilde tegnes flere ganger (markering ved redigering).
  */
 export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { full?: boolean; opacity?: number } = {}) {
-  const g = node('g', { 'data-image': p.id, transform: `translate(${r(p.cx)} ${r(p.cy)}) rotate(${r(p.rotation)})` }, parent);
+  const g = node('g', { 'data-image': p.id, ...(p.milestone ? { 'data-for': p.milestone } : {}), transform: `translate(${r(p.cx)} ${r(p.cy)}) rotate(${r(p.rotation)})` }, parent);
   if (opts.opacity !== undefined) g.setAttribute('opacity', String(opts.opacity));
   const x = -p.w / 2;
   const y = -p.h / 2;
@@ -199,17 +199,18 @@ export function renderPlan(L: Layout): SVGSVGElement {
     L.grid.forEach((g) => g.strong && node('line', { x1: g.x, x2: g.x, y1: top, y2: bot, stroke: '#000000', 'stroke-width': 0.45 }, cal));
   }
 
-  // Milepælslinjer bak boksene
+  // Milepælslinjer bak boksene. Det som hører til en boks, men tegnes utenfor den, merkes med
+  // boksens id (data-for), så et filter kan skjule alt samlet.
   const vlines = node('g', { class: 'milestone-lines' }, area ? node('g', clipAttrs, svg) : svg);
   L.items.forEach((it) => {
-    if (it.kind === 'milestone' && it.verticalLine) node('line', { x1: it.x, x2: it.x, y1: y0, y2: y1, stroke: it.color, 'stroke-width': 0.5 }, vlines);
+    if (it.kind === 'milestone' && it.verticalLine) node('line', { 'data-for': it.id, x1: it.x, x2: it.x, y1: y0, y2: y1, stroke: it.color, 'stroke-width': 0.5 }, vlines);
   });
 
   // Endringer fra siste oppdatering: stiplet omriss der boksen sto før, bak boksene
   if (L.changes.some((c) => c.ghost)) {
     const gg = node('g', { class: 'change-ghosts', 'pointer-events': 'none' }, svg);
     for (const c of L.changes)
-      if (c.ghost) node('rect', { x: c.ghost.x0, y: c.y, width: Math.max(0.6, c.ghost.x1 - c.ghost.x0), height: c.h, fill: CHANGE_COLOR, 'fill-opacity': 0.08, stroke: CHANGE_COLOR, 'stroke-width': 0.3, 'stroke-dasharray': '1 0.7' }, gg);
+      if (c.ghost) node('rect', { 'data-for': c.id, x: c.ghost.x0, y: c.y, width: Math.max(0.6, c.ghost.x1 - c.ghost.x0), height: c.h, fill: CHANGE_COLOR, 'fill-opacity': 0.08, stroke: CHANGE_COLOR, 'stroke-width': 0.3, 'stroke-dasharray': '1 0.7' }, gg);
   }
 
   // Bokser og milepæler
@@ -284,11 +285,11 @@ export function renderPlan(L: Layout): SVGSVGElement {
     for (const m of L.progress) {
       if (m.done) {
         const sh = Math.min(1.2, Math.max(0.5, m.h * 0.22));
-        node('rect', { x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * m.done, height: sh, fill: '#000000', 'fill-opacity': 0.4 }, pg);
+        node('rect', { 'data-for': m.id, x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * m.done, height: sh, fill: '#000000', 'fill-opacity': 0.4 }, pg);
       }
       if (m.base) {
         const by = m.y + m.h + 0.45;
-        node('path', { d: `M${r(m.base.x0)} ${r(by - 0.35)} L${r(m.base.x0)} ${r(by)} L${r(m.base.x1)} ${r(by)} L${r(m.base.x1)} ${r(by - 0.35)}`, fill: 'none', stroke: '#404040', 'stroke-width': 0.25 }, pg);
+        node('path', { 'data-for': m.id, d: `M${r(m.base.x0)} ${r(by - 0.35)} L${r(m.base.x0)} ${r(by)} L${r(m.base.x1)} ${r(by)} L${r(m.base.x1)} ${r(by - 0.35)}`, fill: 'none', stroke: '#404040', 'stroke-width': 0.25 }, pg);
       }
     }
   }
@@ -298,7 +299,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     const cg = node('g', { class: 'change-marks', 'pointer-events': 'none' }, svg);
     const pad = 0.5;
     for (const c of L.changes)
-      node('rect', { x: c.x0 - pad, y: c.y - pad, width: c.x1 - c.x0 + pad * 2, height: c.h + pad * 2, rx: 0.6, fill: 'none', stroke: CHANGE_COLOR, 'stroke-width': c.kind === 'new' ? 0.6 : 0.4, ...(c.kind === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, cg);
+      node('rect', { 'data-for': c.id, x: c.x0 - pad, y: c.y - pad, width: c.x1 - c.x0 + pad * 2, height: c.h + pad * 2, rx: 0.6, fill: 'none', stroke: CHANGE_COLOR, 'stroke-width': c.kind === 'new' ? 0.6 : 0.4, ...(c.kind === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, cg);
   }
 
   if (L.critical && L.critical.points.length >= 4) {

@@ -137,22 +137,22 @@
           <div class="set-row">
             <span class="set-label"><label for="cal-start">Start</label></span>
             <div class="cal-step" role="group" aria-label="Start på tidsaksen">
-              <button type="button" class="cal-nudge" data-cal-nudge="start" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="cal-nudge" data-undo data-cal-nudge="start" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               <span class="num"><input id="cal-start" type="date" /></span>
-              <button type="button" class="cal-nudge" data-cal-nudge="start" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="cal-nudge" data-undo data-cal-nudge="start" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
           </div>
           <div class="set-row">
             <span class="set-label"><label for="cal-end">Slutt</label></span>
             <div class="cal-step" role="group" aria-label="Slutt på tidsaksen">
-              <button type="button" class="cal-nudge" data-cal-nudge="end" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="cal-nudge" data-undo data-cal-nudge="end" data-dir="-1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               <span class="num"><input id="cal-end" type="date" /></span>
-              <button type="button" class="cal-nudge" data-cal-nudge="end" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="cal-nudge" data-undo data-cal-nudge="end" data-dir="1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
           </div>
           <div class="cal-range-foot">
             <p class="pop-hint" id="cal-range-help" role="status"></p>
-            <button type="button" id="cal-range-reset" class="button small" hidden title="Start og slutt følger Project igjen">Bruk datoene fra Project</button>
+            <button type="button" id="cal-range-reset" class="button small" data-undo hidden title="Start og slutt følger Project igjen">Bruk datoene fra Project</button>
           </div>
           <div class="set-row">
             <span class="set-label" id="lbl-style">Stil</span>
@@ -283,7 +283,7 @@
             <div class="logo-well" id="logo-well"><img id="logo-preview" alt="" hidden /><span id="logo-empty">Ingen logo</span></div>
             <div class="set-logo-actions">
               <label class="button" id="logo-pick">Velg bilde …<input id="logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden /></label>
-              <button type="button" id="logo-remove" class="button" disabled>Fjern</button>
+              <button type="button" id="logo-remove" class="button" data-undo disabled>Fjern</button>
             </div>
           </div>
           <p class="pop-hint">Logoen lagres i arbeidsfilen sammen med planen.</p>

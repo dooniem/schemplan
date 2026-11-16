@@ -34,6 +34,24 @@ describe('slå sammen lanes', () => {
     expect(box(p, '1_1').fromLane).toBe('1');
   });
 
+  it('sletting av en lane laget i appen gir Project-lanen boksene tilbake', () => {
+    const p = testplan();
+    const l = newLane(p, '2');
+    newBox(p, l.id, '2026-02-01', '2026-03-01');
+    mergeLanes(p, '3', l.id);
+    mergeLanes(p, '4', l.id);
+    removeLane(p, l.id);
+    expect(p.lanes.some((x) => x.id === l.id)).toBe(false);
+    expect(lane(p, '3').boxes.map((b) => b.id)).toEqual(['3_1', '3_2', '3_3']);
+    expect(lane(p, '4').boxes.map((b) => b.id)).toEqual(['4_1', '4_2']);
+    for (const id of ['3', '4']) {
+      expect(lane(p, id).hidden).toBeUndefined();
+      expect(lane(p, id).mergedInto).toBeUndefined();
+    }
+    expect(box(p, '3_1').fromLane).toBeUndefined();
+    expect(validatePlan(JSON.stringify(p)).errors).toEqual([]);
+  });
+
   it('festede bokser flyttes ned under innholdet, og Multi Lane-bokser følger med', () => {
     const p = testplan();
     box(p, '3_1').top = 1;
