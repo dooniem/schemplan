@@ -42,18 +42,27 @@ export function noteFontReady(note: PlanNote): boolean {
 }
 export const loadNoteFont = (note: PlanNote): Promise<unknown> => document.fonts.load(fontOf(note, 12)).catch(() => []);
 
+/** Luften rundt teksten i mm, [sideveis, opp og ned]. Med ramme kan den velges; ellers litt, så ingenting kuttes. */
+export function notePad(note: PlanNote): [number, number] {
+  const size = note.sizePt * PT_TO_MM;
+  if (!note.frame) return [size * 0.15, size * 0.15];
+  return note.pad ?? [size * 0.5, size * 0.5];
+}
+/** Største luft som kan velges, i mm. */
+export const NOTE_MAX_PAD = 100;
+
 /** Tegner teksten. Gir bildet som data-URL og størrelsen i piksler og millimeter. */
 export function renderNote(note: PlanNote): { data: string; px: [number, number]; mm: [number, number] } {
   const size = note.sizePt * PT_TO_MM;
-  const pad = note.frame ? size * 0.5 : size * 0.15;
+  const [padX, padY] = notePad(note);
   const lines = (note.text || ' ').split('\n');
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
   ctx.font = fontOf(note, size * PX_PER_MM);
   const widths = lines.map((l) => ctx.measureText(l).width / PX_PER_MM);
   const textW = Math.max(...widths);
-  const wMm = textW + pad * 2;
-  const hMm = lines.length * size * LINE + pad * 2;
+  const wMm = textW + padX * 2;
+  const hMm = lines.length * size * LINE + padY * 2;
   c.width = Math.max(1, Math.ceil(wMm * PX_PER_MM));
   c.height = Math.max(1, Math.ceil(hMm * PX_PER_MM));
   const g = c.getContext('2d')!;
@@ -71,8 +80,8 @@ export function renderNote(note: PlanNote): { data: string; px: [number, number]
   g.fillStyle = color;
   g.textBaseline = 'alphabetic';
   lines.forEach((l, i) => {
-    const x = pad + (note.align === 'center' ? (textW - widths[i]) / 2 : note.align === 'right' ? textW - widths[i] : 0);
-    const base = pad + size * (i * LINE + 0.95);
+    const x = padX + (note.align === 'center' ? (textW - widths[i]) / 2 : note.align === 'right' ? textW - widths[i] : 0);
+    const base = padY + size * (i * LINE + 0.95);
     g.fillText(l, x, base);
     // Lerretet kan ikke understreke, så streken tegnes for hånd
     if (note.underline && widths[i] > 0) {

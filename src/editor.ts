@@ -12,7 +12,7 @@ import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
 import type { NoteFont, PlanImage, PlanNote } from './format/types';
-import { loadNoteFont, NOTE_COLORS, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
+import { loadNoteFont, NOTE_COLORS, NOTE_MAX_PAD, notePad, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
 import { MIN_AREA_H, type Pt as AreaPt } from './layout/area';
@@ -2861,6 +2861,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!im.note) return;
     const sizePt = change.sizePt ?? shownPt(im.note, im.px, im.w, W);
     const note = { ...im.note, ...change, sizePt };
+    // Dras teksten større eller mindre, følger luften i rammen med, så rammen blir der den ble sluppet
+    if (change.sizePt === undefined && change.pad === undefined && note.pad && sizePt !== im.note.sizePt) {
+      const k = sizePt / im.note.sizePt;
+      note.pad = note.pad.map((v) => Math.min(NOTE_MAX_PAD, Math.round(v * k * 10) / 10)) as [number, number];
+    }
     const w = im.px[0] / PX_PER_MM / W;
     const same = !Object.keys(change).length && sizePt === im.note.sizePt;
     if (same && Math.abs(im.w - w) < 1e-9) return;
@@ -3400,6 +3405,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       colorWrap.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(color, NOTE_COLORS, tc), colorRow(color, tc));
       sn.append(colorWrap);
       sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
+      if (n.frame) {
+        // Luft inni rammen: sideveis og opp/ned hver for seg, så teksten kan stå løst i en stor ramme
+        const [px, py] = notePad(n);
+        const mm = (v: number) => Math.round(v * 10) / 10;
+        const setPad = (i: 0 | 1, v: number) => {
+          if (!(v >= 0 && v <= NOTE_MAX_PAD)) return;
+          const pad: [number, number] = [mm(px), mm(py)];
+          pad[i] = mm(v);
+          setNote(im.id, { pad });
+        };
+        const padRow = el('div', { class: 'row dates' });
+        padRow.append(numField('Luft sideveis, mm', mm(px), 0.5, (v) => setPad(0, v), 'note-pad-x'), numField('Luft opp/ned, mm', mm(py), 0.5, (v) => setPad(1, v), 'note-pad-y'));
+        sn.append(padRow);
+        if (n.pad) sn.append(lockedRow('Egen luft i rammen', 'Standard', 'En halv skrifthøyde på alle sider', () => setNote(im.id, { pad: undefined })));
+      }
       sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Justeringen gjelder når teksten har flere linjer. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
 
       const sa = section('Pil');
