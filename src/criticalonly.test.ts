@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { criticalIds, shownItems } from './criticalonly';
+import { criticalIds, criticalKeep, shownItems } from './criticalonly';
+import type { Item } from './layout/layout';
 import { testplan } from './test/testplaner';
 
 describe('vis bare kritiske aktiviteter', () => {
@@ -15,5 +16,18 @@ describe('vis bare kritiske aktiviteter', () => {
   it('viser alt når filteret er av', () => {
     const all = testplan().lanes.flatMap((l) => l.boxes);
     expect(shownItems(all, null)).toHaveLength(all.length);
+  });
+});
+
+describe('overskriftsbokser', () => {
+  const box = (id: string, x0: number, x1: number, y: number, h: number, header = false) =>
+    ({ kind: 'box', id, x0, x1, y, h, header }) as unknown as Item;
+  it('tar med overskriftsboksen en kritisk boks ligger i, bare når valget er på', () => {
+    const p = testplan();
+    const all = p.lanes.flatMap((l) => l.boxes);
+    all[0].critical = true;
+    const items = [box('H1', 0, 100, 0, 30, true), box('H2', 200, 300, 0, 30, true), box(all[0].id, 10, 40, 5, 5), box(all[1].id, 210, 240, 5, 5)];
+    expect([...criticalKeep(p, items, true)].sort()).toEqual([all[0].id, 'H1'].sort());
+    expect([...criticalKeep(p, items, false)]).toEqual([all[0].id]);
   });
 });

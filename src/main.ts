@@ -16,6 +16,7 @@ import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
+import { dropHidden } from './criticalonly';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { setupSubmenus } from './submenu';
@@ -119,6 +120,7 @@ const editor = createEditor(
       syncControls();
       syncLookahead();
     },
+    saveCriticalPdf: (keep, btn) => save('deling', btn, undefined, false, keep),
   },
   host,
   $<HTMLElement>('#panel'),
@@ -1014,14 +1016,15 @@ type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
 // Samme nedtoning som på skjermen
 const DIM_OPACITY = 0.15;
 /** Lager PDF-en (hele planen, eller bare valgte fag) og filnavnet den foreslås lagret som. */
-async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Uint8Array; name: string; missing: Set<string> }> {
+async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<string>): Promise<{ pdf: Uint8Array; name: string; missing: Set<string> }> {
   if (!plan || !shown) throw new Error('Ingen plan er åpen');
   const sh = shown;
   const onlyTrades = pick?.trades ?? [];
   const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
   // Utkikken får perioden i filnavnet, så den ikke forveksles med hele planen
   const lookTag = lookWindow ? `_utkikk-${lookWindow.tag}` : '';
-  const name = `${baseName}${SUFFIX[variant]}${lookTag}${fileTag}.pdf`;
+  const critTag = critical ? '_kritisk-linje' : '';
+  const name = `${baseName}${SUFFIX[variant]}${lookTag}${fileTag}${critTag}.pdf`;
   // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
   const saved: PlanFile = structuredClone(plan);
   Object.assign(saved.plan.layout, {
@@ -1062,12 +1065,20 @@ async function makePdf(variant: PdfVariant, pick?: TradePick): Promise<{ pdf: Ui
     }
     target = { layout, svg };
   }
+  // Bare kritiske aktiviteter: alt står der det står på skjermen, de andre boksene er tatt bort
+  if (critical) {
+    const v = viewOf(saved);
+    const layout = computeLayout(v.plan, v.opts, measure);
+    const svg = renderPlan(layout);
+    dropHidden(svg, critical);
+    target = { layout, svg };
+  }
   const missing = new Set<string>();
   const pdf = await exportPdf(target.layout, target.svg, saved, variant, __APP_VERSION__, missing);
   return { pdf, name, missing };
 }
 
-async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false) {
+async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePick, again = false, critical?: Set<string>) {
   if (!plan || !shown) return;
   btn.disabled = true;
   saveStatus.textContent = 'Lager PDF …';
@@ -1076,7 +1087,7 @@ async function save(variant: PdfVariant, btn: HTMLButtonElement, pick?: TradePic
     // PDF-en lages før Lagre som-dialogen. Dialogen tømmer filen du velger med en gang, så feiler
     // noe etterpå, står du igjen med en tom arbeidsfil. Nå er PDF-en ferdig før filen røres.
     const picker = (window as unknown as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
-    const { pdf, name, missing } = await makePdf(variant, pick);
+    const { pdf, name, missing } = await makePdf(variant, pick, critical);
     const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' });
     const pickOpts = { suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] };
     let handle: FileSystemFileHandle | null = again && variant === 'arbeidsfil' ? workHandle : null;
@@ -1205,6 +1216,10 @@ $<HTMLButtonElement>('#copy-png').addEventListener('click', async (e) => {
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'bare' }));
+$<HTMLButtonElement>('#save-critical').addEventListener('click', (e) => {
+  const keep = editor.criticalView();
+  if (keep) save('deling', e.currentTarget as HTMLButtonElement, undefined, false, keep);
+});
 $<HTMLButtonElement>('#save-trades-dim').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'nedtonet' }));
 // Lagre-knappen i fremhevingslinjen lagrer slik planen vises: bare fagene, eller med de andre nedtonet
 $<HTMLButtonElement>('#focus-save').addEventListener('click', (e) =>
@@ -1217,6 +1232,7 @@ $<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
   const names = tradeNames(t).join(', ');
   $<HTMLButtonElement>('#save-trades').hidden = !t.length || !plan;
   $<HTMLButtonElement>('#save-trades-dim').hidden = !t.length || !plan;
+  $<HTMLButtonElement>('#save-critical').hidden = !plan || !editor.criticalView();
   $('#save-trades-text').textContent = `Bare ${names}. De andre fagene er tatt bort.`;
   $('#save-trades-dim-text').textContent = `Hele planen, med ${names} fremhevet og de andre fagene nedtonet.`;
 });

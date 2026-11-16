@@ -528,6 +528,7 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .sheet-host.critical-mode g[data-id] { cursor: pointer; }
 /* «Vis bare kritiske aktiviteter»: de andre boksene skjules på skjermen */
 .sheet-host g.items > g.crit-out { display: none; }
+#panel .crit-save { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 /* Velg boksen en egen boks skal følge */
 .sheet-host.follow-mode, .sheet-host.follow-mode g[data-id] { cursor: crosshair; }
 .follow-acts { gap: 16px; }
