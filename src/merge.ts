@@ -212,12 +212,13 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
   return { plan, report };
 }
 
-/** Navn, farge, høyde og skjuling fra appen. Navn og farge gjelder så lenge Project ikke har endret dem. */
+/** Navn, farge, bakgrunn, høyde og skjuling fra appen. Navn og farge gjelder så lenge Project ikke har endret dem. */
 function mergeLane(ol: Lane, lane: Lane, report: MergeReport) {
   if (ol.height) lane.height = ol.height;
   if (ol.order) lane.order = ol.order;
   if (ol.hidden) lane.hidden = true;
   if (ol.mergedInto) lane.mergedInto = ol.mergedInto;
+  if (ol.tintBackground) lane.tintBackground = true;
   if (!ol.original) return;
   const orig = { name: lane.name, fill: lane.fill };
   if (lane.name === ol.original.name) lane.name = ol.name;

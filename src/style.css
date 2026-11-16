@@ -449,6 +449,7 @@ details summary { cursor: pointer; font-size: 13px; }
 .pswitch input:checked { background: var(--accent); }
 .pswitch input:checked::after { transform: translateX(12px); }
 .pswitch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pswitch:has(input:disabled), .pswitch input:disabled { opacity: 0.45; cursor: default; }
 .locked-row { justify-content: space-between; padding: 6px 8px; border-radius: 6px; background: var(--bg); }
 .color-trial { gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg); }
 .color-trial .trial-text { margin-right: auto; color: var(--muted); }

@@ -233,7 +233,7 @@ export const BOX_PALETTE: Swatch[] = (<[string, string][]>[
 
 /** Har brukeren endret lanen? */
 export function isLaneEdited(l: Lane): boolean {
-  return !!(l.original || l.height || l.hidden || l.manual || l.order);
+  return !!(l.original || l.height || l.hidden || l.manual || l.order || l.tintBackground);
 }
 
 /** Tar vare på navn og farge fra Project før første endring. */
@@ -241,7 +241,7 @@ export function keepLaneOriginal(l: Lane): void {
   if (!l.original && !l.manual) l.original = { name: l.name, fill: l.fill };
 }
 
-/** Setter navn og farge tilbake og fjerner fast høyde og skjuling. */
+/** Setter navn og farge tilbake og fjerner bakgrunnsfarge, fast høyde og skjuling. */
 export function resetLane(l: Lane): void {
   if (l.original) {
     l.name = l.original.name;
@@ -252,6 +252,7 @@ export function resetLane(l: Lane): void {
   delete l.hidden;
   delete l.order;
   delete l.mergedInto;
+  delete l.tintBackground;
 }
 
 /** Ny lane laget i appen, rett etter lanen med id `afterId` (eller først). */

@@ -964,6 +964,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           }
         : undefined),
     );
+    const bg = switchRow('Også bak boksene', !!l.tintBackground, (v) =>
+      changeLane((x) => {
+        if (v) x.tintBackground = true;
+        else delete x.tintBackground;
+      }), 'Lanefargen vises dempet bak boksene, i en lys og en mørk nyanse for annenhver måned eller uke');
+    const noTint = !l.fill || l.fill.toUpperCase() === '#FFFFFF';
+    bg.querySelector('input')!.disabled = noTint;
+    sc.append(bg);
+    if (noTint && l.tintBackground) sc.append(el('p', { class: 'hint' }, 'Hvit lane har ingen farge å vise bak boksene.'));
 
     const sp = section('Plass');
     if (layoutNow?.compact) sp.append(el('p', { class: 'hint' }, 'Kompakt: lanen er så lav som innholdet. Fast høyde gjelder i «Fyll hele arket».'));
