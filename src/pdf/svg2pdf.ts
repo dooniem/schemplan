@@ -76,7 +76,7 @@ const num = (el: Element, a: string, d = 0) => {
 };
 
 function rgb(hex: string): [number, number, number] | null {
-  if (!hex || hex === 'none') return null;
+  if (!hex || hex === 'none' || hex === 'transparent') return null;
   const s = hex.replace('#', '');
   const f = s.length === 3 ? s.replace(/./g, (c) => c + c) : s;
   if (!/^[0-9a-fA-F]{6}$/.test(f)) return [0, 0, 0];

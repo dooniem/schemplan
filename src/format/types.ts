@@ -164,6 +164,20 @@ export interface PlanNote {
   underline?: boolean;
   /** Justering av linjene; uten den venstrejustert. */
   align?: 'center' | 'right';
+  /** Pil fra teksten til et punkt på arket, gjerne en boks teksten gjelder. */
+  arrow?: NoteArrow;
+}
+
+/** Pil fra en fritekst. Streken starter på kanten av teksten og har samme farge som teksten. */
+export interface NoteArrow {
+  /** Pilspissen, som andel av arkets bredde og høyde. */
+  x: number;
+  y: number;
+  /**
+   * Pilspissen står på en boks eller milepæl (id) og følger den. u og v er plassen i boksen,
+   * fra 0 til 1 fra venstre og fra toppen. Vises ikke boksen, brukes x og y.
+   */
+  to?: { id: string; u: number; v: number };
 }
 
 export type NoteFont = 'arimo' | 'tinos' | 'cousine';
