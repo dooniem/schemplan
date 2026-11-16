@@ -2,6 +2,7 @@ import { CHANGE_COLOR, type Layout, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
+import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
@@ -76,6 +77,17 @@ export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { 
     img.setAttribute('clip-path', `url(#imp-${key})`);
   }
   inner.append(img);
+  return g;
+}
+
+/** Pil fra en fritekst: streken og en fylt pilspiss. Bare path, så PDF-en tegner den som vektor. */
+export function drawArrow(a: PlacedArrow, parent: Element) {
+  const g = node('g', { 'data-arrow': a.id }, parent);
+  node('path', { d: `M ${r(a.x1)} ${r(a.y1)} L ${r(a.lx)} ${r(a.ly)}`, fill: 'none', stroke: a.color, 'stroke-width': r(a.width) }, g);
+  const [t, b1, b2] = a.head;
+  node('path', { d: `M ${r(t.x)} ${r(t.y)} L ${r(b1.x)} ${r(b1.y)} L ${r(b2.x)} ${r(b2.y)} Z`, fill: a.color }, g);
+  // Bred, usynlig strek som er lett å treffe med musen ved redigering
+  node('path', { d: `M ${r(a.x1)} ${r(a.y1)} L ${r(t.x)} ${r(t.y)}`, fill: 'none', stroke: 'transparent', 'stroke-width': 2.5, class: 'arrow-hit' }, g);
   return g;
 }
 
@@ -373,6 +385,10 @@ export function renderPlan(L: Layout): SVGSVGElement {
     }
     text(e.label, leg);
   });
+
+  // Piler fra fritekst ligger under teksten de kommer fra. Gruppen tegnes alltid, så en ny pil kan vises mens den dras.
+  const ag = node('g', { class: 'note-arrows' }, svg);
+  L.arrows.forEach((a) => drawArrow(a, ag));
 
   // Bilder satt inn i appen ligger oppå planen
   if (L.images.length) {

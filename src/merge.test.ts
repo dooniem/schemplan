@@ -55,6 +55,21 @@ describe('oppdater fra Project', () => {
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
 
+  it('pil fra fritekst følger boksen den peker på, også med ny id', () => {
+    const work = testplan();
+    const im = (to: string) => ({ id: `t${to}`, data: 'data:image/png;base64,AA==', px: [10, 10] as [number, number], x: 0.5, y: 0.5, w: 0.1, h: 0.1, rotation: 0, note: { text: 'Se her', sizePt: 12, arrow: { x: 0.6, y: 0.7, to: { id: to, u: 0.5, v: 0.5 } } } });
+    work.plan.layout.images = [im('2_2'), im('1_1')];
+    const fresh = testplan();
+    box(fresh, '2_2').id = '2_9';
+    // 1_1 er borte fra Project
+    fresh.lanes.forEach((l) => (l.boxes = l.boxes.filter((b) => b.id !== '1_1')));
+    const { plan } = mergePlans(work, fresh);
+    const [a, b] = plan.plan.layout.images!;
+    expect(a.note!.arrow!.to!.id).toBe('2_9');
+    expect(b.note!.arrow).toEqual({ x: 0.6, y: 0.7 });
+    expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
+  });
+
   it('callout-bredden fra arbeidsfilen gjelder, som de andre startverdiene', () => {
     const work = testplan();
     work.plan.layout.calloutMaxWidthCm = 2.5;
