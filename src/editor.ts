@@ -5,6 +5,7 @@ import { autoTextColor } from './layout/color';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { CRITICAL_DEFAULT } from './layout/critical';
+import { criticalIds, paintCriticalOnly, shownItems } from './criticalonly';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
@@ -146,6 +147,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const criticalBtn = tools.querySelector<HTMLButtonElement>('#critical-mode');
   /** Kritisk linje: klikk på en boks tar den med i linjen eller ut av den. */
   let criticalMode = false;
+  /** «Vis bare kritiske aktiviteter»: bare på skjermen, og bare så lenge tegnemodusen er på. */
+  let criticalOnly = false;
+  /** Boksene som vises når filteret er på, ellers null. */
+  const criticalKeep = (): Set<string> | null => {
+    const plan = host.getPlan();
+    return active && criticalMode && criticalOnly && plan ? criticalIds(plan) : null;
+  };
   /** Velg boksen en egen boks skal følge: neste klikk på en boks lager koblingen. */
   let followPick: { id: string; edge: Edge } | null = null;
   const followBar = document.querySelector<HTMLElement>('#follow-bar');
@@ -1015,9 +1023,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const buildCriticalPanel = (plan: PlanFile) => {
     const marked = plan.lanes.flatMap((l) => l.boxes.filter((x) => x.critical));
     panelHead('Kritisk linje', marked.length ? `${marked.length} ${marked.length === 1 ? 'boks' : 'bokser'} i linjen` : 'Ingen bokser ennå', () => setCriticalMode(false), 'Ferdig');
-    panel.append(el('p', { class: 'panel-note' }, marked.length
+    if (!marked.length) criticalOnly = false;
+    panel.append(el('p', { class: 'panel-note' }, criticalOnly
+      ? 'Bare boksene i linjen vises. Slå av filteret under for å se og merke de andre igjen.'
+      : marked.length
       ? 'Klikk en boks for å ta den med eller ut. Linjen følger datoene, så rekkefølgen du klikker i spiller ingen rolle.'
       : 'Klikk boksene som ligger på den kritiske linjen. Linjen tegnes gjennom dem i datorekkefølge og går utenom teksten.'));
+    const vs = section('Visning');
+    const only = switchRow('Vis bare kritiske aktiviteter', criticalOnly, (v) => {
+      criticalOnly = v;
+      buildPanel();
+      overlay();
+    }, 'Skjuler de andre boksene og milepælene på skjermen. Planen og PDF-en endres ikke, og filteret slås av når du trykker Ferdig.');
+    only.querySelector('input')!.disabled = !marked.length;
+    vs.append(only);
     const style = plan.plan.layout.criticalLine ?? CRITICAL_DEFAULT;
     const setStyle = (v: Partial<typeof style>) => commit((pl) => (pl.plan.layout.criticalLine = { ...(pl.plan.layout.criticalLine ?? CRITICAL_DEFAULT), ...v }));
 
@@ -1130,6 +1149,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   const setCriticalMode = (on: boolean) => {
     criticalMode = on;
+    criticalOnly = false;
     selected = null;
     selectedLane = null;
     selectedHeader = false;
@@ -1691,6 +1711,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   const overlay = () => {
     if (!svgNow || !layoutNow) return;
     svgNow.querySelector('g.edit-overlay.edit-marks')?.remove();
+    paintCriticalOnly(svgNow, criticalKeep());
     if (!active) return;
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'edit-overlay edit-marks');
@@ -2391,7 +2412,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     // Millimeter per skjermpunkt
     const px = 1 / (svgNow?.getScreenCTM()?.a || 4);
     type R = { x: number; y: number; w: number; h: number };
-    const items = layoutNow.items;
+    // Skjulte bokser kan ikke treffes
+    const items = shownItems(layoutNow.items, criticalKeep());
     const body = (it: Item): R => (it.kind === 'box' ? { x: it.x0, y: it.y, w: it.x1 - it.x0, h: it.h } : { x: it.x - it.size / 2, y: it.y - it.size / 2, w: it.size, h: it.size });
     const text = (it: Item): R | null => (it.kind === 'box' ? (it.callout?.box ?? null) : it.labelBox);
     const behind = (it: Item) => it.kind === 'box' && !!(it.header || it.span);
@@ -3787,6 +3809,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       endFollowPick();
       lanePick?.end();
       criticalMode = false;
+      criticalOnly = false;
       selected = null;
       selectedLane = null;
       selectedHeader = false;
