@@ -17,6 +17,7 @@ import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
 import { dropHidden, shownImages } from './criticalonly';
+import { snapshotOf } from './editmodel';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { setupSubmenus } from './submenu';
@@ -418,7 +419,8 @@ function draw() {
   if (lookWindow) status.textContent = `Utkikk: ${lookWindow.label.toLowerCase()}.${lookWindow.note ? ` ${lookWindow.note}` : ''} ${status.textContent}`;
   syncLookahead();
 
-  // Forslag til annet ark når planen er trang. Regnes ut litt etterpå, så tegningen ikke venter.
+  // Forslag til annet ark når planen er trang. Regnes ut når endringene har stoppet opp, så tegningen
+  // ikke venter og flere endringer på rad (piltaster, skriving) ikke regner dem ut hver gang.
   // De gamle forslagene står til de nye er klare: tømmes linjen imens, endrer arket høyde og
   // visningen hopper ved hver endring.
   window.clearTimeout(suggestTimer);
@@ -443,7 +445,7 @@ function draw() {
       }
     }
     showSuggestions(better, tight);
-  }, 30);
+  }, 250);
 }
 
 let suggestKey = '';
@@ -1036,7 +1038,8 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
   const critTag = critical ? '_kritisk-linje' : '';
   const name = `${baseName}${SUFFIX[variant]}${lookTag}${fileTag}${critTag}.pdf`;
   // Appens valg følger med i planen, så arbeidsfilen åpnes likt igjen
-  const saved: PlanFile = structuredClone(plan);
+  // Tekst deles med planen i stedet for å kopieres, så bildene ikke tar minne én gang til
+  const saved: PlanFile = snapshotOf(plan);
   Object.assign(saved.plan.layout, {
     orientation: opts.orientation,
     heightMode: opts.heightMode,
