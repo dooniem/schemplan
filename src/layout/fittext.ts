@@ -5,6 +5,7 @@ import { snapshotOf } from '../editmodel';
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
 import { computeLayout, defaultLaneTitleScale, layoutAtScale, laneTitleScaleOf, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
+import { marksInset } from './marks';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 
 /** Tilpasset tekst blir aldri større enn dette, selv om planens tekst er stor. */
@@ -65,6 +66,9 @@ export function textHeightInBox(box: Pick<Box, 'text' | 'rotation' | 'callout'>,
   return h;
 }
 
+/** Bredden teksten har i boksen: ikonene for høylytt arbeid og nattarbeid tar litt av høyre side. */
+const textWidth = (it: BoxItem) => it.x1 - it.x0 - (it.marks ? marksInset(it.marks) : 0);
+
 /** Finner størst mulig tekst for boksene og lane-titlene. Endrer ikke planen som sendes inn. */
 export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Measure, scope: FitTextScope): FitTextResult {
   const before = computeLayout(file, opts, measure);
@@ -107,7 +111,7 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
       const it = items.get(box.id);
       // Callout, overskriftsbokser og milepæler beholder planens tekst
       if (!it || !it.text || it.callout || it.header || box.resolved?.isMilestone) continue;
-      const w = it.x1 - it.x0;
+      const w = textWidth(it);
       let best: { pt: number; h: number } | null = null;
       for (const pt of candidates(planPt)) {
         const h = textHeightInBox(box, w, pt * PT_TO_MM, measure);
@@ -189,7 +193,7 @@ function growOnce(input: PlanFile, opts: LayoutOptions, measure: Measure, scope:
       const it = items.get(box.id);
       if (!it || !it.text || it.callout || it.header || it.span || box.resolved?.isMilestone) continue;
       const pt = Math.max(planPt, (box.textScale ?? 1) * planPt);
-      list.push({ box, lane: lane.id, w: it.x1 - it.x0, pt, start: pt, done: false });
+      list.push({ box, lane: lane.id, w: textWidth(it), pt, start: pt, done: false });
     }
     if (list.length) perLane.push(list);
   }

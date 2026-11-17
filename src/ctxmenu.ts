@@ -46,6 +46,8 @@ const ICONS = {
   share: 'M12 15V3 M8 7l4-4 4 4 M5 12v8h14v-8',
   arrow: 'M5 19L19 5 M10 5h9v9',
   chevron: 'M9 6l6 6-6 6',
+  speaker: 'M4 9.5h3.5L12 6v12l-4.5-3.5H4z M15.5 9.5a3.5 3.5 0 0 1 0 5 M18 7a7 7 0 0 1 0 10',
+  moon: 'M19.5 14.5A7.5 7.5 0 1 1 9.5 4.5a6 6 0 0 0 10 10z',
 } as const;
 export type IconName = keyof typeof ICONS;
 

@@ -2,6 +2,7 @@
 import type { Box, BoxChange, PlanFile, Task } from '../format/types';
 import { plainText } from '../format/text';
 import { boxTrade, tradeColors } from '../trades';
+import { markText } from '../layout/marks';
 
 export interface DataRow {
   id: string;
@@ -20,6 +21,8 @@ export interface DataRow {
   hidden: boolean;
   /** Med i den kritiske linjen. */
   critical: boolean;
+  /** Høylytt arbeid og nattarbeid, med vanlige ord. Tom uten merking. */
+  marks: string;
   movedFrom: string;
   /** Endring ved siste oppdatering fra Project: ny, eller nye datoer (med datoene før). Tom ellers. */
   fromProject: string;
@@ -117,6 +120,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         changes: l.hidden ? [...changes, 'lanen er skjult'] : changes,
         hidden: !!b.hidden || !!l.hidden,
         critical: !!b.critical,
+        marks: markText(b),
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         fromProject: changeText(plan.plan.layout.changes?.[b.id], ms),
         ...progressOf(b.taskIds.map((id) => taskOf.get(id)).filter((t): t is Task => !!t), r?.finish),
@@ -161,6 +165,7 @@ export const COLUMNS: { key: keyof DataRow; title: string; width: number; date?:
   { key: 'changes', title: 'Endret', width: 30 },
   { key: 'hidden', title: 'Skjult', width: 8 },
   { key: 'critical', title: 'Kritisk linje', width: 12 },
+  { key: 'marks', title: 'Merking', width: 22 },
   { key: 'movedFrom', title: 'Flyttet fra', width: 20 },
   { key: 'fromProject', title: 'Siste oppdatering', width: 30 },
   { key: 'progress', title: '% ferdig', width: 9 },

@@ -5,6 +5,7 @@ import type { Item, Layout } from './layout/layout';
 import { bounds } from './editmodel';
 import { formatLong, isoWeek, parseIso } from './layout/dates';
 import { planRows, type DataRow } from './data/rows';
+import { boxMarks, marksLabel, marksMatch, type MarkKind } from './layout/marks';
 
 const NS = 'http://www.w3.org/2000/svg';
 const ACCENT = '#1F5FBF';
@@ -15,7 +16,11 @@ export interface Focus {
   reset(): void;
   /** Fagene i fokus (tom når ingen er valgt). */
   readonly trades: string[];
-  /** «Vis bare disse fagene» er på. */
+  /** Merkene i fokus (høylytt arbeid, nattarbeid), tom når ingen er valgt. */
+  readonly marks: MarkKind[];
+  /** Med to merker valgt: bare bokser som har begge. */
+  readonly bothMarks: boolean;
+  /** «Vis bare disse» er på. */
   readonly onlyTrades: boolean;
 }
 
@@ -70,8 +75,17 @@ export function createFocus(
   let period: Period | null = null;
   let trades = new Set<string>();
   let onlyTrades = false;
+  /** Høylytt arbeid og nattarbeid valgt i forklaringen. */
+  let marks = new Set<MarkKind>();
+  let bothMarks = false;
   /** Faget til hver boks, slik det står i forklaringen. */
   let tradeOf = new Map<string, string>();
+  /** Merkene til hver boks. */
+  let marksOf = new Map<string, MarkKind[]>();
+  const anyPick = () => trades.size > 0 || marks.size > 0;
+  /** Boksen er med i utvalget: i et av fagene (når fag er valgt) og med merkene (når merker er valgt). */
+  const inPick = (id: string) =>
+    (!trades.size || trades.has(tradeOf.get(id) ?? '')) && marksMatch(marksOf.get(id) ?? [], [...marks], bothMarks);
 
   // ---- Detaljer ved musepeker ----
   const tip = document.createElement('div');
@@ -189,13 +203,24 @@ export function createFocus(
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4 || !L) return;
     // Fag i forklaringen (i redigering velger klikket faget for å endre farge i stedet)
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
-    if (tradeG && !isEditing()) {
-      const t = tradeG.getAttribute('data-trade')!;
-      // Ctrl-, Cmd- eller Shift-klikk legger til eller tar bort et fag
-      if (e.shiftKey || e.ctrlKey || e.metaKey) trades.has(t) ? trades.delete(t) : trades.add(t);
-      else if (trades.size === 1 && trades.has(t)) trades.clear();
-      else trades = new Set([t]);
-      if (!trades.size) onlyTrades = false;
+    const markG = (e.target as Element | null)?.closest?.('g[data-mark]');
+    if ((tradeG || markG) && !isEditing()) {
+      const add = e.shiftKey || e.ctrlKey || e.metaKey;
+      if (tradeG) {
+        const t = tradeG.getAttribute('data-trade')!;
+        // Ctrl-, Cmd- eller Shift-klikk legger til eller tar bort et fag
+        if (add) trades.has(t) ? trades.delete(t) : trades.add(t);
+        else if (trades.size === 1 && trades.has(t) && !marks.size) trades.clear();
+        else [trades, marks] = [new Set([t]), new Set()];
+      } else {
+        // Høylytt arbeid og nattarbeid velges som fagene; Shift-klikk tar med begge
+        const m = markG!.getAttribute('data-mark') as MarkKind;
+        if (add) marks.has(m) ? marks.delete(m) : marks.add(m);
+        else if (marks.size === 1 && marks.has(m) && !trades.size) marks.clear();
+        else [trades, marks] = [new Set(), new Set([m])];
+      }
+      if (marks.size < 2) bothMarks = false;
+      if (!anyPick()) onlyTrades = false;
       return paint();
     }
     const p = toMm(e.clientX, e.clientY);
@@ -217,11 +242,13 @@ export function createFocus(
   const clearAll = () => {
     period = null;
     trades.clear();
+    marks.clear();
+    bothMarks = false;
     onlyTrades = false;
     paint();
   };
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && (period || trades.size) && !isEditing() && !(e.target as HTMLElement).matches?.('input, textarea, select')) clearAll();
+    if (e.key === 'Escape' && (period || anyPick()) && !isEditing() && !(e.target as HTMLElement).matches?.('input, textarea, select')) clearAll();
   });
 
   const setPeriod = (p: Period | null) => {
@@ -252,15 +279,19 @@ export function createFocus(
   // på skjermen. «Lagre PDF» i linjen lagrer det samme som en PDF for deling.
   function paintTrades() {
     if (!svg) return;
-    const on = trades.size > 0;
-    svg.querySelectorAll<SVGGElement>('g.items > g[data-id]').forEach((g) => {
-      const t = tradeOf.get(g.getAttribute('data-id')!) ?? '';
-      g.classList.toggle('focus-out', on && !trades.has(t));
+    const on = anyPick();
+    svg.querySelectorAll<SVGGElement>('g.items > g[data-id], g.marks > g[data-for]').forEach((g) => {
+      g.classList.toggle('focus-out', on && !inPick(g.getAttribute('data-id') ?? g.getAttribute('data-for')!));
     });
     svg.querySelectorAll<SVGGElement>('g[data-trade]').forEach((g) => {
       const t = g.getAttribute('data-trade')!;
       g.classList.toggle('focus-on', on && trades.has(t));
       g.classList.toggle('focus-out', on && !trades.has(t));
+    });
+    svg.querySelectorAll<SVGGElement>('g[data-mark]').forEach((g) => {
+      const m = g.getAttribute('data-mark') as MarkKind;
+      g.classList.toggle('focus-on', on && marks.has(m));
+      g.classList.toggle('focus-out', on && !marks.has(m));
     });
     host.classList.toggle('focus-only', on && onlyTrades);
   }
@@ -269,15 +300,17 @@ export function createFocus(
     svg?.querySelector('g.edit-overlay.focus-period')?.remove();
     if (period && !placePeriod()) period = null;
     paintTrades();
-    bar.hidden = !period && !trades.size;
-    onlyBtn.hidden = !trades.size;
-    saveBtn.hidden = !trades.size;
+    bar.hidden = !period && !anyPick();
+    onlyBtn.hidden = !anyPick();
+    saveBtn.hidden = !anyPick();
+    bothBtn.hidden = marks.size < 2;
+    bothBtn.setAttribute('aria-pressed', String(bothMarks));
     onlyBtn.setAttribute('aria-pressed', String(onlyTrades));
-    onlyBtn.textContent = trades.size === 1 ? 'Vis bare dette faget' : 'Vis bare disse fagene';
+    onlyBtn.textContent = marks.size ? 'Vis bare disse boksene' : trades.size === 1 ? 'Vis bare dette faget' : 'Vis bare disse fagene';
     if (!svg || !L || bar.hidden) return;
 
     let all = [...rows.values()].filter((r) => !r.hidden);
-    if (trades.size) all = all.filter((r) => trades.has(tradeOf.get(r.id) ?? ''));
+    if (anyPick()) all = all.filter((r) => inPick(r.id));
     if (period) all = rowsIn(all, period.start, period.end);
 
     if (period) {
@@ -306,7 +339,7 @@ export function createFocus(
     const ms = all.filter((r) => r.type === 'Milepæl').length;
     const boxes = all.length - ms;
     const names = [...trades].map((t) => (t === '(none)' ? 'uten fag' : t));
-    const what = [period ? period.label : '', names.length > 3 ? `${names.length} fag` : names.join(', ')].filter(Boolean).join(', ');
+    const what = [period ? period.label : '', names.length > 3 ? `${names.length} fag` : names.join(', '), marksLabel([...marks], bothMarks)].filter(Boolean).join(', ');
     let text = `${what[0].toUpperCase()}${what.slice(1)}: ${boxes} ${boxes === 1 ? 'boks' : 'bokser'}` + (ms ? ` og ${ms} ${ms === 1 ? 'milepæl' : 'milepæler'}` : '');
     if (period && boxes) {
       const starts = all.filter((r) => r.type !== 'Milepæl' && r.start >= period!.start).length;
@@ -317,6 +350,12 @@ export function createFocus(
   }
   const onlyBtn = bar.querySelector<HTMLButtonElement>('.focus-only-btn')!;
   const saveBtn = bar.querySelector<HTMLButtonElement>('.focus-save')!;
+  // Med begge merkene valgt: bokser med ett av dem, eller bare de som har begge
+  const bothBtn = bar.querySelector<HTMLButtonElement>('.focus-both-btn')!;
+  bothBtn.addEventListener('click', () => {
+    bothMarks = !bothMarks;
+    paint();
+  });
   onlyBtn.addEventListener('click', () => {
     onlyTrades = !onlyTrades;
     paint();
@@ -327,9 +366,15 @@ export function createFocus(
     get trades() {
       return [...trades];
     },
-    /** «Vis bare disse fagene» er på. */
+    get marks() {
+      return [...marks];
+    },
+    get bothMarks() {
+      return bothMarks && marks.size > 1;
+    },
+    /** «Vis bare disse» er på. */
     get onlyTrades() {
-      return onlyTrades && trades.size > 0;
+      return onlyTrades && anyPick();
     },
     afterDraw(s, layout) {
       svg = s;
@@ -337,12 +382,15 @@ export function createFocus(
       const plan = getPlan();
       rows = new Map(plan ? planRows(plan).map((r) => [r.id, r]) : []);
       tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])) : []);
+      marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b)] as [string, MarkKind[]])) : []);
       hideTip();
       paint();
     },
     reset() {
       period = null;
       trades.clear();
+      marks.clear();
+      bothMarks = false;
       onlyTrades = false;
       hideTip();
       paint();

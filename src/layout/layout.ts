@@ -1,4 +1,5 @@
 import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
+import { boxMarks, markScaleOf, MARK_KEYS, MARK_OUT, MARK_KINDS, MARK_NAMES, markSize, marksHeight, marksInset, type BoxMarks, type MarkKind } from './marks';
 import { parseBoxText, splitLines } from '../format/text';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
@@ -116,6 +117,10 @@ export interface BoxItem {
   header?: boolean;
   /** Multi Lane-boks: går ned til bunnen av en lane lenger ned, uten å gjøre noen lane høyere. */
   span?: boolean;
+  /** Ikoner for høylytt arbeid og nattarbeid på høyre kant. */
+  marks?: BoxMarks;
+  /** Høyden på boksen med én tekstlinje, som ikonene stilles etter. */
+  lineBoxH?: number;
 }
 
 export interface MilestoneItem {
@@ -201,7 +206,7 @@ export interface LegendEntry {
   trade?: string;
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
-  symbol?: 'diamond' | 'flag' | 'holiday' | 'new' | 'moved';
+  symbol?: 'diamond' | 'flag' | 'holiday' | 'new' | 'moved' | MarkKind;
   /** Nøkkelen i plan.layout.legendItems: fagnavnet, eller FERIE_KEY. */
   key: string;
 }
@@ -763,6 +768,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const changeKinds = new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.shown && !b.hidden && changeOf[b.id]).map((b) => changeOf[b.id].kind)));
   const usedTrades = new Set<string>();
   lanePieces.flat().forEach((p) => p.item.kind === 'box' && usedTrades.add((p.item as BoxItem & { trade?: string }).trade ?? ''));
+  // Høylytt arbeid og nattarbeid kommer i forklaringen når en boks på arket har merket
+  const usedMarks = new Set(lanePieces.flat().flatMap((p) => (p.item.kind === 'box' ? (p.item.marks?.kinds ?? []) : [])));
   // Som overskriften krymper ikke bunnteksten (legend og dato) når planen skaleres ned
   // for å få plass, ellers blir den uleselig på store planer
   // men har et tak, så forklaringen ikke tar mer plass enn den trenger når planen forstørres
@@ -776,7 +783,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   if (opts.showLegend ?? file.plan.options.legend) {
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure(footerText, legendSize, true) - 6;
-    const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved'; key: string }[] = [
+    const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved' | MarkKind; key: string }[] = [
+      ...MARK_KINDS.filter((k) => usedMarks.has(k)).map((k) => ({ name: MARK_NAMES[k], symbol: k, key: MARK_KEYS[k] })),
       // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
       ...(ny && file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
       ...(['new', 'moved'] as const)
@@ -1327,51 +1335,82 @@ function buildPieces(
     let useCallout = !box.header && box.spanTo === undefined && (choice === 'on' || (choice === 'auto' && forcedCallout));
     const neverCallout = choice === 'off' || !!box.header || box.spanTo !== undefined;
     let lines: string[] = [];
+    // Høylytt arbeid og nattarbeid: ikonene står på høyre kant, så teksten får litt mindre bredde,
+    // og boksen blir aldri lavere enn ikonene. Ikonene står under hverandre, eller på rad når det sparer høyde.
+    const kinds = boxMarks(box);
+    const oneLine = Math.max(blh, lh) + 2 * PAD_Y;
+    // Ikonene følger planens tekst (ikke boksens egen størrelse), så de er like store i hele planen
+    const mk: BoxMarks | null = kinds.length ? { kinds, size: markSize(lh) * markScaleOf(file.plan.layout.markScale), row: false } : null;
+    const rowMk: BoxMarks | null = mk && kinds.length > 1 ? { ...mk, row: true } : null;
+    if (mk) Object.assign(item, { marks: mk, lineBoxH: oneLine });
+    const inset = () => (item.marks ? marksInset(item.marks) : 0);
+    const marksH = () => (item.marks ? marksHeight(item.marks, oneLine) : 0);
     if (!useCallout && box.rotation !== 0) {
       // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
       // Høyde valgt i appen gir plass til lengre linjer: dra boksen høyere for færre linjer, til slutt én
-      lines = rotatedLines(rawLines, w - 2 * PAD_X, bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
-      item.h = widest(lines, bs, measure) + 2 * PAD_Y + 1;
-      item.text = { x: bx0 + w / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
+      const tw = w - inset();
+      lines = rotatedLines(rawLines, tw - 2 * PAD_X, bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
+      item.h = Math.max(widest(lines, bs, measure) + 2 * PAD_Y + 1, marksH());
+      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
     // Fet skrift kan velges for overskrifts- og Multi Lane-bokser
     const bold = !!box.bold && (!!box.header || box.spanTo !== undefined);
     if (!useCallout) {
-      const inner = Math.max(w - 2 * PAD_X, 0.5);
       // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
       // så like bokser med samme tekst behandles likt
       const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)));
-      if (inner < longestWord && !neverCallout) useCallout = true;
+      const words = new Set(rawLines.join(' ').split(/\s+/));
+      /** Teksten brutt for bredden som er igjen ved siden av ikonene, eller null når den ikke får plass. */
+      const fit = (m: BoxMarks | null) => {
+        const inner = Math.max(w - 2 * PAD_X - (m ? marksInset(m) : 0), 0.5);
+        if (inner < longestWord) return null;
+        const ls = wrapLines(rawLines, inner, bs, measure, bold);
+        const textH = ls.length * blh + 2 * PAD_Y;
+        // Et ord som må deles for å få plass, gir callout
+        const broke = ls.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
+        return { ls, textH, h: Math.max(textH, m ? marksHeight(m, oneLine) : 0), broke, m };
+      };
+      let best = fit(mk);
+      // To ikoner på rad når boksen da blir lavere og teksten fortsatt får plass
+      const asRow = rowMk && best && best.h > best.textH + 1e-6 ? fit(rowMk) : null;
+      if (asRow && !asRow.broke && asRow.h < best!.h - 1e-6) best = asRow;
+      if (!best && !neverCallout) useCallout = true;
       else {
-        lines = wrapLines(rawLines, inner, bs, measure, bold);
+        if (!best) best = { ls: wrapLines(rawLines, Math.max(w - 2 * PAD_X - inset(), 0.5), bs, measure, bold), textH: 0, h: 0, broke: true, m: mk };
+        lines = best.ls;
         const h = lines.length * blh + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
-        const words = new Set(rawLines.join(' ').split(/\s+/));
-        const brokeWord = lines.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
-        if ((w / h < 0.25 || brokeWord) && !neverCallout) useCallout = true;
+        if ((w / h < 0.25 || best.broke) && !neverCallout) useCallout = true;
         else {
-          item.h = h;
-          item.text = { x: bx0 + w / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}) };
+          if (best.m) item.marks = best.m;
+          item.h = Math.max(h, marksH());
+          const tw = w - inset();
+          item.text = { x: bx0 + tw / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}) };
         }
       }
     }
 
     if (useCallout) {
-      item.h = blh + 2 * PAD_Y;
+      // Teksten står utenfor, så ikonene står på rad når boksen er bred nok til det
+      if (rowMk && marksInset(rowMk) + 2 * PAD_X <= w) item.marks = rowMk;
+      else if (mk) item.marks = mk;
+      item.h = Math.max(blh + 2 * PAD_Y, marksH());
       const make = (side: 'right' | 'left', maxW: number): Variant => {
         const cl = wrapLines(rawLines, maxW, bs, measure);
         const cw = widest(cl, bs, measure) + 2 * PAD_X;
         const ch = cl.length * blh + 2 * PAD_Y;
-        const cx = side === 'right' ? bx1 + 2 : bx0 - 2 - cw;
+        // Ikonene stikker ut på høyre side, så callouten der står litt lenger ut
+        const out = item.marks ? item.marks.size * MARK_OUT : 0;
+        const cx = side === 'right' ? bx1 + 2 + out : bx0 - 2 - cw;
         const it: BoxItem & { trade: string } = { ...item, callout: null };
         it.callout = {
           box: { x: cx, y: 0, w: cw, h: ch },
           text: { x: cx + PAD_X, y: PAD_Y + bs * 0.85, lines: cl, size: bs, color: '#000000', anchor: 'start' },
           leader: ny
             ? side === 'right'
-              ? [bx1, item.h / 2, cx, item.h / 2]
+              ? [bx1 + out, item.h / 2, cx, item.h / 2]
               : [bx0, item.h / 2, cx + cw, item.h / 2]
             : calloutLeader(bx0, bx1, item.h, side === 'right' ? cx : cx + cw, side),
         };
