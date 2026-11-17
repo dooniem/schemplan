@@ -66,6 +66,8 @@ describe('statuslinje: tegning', () => {
     expect(L.status!.y1).toBeCloseTo(L.plot.y1);
     expect(L.status!.x).toBeGreaterThan(L.plot.x0);
     expect(L.status!.tag?.text.lines).toEqual(['Status 9.11']);
+    // Lappens venstre kant ligger i flukt med strekens venstre kant
+    expect(L.status!.tag!.x).toBeCloseTo(L.status!.x - L.status!.width / 2);
     const noTag = computeLayout(p, { ...O, status: { moment: m, style: on({ label: false }) } }, approxMeasure);
     expect(noTag.status!.tag).toBeNull();
     expect(computeLayout(p, O, approxMeasure).status).toBeNull();

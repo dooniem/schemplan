@@ -1874,8 +1874,10 @@ function statusMark(
     const label = statusLabel(m);
     const w = measure(label, size, true) + 1.2;
     const h = size * 1.35;
-    // Lappen står til høyre for streken, eller til venstre når den ellers går utenfor planen.
-    const tx = x + w > axis.x1 ? x - w : x;
+    // Lappen går i flukt med streken: venstre kant på strekens venstre kant,
+    // eller høyre kant på strekens høyre kant når den ellers går utenfor planen.
+    const half = style.width / 2;
+    const tx = x - half + w > axis.x1 ? x + half - w : x - half;
     // Som et flagg over kalenderen: streken går opp gjennom kalenderen til lappen
     const ty = calTop - h - 0.3;
     tag = { x: tx, y: ty, w, h, text: { x: tx + w / 2, y: ty + h * 0.74, lines: [label], size, color: '#FFFFFF', anchor: 'middle', bold: true } };
