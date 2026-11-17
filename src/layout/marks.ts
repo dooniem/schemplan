@@ -1,26 +1,32 @@
 // Merking av bokser med høylytt arbeid og nattarbeid: navn, mål og ikonene som tegnes på høyre kant.
 // Ikonene er små merker (høyttaler på gult, halvmåne på mørkeblått) som stikker litt ut av boksen.
 
-export type MarkKind = 'loud' | 'night';
+export type MarkKind = 'loud' | 'night' | 'custom';
 
 /** Rekkefølgen ikonene står i, ovenfra (eller fra venstre når de står på rad). */
-export const MARK_KINDS: readonly MarkKind[] = ['loud', 'night'];
+export const MARK_KINDS: readonly MarkKind[] = ['loud', 'night', 'custom'];
 
-export const MARK_NAMES: Record<MarkKind, string> = { loud: 'Høylytt arbeid', night: 'Nattarbeid' };
+export const MARK_NAMES: Record<MarkKind, string> = { loud: 'Høylytt arbeid', night: 'Nattarbeid', custom: 'Eget merke' };
+
+/** Navnet på merket i planen: eget merke har navnet brukeren har gitt det. */
+export const markName = (kind: MarkKind, customName?: string): string => (kind === 'custom' && customName?.trim()) || MARK_NAMES[kind];
 
 /** Nøklene i plan.layout.legendItems, så oppføringene kan skjules eller få egen tekst. */
-export const MARK_KEYS: Record<MarkKind, string> = { loud: '(høylytt)', night: '(natt)' };
+export const MARK_KEYS: Record<MarkKind, string> = { loud: '(høylytt)', night: '(natt)', custom: '(eget merke)' };
 
 /** Merket som hører til en nøkkel i forklaringen, eller null. */
 export const markOfKey = (key: string): MarkKind | null => MARK_KINDS.find((k) => MARK_KEYS[k] === key) ?? null;
 
-/** Merkene boksen har, i fast rekkefølge. */
-export const boxMarks = (b: { loud?: boolean; night?: boolean }): MarkKind[] => MARK_KINDS.filter((k) => b[k]);
+type Marked = { loud?: boolean; night?: boolean; custom?: boolean };
 
-/** Merkene med vanlige ord, til datafanen: «Høylytt arbeid, nattarbeid». */
-export function markText(b: { loud?: boolean; night?: boolean }): string {
-  return boxMarks(b)
-    .map((k, i) => (i ? MARK_NAMES[k].toLowerCase() : MARK_NAMES[k]))
+/** Merkene boksen har, i fast rekkefølge. Eget merke telles bare når planen har et (`custom`). */
+export const boxMarks = (b: Marked, custom = true): MarkKind[] => MARK_KINDS.filter((k) => b[k] && (k !== 'custom' || custom));
+
+/** Merkene med vanlige ord, til datafanen: «Høylytt arbeid, nattarbeid». `customName` er navnet på eget merke, når planen har et. */
+export function markText(b: Marked, customName?: string): string {
+  // Egne navn står som brukeren skrev dem; de faste skrives med liten forbokstav etter den første
+  return boxMarks(b, customName !== undefined)
+    .map((k, i) => (k === 'custom' ? markName(k, customName) : i ? MARK_NAMES[k].toLowerCase() : MARK_NAMES[k]))
     .join(', ');
 }
 
@@ -131,6 +137,8 @@ const MOON = '#FFE58A';
  * Høylytt arbeid: høyttaler med lydbølger på gul bunn. Nattarbeid: halvmåne og en liten stjerne på mørkeblå bunn.
  */
 export function markShapes(kind: MarkKind, x: number, y: number, s: number): MarkShape[] {
+  // Eget merke er et bilde og tegnes for seg
+  if (kind === 'custom') return [];
   const P = (u: number, v: number): [number, number] => [x + u * s, y + v * s];
   const badge: MarkShape = {
     tag: 'path',
@@ -192,7 +200,8 @@ export function marksMatch(kinds: readonly MarkKind[], pick: readonly MarkKind[]
 }
 
 /** Utvalget med vanlige ord: «høylytt arbeid», «høylytt arbeid eller nattarbeid», «høylytt arbeid og nattarbeid». */
-export function marksLabel(pick: readonly MarkKind[], all: boolean): string {
-  const names = MARK_KINDS.filter((k) => pick.includes(k)).map((k) => MARK_NAMES[k].toLowerCase());
-  return names.join(all ? ' og ' : ' eller ');
+export function marksLabel(pick: readonly MarkKind[], all: boolean, customName?: string): string {
+  const names = MARK_KINDS.filter((k) => pick.includes(k)).map((k) => (k === 'custom' ? markName(k, customName) : MARK_NAMES[k].toLowerCase()));
+  const last = names.pop();
+  return names.length ? `${names.join(', ')}${all ? ' og ' : ' eller '}${last}` : (last ?? '');
 }

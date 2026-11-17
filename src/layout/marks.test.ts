@@ -89,4 +89,23 @@ describe('høylytt arbeid og nattarbeid', () => {
     p.plan.layout.markScale = 3;
     expect(validatePlan(p).errors.length).toBeGreaterThan(0);
   });
+
+  it('eget merke vises bare når planen har et bilde, med navnet i forklaringen og datafanen', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const p = testplan();
+    setMarks(p, ['1_1'], 'custom', true);
+    expect(boxOf(computeLayout(p, opts, approxMeasure), '1_1').marks).toBeUndefined();
+    p.plan.layout.customMark = { name: 'Støvende arbeid', image: PNG };
+    expect(validatePlan(p).errors).toEqual([]);
+    const L = computeLayout(p, opts, approxMeasure);
+    expect(boxOf(L, '1_1').marks?.kinds).toEqual(['custom']);
+    expect(L.customMark).toBe(PNG);
+    const e = L.legend.find((x) => x.key === '(eget merke)');
+    expect(e?.label.lines).toEqual(['Støvende arbeid']);
+    expect(markText({ loud: true, custom: true }, 'Støvende arbeid')).toBe('Høylytt arbeid, Støvende arbeid');
+    expect(markText({ custom: true })).toBe('');
+    expect(marksLabel(['loud', 'night', 'custom'], true, 'Støv')).toBe('høylytt arbeid, nattarbeid og Støv');
+    p.plan.layout.customMark = { name: 'x', image: 'https://example.com/a.png' };
+    expect(validatePlan(p).errors.length).toBeGreaterThan(0);
+  });
 });

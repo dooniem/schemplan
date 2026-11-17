@@ -37,6 +37,7 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
   }
 
   await drawImages(doc, page, L);
+  await drawMarkImages(doc, page, svg, L);
 
   // Samme tittel som overskriften på arket: egen overskrift fra appen går foran navnet fra Project
   doc.setTitle(plainText(plan.plan.layout.title ?? plan.plan.title) || plan.plan.title, { showInWindowTitleBar: true });
@@ -55,6 +56,34 @@ export async function exportPdf(L: Layout, svg: SVGSVGElement, plan: PlanFile, v
     page.drawText(label, { x: 8 * MM_TO_PT, y: 3 * MM_TO_PT, size: size * MM_TO_PT, font: fonts.regular, color: rgb(0.45, 0.45, 0.45) });
   }
   return doc.save({ useObjectStreams: true });
+}
+
+/**
+ * Eget merke er et bilde i SVG-en (image.mark-img), som drawSvg ikke tegner. Det bygges inn én gang og
+ * settes der det står i SVG-en, tilpasset kvadratet og med nedtoningen fra gruppene rundt.
+ */
+async function drawMarkImages(doc: PDFDocument, page: PDFPage, svg: SVGSVGElement, L: Layout) {
+  const els = [...svg.querySelectorAll<SVGImageElement>('image.mark-img')];
+  if (!els.length) return;
+  const embedded = new Map<string, PDFImage>();
+  for (const el of els) {
+    const href = el.getAttribute('href') ?? '';
+    if (!/^data:image\/(png|jpeg);/.test(href)) continue;
+    let img = embedded.get(href);
+    if (!img) {
+      img = href.startsWith('data:image/png') ? await doc.embedPng(bytesOf(href)) : await doc.embedJpg(bytesOf(href));
+      embedded.set(href, img);
+    }
+    let opacity = 1;
+    for (let p: Element | null = el; p && p !== svg; p = p.parentElement) opacity *= Number(p.getAttribute('opacity') ?? '1');
+    const s = Number(el.getAttribute('width'));
+    const k = Math.min(s / img.width, s / img.height);
+    const w = img.width * k;
+    const h = img.height * k;
+    const x = Number(el.getAttribute('x')) + (s - w) / 2;
+    const y = Number(el.getAttribute('y')) + (s - h) / 2;
+    page.drawImage(img, { x: x * MM_TO_PT, y: (L.height - y - h) * MM_TO_PT, width: w * MM_TO_PT, height: h * MM_TO_PT, opacity });
+  }
 }
 
 /** Bildene satt inn i appen, oppå planen, med rotasjon og beskjæring som på skjermen. Like bilder bygges inn én gang. */

@@ -304,6 +304,7 @@ export function createFocus(
     onlyBtn.hidden = !anyPick();
     saveBtn.hidden = !anyPick();
     bothBtn.hidden = marks.size < 2;
+    bothBtn.textContent = marks.size > 2 ? 'Bare med alle' : 'Bare med begge';
     bothBtn.setAttribute('aria-pressed', String(bothMarks));
     onlyBtn.setAttribute('aria-pressed', String(onlyTrades));
     onlyBtn.textContent = marks.size ? 'Vis bare disse boksene' : trades.size === 1 ? 'Vis bare dette faget' : 'Vis bare disse fagene';
@@ -339,7 +340,7 @@ export function createFocus(
     const ms = all.filter((r) => r.type === 'Milepæl').length;
     const boxes = all.length - ms;
     const names = [...trades].map((t) => (t === '(none)' ? 'uten fag' : t));
-    const what = [period ? period.label : '', names.length > 3 ? `${names.length} fag` : names.join(', '), marksLabel([...marks], bothMarks)].filter(Boolean).join(', ');
+    const what = [period ? period.label : '', names.length > 3 ? `${names.length} fag` : names.join(', '), marksLabel([...marks], bothMarks, getPlan()?.plan.layout.customMark?.name)].filter(Boolean).join(', ');
     let text = `${what[0].toUpperCase()}${what.slice(1)}: ${boxes} ${boxes === 1 ? 'boks' : 'bokser'}` + (ms ? ` og ${ms} ${ms === 1 ? 'milepæl' : 'milepæler'}` : '');
     if (period && boxes) {
       const starts = all.filter((r) => r.type !== 'Milepæl' && r.start >= period!.start).length;
@@ -382,7 +383,7 @@ export function createFocus(
       const plan = getPlan();
       rows = new Map(plan ? planRows(plan).map((r) => [r.id, r]) : []);
       tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])) : []);
-      marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b)] as [string, MarkKind[]])) : []);
+      marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b, !!plan.plan.layout.customMark)] as [string, MarkKind[]])) : []);
       hideTip();
       paint();
     },

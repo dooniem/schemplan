@@ -1028,7 +1028,7 @@ const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : 
 type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet'; marks?: MarkKind[]; bothMarks?: boolean };
 /** Utvalget med vanlige ord: fagene og merkene, til overskrift, filnavn og menyen. */
 const pickNames = (p: { trades: string[]; marks?: MarkKind[]; bothMarks?: boolean }) =>
-  [...tradeNames(p.trades), ...(p.marks?.length ? [marksLabel(p.marks, !!p.bothMarks)] : [])];
+  [...tradeNames(p.trades), ...(p.marks?.length ? [marksLabel(p.marks, !!p.bothMarks, plan?.plan.layout.customMark?.name)] : [])];
 /** Fagene og merkene som er valgt i forklaringen. */
 const focusPick = () => ({ trades: focus.trades, marks: focus.marks, bothMarks: focus.bothMarks });
 // Samme nedtoning som på skjermen
@@ -1067,7 +1067,7 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
   if (picked) {
     const keep = new Set(onlyTrades);
     // Med i utvalget: i et av fagene (når fag er valgt) og med merkene (når merker er valgt)
-    const inPick = (b: Box) => (!keep.size || keep.has(b.trade ?? b.resolved?.trade ?? '')) && marksMatch(boxMarks(b), pickMarks, !!pick?.bothMarks);
+    const inPick = (b: Box) => (!keep.size || keep.has(b.trade ?? b.resolved?.trade ?? '')) && marksMatch(boxMarks(b, !!saved.plan.layout.customMark), pickMarks, !!pick?.bothMarks);
     const inIds = new Set(saved.lanes.flatMap((l) => l.boxes.filter(inPick).map((b) => b.id)));
     if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!inIds.has(b.id)) b.hidden = true;
     const tag = pickNames(pick!).join(', ');

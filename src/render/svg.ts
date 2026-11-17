@@ -83,8 +83,13 @@ export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { 
 
 /** Pil fra en fritekst: streken og en fylt pilspiss. Bare path, så PDF-en tegner den som vektor. */
 /** Ikonet for høylytt arbeid eller nattarbeid i kvadratet (x, y) med siden s. */
-export function drawMark(kind: MarkKind, x: number, y: number, s: number, parent: Element) {
+export function drawMark(kind: MarkKind, x: number, y: number, s: number, parent: Element, customHref: string | null = null) {
   const g = node('g', { class: `mark mark-${kind}` }, parent);
+  // Eget merke: bildet brukeren lastet opp, tilpasset kvadratet uten å forvrenges. PDF-en tegner det for seg (mark-img).
+  if (kind === 'custom') {
+    if (customHref) node('image', { class: 'mark-img', x: r(x), y: r(y), width: r(s), height: r(s), href: customHref, preserveAspectRatio: 'xMidYMid meet' }, g);
+    return;
+  }
   for (const sh of markShapes(kind, x, y, s)) node(sh.tag, sh.attrs, g);
 }
 
@@ -306,7 +311,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     const mg = node('g', { class: 'marks', 'pointer-events': 'none' }, svg);
     for (const [it, edge] of markEdges) {
       const g = node('g', { 'data-for': it.id }, mg);
-      for (const m of markRects(it.marks!, edge, it.y, it.h, it.lineBoxH ?? it.h)) drawMark(m.kind, m.x, m.y, m.s, g);
+      for (const m of markRects(it.marks!, edge, it.y, it.h, it.lineBoxH ?? it.h)) drawMark(m.kind, m.x, m.y, m.s, g, L.customMark);
     }
   }
 
@@ -399,7 +404,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {
     // Hvert fag i sin egen gruppe, så det kan velges ved redigering
-    const mark: Attrs = e.symbol === 'loud' || e.symbol === 'night' ? { 'data-mark': e.symbol } : {};
+    const mark: Attrs = e.symbol === 'loud' || e.symbol === 'night' || e.symbol === 'custom' ? { 'data-mark': e.symbol } : {};
     const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : node('g', { 'data-legend': e.key, ...mark }, legG);
     const cx = e.x + e.w / 2;
     const cy = e.y + e.h / 2;
@@ -411,8 +416,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
       node('path', { d: `M${r(cx + s * 0.6)} ${r(cy - s)} L${r(cx - s * 1.2)} ${r(cy - s * 0.45)} L${r(cx + s * 0.6)} ${r(cy + s * 0.1)} Z`, fill: '#008000' }, leg);
     } else if (e.symbol === 'new' || e.symbol === 'moved') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, rx: 0.4, fill: '#FFFFFF', stroke: CHANGE_COLOR, 'stroke-width': e.symbol === 'new' ? 0.6 : 0.4, ...(e.symbol === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, leg);
-    } else if (e.symbol === 'loud' || e.symbol === 'night') {
-      drawMark(e.symbol, cx - e.h / 2, e.y, e.h, leg);
+    } else if (e.symbol === 'loud' || e.symbol === 'night' || e.symbol === 'custom') {
+      drawMark(e.symbol, cx - e.h / 2, e.y, e.h, leg, L.customMark);
     } else if (e.symbol === 'holiday') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
     } else {
