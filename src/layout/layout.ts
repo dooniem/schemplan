@@ -1635,11 +1635,14 @@ function rotatedMilestonePiece(
   };
   const lxOf = (v: Variant) => (v.item.kind === 'milestone' ? v.item.labelBox.x : 0);
   if (flag && style.flagTurned) {
-    // Stangen ligger langs toppen fra datoen og bortover, flagget henger ned fra den
+    // Stangen ligger langs toppen og går mot venstre, med toppen av stangen på datoen. Flagget henger
+    // ned fra toppen av stangen, og teksten står under flagget. Bare helt i venstre kant av kalenderen,
+    // der det ikke er plass, går stangen mot høyre.
     const ly = FLAG_WAVE * s + 0.4;
-    const right = make(x, ly, s, { x0: x - 0.3, x1: x + FLAG_HOIST * s }, 1);
-    const left = make(x - lw, ly, s, { x0: x - FLAG_HOIST * s, x1: x + 0.3 }, -1);
-    return pick([right, left].filter((v) => fits(lxOf(v))), x + lw <= rightLimit ? right : left, x - s);
+    const v = x - lw >= leftLimit - 1e-6
+      ? make(x - lw, ly, s, { x0: x - FLAG_HOIST * s, x1: x + 0.3 }, -1)
+      : make(x, ly, s, { x0: x - 0.3, x1: x + FLAG_HOIST * s }, 1);
+    return { ...v, alts: [v], sortX: x - s, sortW: 0 };
   }
   if (flag) {
     const ext = { x0: x - size * 1.25, x1: x + s };
