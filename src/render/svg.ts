@@ -1,9 +1,10 @@
-import { CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type Layout, type TextBlock } from '../layout/layout';
+import { CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type BoxItem, type Layout, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
 import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
+import { markRects, markShapes, type MarkKind } from '../layout/marks';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -81,6 +82,12 @@ export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { 
 }
 
 /** Pil fra en fritekst: streken og en fylt pilspiss. Bare path, så PDF-en tegner den som vektor. */
+/** Ikonet for høylytt arbeid eller nattarbeid i kvadratet (x, y) med siden s. */
+export function drawMark(kind: MarkKind, x: number, y: number, s: number, parent: Element) {
+  const g = node('g', { class: `mark mark-${kind}` }, parent);
+  for (const sh of markShapes(kind, x, y, s)) node(sh.tag, sh.attrs, g);
+}
+
 export function drawArrow(a: PlacedArrow, parent: Element) {
   const g = node('g', { 'data-arrow': a.id }, parent);
   node('path', { d: a.d, fill: 'none', stroke: a.color, 'stroke-width': r(a.width) }, g);
@@ -215,6 +222,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
 
   // Bokser og milepæler
   const itemsG = node('g', { class: 'items' }, svg);
+  const markEdges: [BoxItem, number][] = [];
   for (const it of L.items) {
     // Multi Lane-bokser går over flere lanes og klippes til planområdets omriss
     const g = node('g', { 'data-id': it.id, ...(it.kind === 'box' && it.span ? clipAttrs : {}) }, itemsG);
@@ -238,6 +246,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
         node('path', { d, fill: it.fill, stroke: it.border ?? 'none', 'stroke-width': it.border ? 0.25 : 0 }, g);
       }
       if (it.text) text(it.text, g);
+      // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter
+      if (it.marks) markEdges.push([it, xr]);
       if (it.callout) {
         // Leder og strek tegnes oppå boksen, slik Excel-callouten gjør
         const pts = it.callout.leader;
@@ -289,6 +299,14 @@ export function renderPlan(L: Layout): SVGSVGElement {
         }, g);
       }
       text(it.label, g);
+    }
+  }
+  // Ikonene ligger oppå alle boksene, så delen som stikker ut ikke dekkes av naboen
+  if (markEdges.length) {
+    const mg = node('g', { class: 'marks', 'pointer-events': 'none' }, svg);
+    for (const [it, edge] of markEdges) {
+      const g = node('g', { 'data-for': it.id }, mg);
+      for (const m of markRects(it.marks!, edge, it.y, it.h, it.lineBoxH ?? it.h)) drawMark(m.kind, m.x, m.y, m.s, g);
     }
   }
 
@@ -381,7 +399,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
   const legG = node('g', { class: 'legend' }, svg);
   L.legend.forEach((e) => {
     // Hvert fag i sin egen gruppe, så det kan velges ved redigering
-    const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : node('g', { 'data-legend': e.key }, legG);
+    const mark: Attrs = e.symbol === 'loud' || e.symbol === 'night' ? { 'data-mark': e.symbol } : {};
+    const leg = e.trade ? node('g', { 'data-trade': e.trade }, legG) : node('g', { 'data-legend': e.key, ...mark }, legG);
     const cx = e.x + e.w / 2;
     const cy = e.y + e.h / 2;
     const s = e.h / 2;
@@ -392,6 +411,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
       node('path', { d: `M${r(cx + s * 0.6)} ${r(cy - s)} L${r(cx - s * 1.2)} ${r(cy - s * 0.45)} L${r(cx + s * 0.6)} ${r(cy + s * 0.1)} Z`, fill: '#008000' }, leg);
     } else if (e.symbol === 'new' || e.symbol === 'moved') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, rx: 0.4, fill: '#FFFFFF', stroke: CHANGE_COLOR, 'stroke-width': e.symbol === 'new' ? 0.6 : 0.4, ...(e.symbol === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, leg);
+    } else if (e.symbol === 'loud' || e.symbol === 'night') {
+      drawMark(e.symbol, cx - e.h / 2, e.y, e.h, leg);
     } else if (e.symbol === 'holiday') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
     } else {

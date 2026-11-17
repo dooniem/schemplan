@@ -3,6 +3,7 @@
 import type { PlanFile } from './format/types';
 import type { Layout } from './layout/layout';
 import { FERIE_KEY } from './layout/layout';
+import { MARK_NAMES, markOfKey } from './layout/marks';
 import type { EditorHost } from './editor';
 import type { ImageEditKit } from './imageedit';
 import { BOX_PALETTE } from './editmodel';
@@ -67,7 +68,7 @@ export function createTradeUi(ed: TradeUiHost) {
     }
     syncTools();
   };
-  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : tradeName(key));
+  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : markOfKey(key) ? MARK_NAMES[markOfKey(key)!] : tradeName(key));
   /** Vis eller skjul i forklaringen, og teksten som står der. */
   const legendSection = (plan: PlanFile, key: string, ownText = true) => {
     const item = plan.plan.layout.legendItems?.[key] ?? {};
@@ -84,7 +85,7 @@ export function createTradeUi(ed: TradeUiHost) {
     s.append(switchRow('Vis i forklaringen', !item.hidden, (v) => setLegendItem(key, { hidden: !v })));
     // Et fag laget i appen står med navnet sitt, som endres over, så det trenger ingen egen tekst
     if (ownText || item.text)
-      s.append(lab, el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'));
+      s.append(lab, el('p', { class: 'hint' }, key === FERIE_KEY ? 'Tom tekst gir «Ferie».' : markOfKey(key) ? `Tom tekst gir «${legendName(key)}».` : 'Tom tekst gir fagnavnet. Endrer bare forklaringen, ikke faget i Project. Beholdes når du oppdaterer fra Project.'));
     // Forklaringen har én felles størrelse, som lane-navnene
     const L = ed.layout();
     if (L) {

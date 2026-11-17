@@ -463,7 +463,7 @@
           <ul>
             <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
             <li>Hold musen over en boks for datoer.</li>
-            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
+            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Høylytt arbeid og nattarbeid i forklaringen fremheves på samme måte; med begge valgt kan du vise bare boksene som har begge. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
             <li>Start og slutt på tidsaksen velges under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Kalender og stil</span>. Bokser som stikker utenfor, får pil. Bokser helt utenfor vises ikke, men ligger urørt og kommer tilbake når kalenderen utvides.</li>
             <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
           </ul>
@@ -471,7 +471,7 @@
           <ul>
             <li>Klikk for å velge, dobbeltklikk for å skrive.</li>
             <li>Shift-klikk eller Shift + dra på tomt sted velger flere bokser. Dra en av dem, så flyttes alle like langt.</li>
-            <li>Høyreklikk en boks eller et lane-navn for flere valg.</li>
+            <li>Høyreklikk en boks eller et lane-navn for flere valg. Der, eller under <span class="ui-name">Merking</span> i panelet, merker du bokser med høylytt arbeid eller nattarbeid.</li>
             <li>Bilder settes inn fra høyreklikkmenyen, med <kbd>Ctrl</kbd>+<kbd>V</kbd> eller ved å dra en fil inn. En milepæl kan få et bilde som symbol.</li>
             <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> angrer, <kbd>Ctrl</kbd>+<kbd>Y</kbd> gjør om, <kbd>Esc</kbd> fjerner valget.</li>
           </ul>
@@ -532,6 +532,7 @@
         <div id="sheet" class="sheet-host landscape"></div>
         <div id="focus-bar" class="focus-bar no-print" role="status" hidden>
           <span class="focus-text"></span>
+          <button type="button" class="tb focus-both-btn" aria-pressed="false" hidden title="Med begge merkene valgt: vis bare boksene som har både høylytt arbeid og nattarbeid.">Bare med begge</button>
           <button type="button" class="tb focus-only-btn" aria-pressed="false" hidden title="Skjuler boksene i de andre fagene.">Vis bare dette faget</button>
           <button type="button" class="tb focus-save" id="focus-save" hidden title="Lagrer en PDF for deling slik planen vises nå: med de andre fagene nedtonet, eller bare de valgte fagene.">Lagre PDF</button>
           <button type="button" class="icon" title="Fjern fremhevingen (Esc)" aria-label="Fjern fremhevingen">×</button>

@@ -3,7 +3,8 @@ import { fileTitle, lastPart } from './filename';
 import { checkOutboundBlocked } from './csp';
 import { a3Size, renderSheet, type Orientation } from './sheet';
 import { summarize, validatePlan } from './format/validate';
-import type { PlanFile, ProgressFront, StatusLine } from './format/types';
+import type { Box, PlanFile, ProgressFront, StatusLine } from './format/types';
+import { boxMarks, marksLabel, marksMatch, type MarkKind } from './layout/marks';
 import { setPrintPage } from './print';
 import { fitTextIntoLaneSpace } from './layout/fittext';
 import { arrangeLanes, computeLayout, DEFAULT_MIN_TEXT_PT, DEFAULT_TITLE_PT, fitAlternatives, type LayoutOptions } from './layout/layout';
@@ -1024,7 +1025,12 @@ const SUFFIX: Record<PdfVariant, string> = { arbeidsfil: '_arbeidsfil', deling: 
 /** Navnene på fagene i fokus, slik de står i forklaringen. */
 const tradeNames = (t: string[]) => t.map((x) => (x === '(none)' ? 'Uten fag' : x));
 /** Fagene som skal med i PDF-en: bare dem ('bare'), eller alle med de andre nedtonet ('nedtonet'). */
-type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet' };
+type TradePick = { trades: string[]; mode: 'bare' | 'nedtonet'; marks?: MarkKind[]; bothMarks?: boolean };
+/** Utvalget med vanlige ord: fagene og merkene, til overskrift, filnavn og menyen. */
+const pickNames = (p: { trades: string[]; marks?: MarkKind[]; bothMarks?: boolean }) =>
+  [...tradeNames(p.trades), ...(p.marks?.length ? [marksLabel(p.marks, !!p.bothMarks)] : [])];
+/** Fagene og merkene som er valgt i forklaringen. */
+const focusPick = () => ({ trades: focus.trades, marks: focus.marks, bothMarks: focus.bothMarks });
 // Samme nedtoning som på skjermen
 const DIM_OPACITY = 0.15;
 /** Lager PDF-en (hele planen, eller bare valgte fag) og filnavnet den foreslås lagret som. */
@@ -1032,7 +1038,9 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
   if (!plan || !shown) throw new Error('Ingen plan er åpen');
   const sh = shown;
   const onlyTrades = pick?.trades ?? [];
-  const fileTag = onlyTrades.length ? `_${tradeNames(onlyTrades).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
+  const pickMarks = pick?.marks ?? [];
+  const picked = onlyTrades.length > 0 || pickMarks.length > 0;
+  const fileTag = picked ? `_${pickNames(pick!).join('_').replace(/[\\/:*?"<>|\s]+/g, '-')}${pick?.mode === 'nedtonet' ? '_fremhevet' : ''}` : '';
   // Utkikken får perioden i filnavnet, så den ikke forveksles med hele planen
   const lookTag = lookWindow ? `_utkikk-${lookWindow.tag}` : '';
   const critTag = critical ? '_kritisk-linje' : '';
@@ -1056,11 +1064,13 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
   const { exportPdf } = await import('./pdf/export');
   // Bare valgte fag: planen tegnes på nytt uten de andre boksene, med fagene i overskriften
   let target = sh;
-  if (onlyTrades.length) {
+  if (picked) {
     const keep = new Set(onlyTrades);
-    const tradeOf = new Map(saved.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])));
-    if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!keep.has(b.trade ?? b.resolved?.trade ?? '')) b.hidden = true;
-    const tag = tradeNames(onlyTrades).join(', ');
+    // Med i utvalget: i et av fagene (når fag er valgt) og med merkene (når merker er valgt)
+    const inPick = (b: Box) => (!keep.size || keep.has(b.trade ?? b.resolved?.trade ?? '')) && marksMatch(boxMarks(b), pickMarks, !!pick?.bothMarks);
+    const inIds = new Set(saved.lanes.flatMap((l) => l.boxes.filter(inPick).map((b) => b.id)));
+    if (pick?.mode === 'bare') for (const l of saved.lanes) for (const b of l.boxes) if (!inIds.has(b.id)) b.hidden = true;
+    const tag = pickNames(pick!).join(', ');
     saved.plan.title = `${saved.plan.title} – ${tag}`;
     // Egen overskrift fra appen går foran Project-navnet, så fagene må med der også
     if (saved.plan.layout.title !== undefined) saved.plan.layout.title = `${saved.plan.layout.title} – ${tag}`;
@@ -1069,11 +1079,14 @@ async function makePdf(variant: PdfVariant, pick?: TradePick, critical?: Set<str
     const svg = renderPlan(layout);
     // Nedtonet: alt står på samme plass som på skjermen, men de andre fagene blir svake
     if (pick?.mode === 'nedtonet') {
-      svg.querySelectorAll('g.items > g[data-id]').forEach((g) => {
-        if (!keep.has(tradeOf.get(g.getAttribute('data-id')!) ?? '')) g.setAttribute('opacity', String(DIM_OPACITY));
+      svg.querySelectorAll('g.items > g[data-id], g.marks > g[data-for]').forEach((g) => {
+        if (!inIds.has(g.getAttribute('data-id') ?? g.getAttribute('data-for')!)) g.setAttribute('opacity', String(DIM_OPACITY));
       });
       svg.querySelectorAll('g[data-trade]').forEach((g) => {
         if (!keep.has(g.getAttribute('data-trade')!)) g.setAttribute('opacity', String(DIM_OPACITY));
+      });
+      svg.querySelectorAll('g[data-mark]').forEach((g) => {
+        if (!pickMarks.includes(g.getAttribute('data-mark') as MarkKind)) g.setAttribute('opacity', String(DIM_OPACITY));
       });
     }
     target = { layout, svg };
@@ -1230,26 +1243,30 @@ $<HTMLButtonElement>('#copy-png').addEventListener('click', async (e) => {
 });
 $<HTMLButtonElement>('#save-work').addEventListener('click', (e) => save('arbeidsfil', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#save-share').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement));
-$<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'bare' }));
+$<HTMLButtonElement>('#save-trades').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { ...focusPick(), mode: 'bare' }));
 $<HTMLButtonElement>('#save-critical').addEventListener('click', (e) => {
   const keep = editor.criticalView();
   if (keep) save('deling', e.currentTarget as HTMLButtonElement, undefined, false, keep);
 });
-$<HTMLButtonElement>('#save-trades-dim').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: 'nedtonet' }));
+$<HTMLButtonElement>('#save-trades-dim').addEventListener('click', (e) => save('deling', e.currentTarget as HTMLButtonElement, { ...focusPick(), mode: 'nedtonet' }));
 // Lagre-knappen i fremhevingslinjen lagrer slik planen vises: bare fagene, eller med de andre nedtonet
 $<HTMLButtonElement>('#focus-save').addEventListener('click', (e) =>
-  save('deling', e.currentTarget as HTMLButtonElement, { trades: focus.trades, mode: focus.onlyTrades ? 'bare' : 'nedtonet' }),
+  save('deling', e.currentTarget as HTMLButtonElement, { ...focusPick(), mode: focus.onlyTrades ? 'bare' : 'nedtonet' }),
 );
 // Valgene for fag vises når et fag er i fokus
 $<HTMLElement>('#menu-save').addEventListener('beforetoggle', (e) => {
   if ((e as ToggleEvent).newState !== 'open') return;
-  const t = focus.trades;
-  const names = tradeNames(t).join(', ');
+  const fp = focusPick();
+  const t = [...fp.trades, ...fp.marks];
+  const names = pickNames(fp).join(', ');
   $<HTMLButtonElement>('#save-trades').hidden = !t.length || !plan;
   $<HTMLButtonElement>('#save-trades-dim').hidden = !t.length || !plan;
+  // Med merker i utvalget gjelder valgene mer enn fagene
+  $('#save-trades strong').textContent = fp.marks.length ? 'Lagre PDF med bare utvalget' : 'Lagre PDF med bare valgte fag';
+  $('#save-trades-dim strong').textContent = fp.marks.length ? 'Lagre PDF med utvalget fremhevet' : 'Lagre PDF med valgte fag fremhevet';
   $<HTMLButtonElement>('#save-critical').hidden = !plan || !editor.criticalView();
-  $('#save-trades-text').textContent = `Bare ${names}. De andre fagene er tatt bort.`;
-  $('#save-trades-dim-text').textContent = `Hele planen, med ${names} fremhevet og de andre fagene nedtonet.`;
+  $('#save-trades-text').textContent = `Bare ${names}. ${fp.marks.length ? 'De andre boksene' : 'De andre fagene'} er tatt bort.`;
+  $('#save-trades-dim-text').textContent = `Hele planen, med ${names} fremhevet og ${fp.marks.length ? 'resten' : 'de andre fagene'} nedtonet.`;
 });
 // Planen kan komme med i adressen etter # (gzip, base64url), så den åpnes rett fra Project.
 // Delen etter # sendes aldri til nettstedet, og den fjernes fra adressen straks den er lest.

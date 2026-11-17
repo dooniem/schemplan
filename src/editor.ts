@@ -20,6 +20,8 @@ import { contentWords, createLanePick, laneName } from './lanepick';
 import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
+import { markScaleRow, marksMenuItems, marksSection, setMarks } from './marksui';
+import { MARK_NAMES, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles } from './imagefile';
@@ -1144,6 +1146,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ],
     };
   };
+  const markKit = { section, switchRow, el, segmented };
+  /** Størrelsen på alle ikonene for høylytt arbeid og nattarbeid. */
+  const setMarkScale = (v: number | undefined) =>
+    commit((pl) => {
+      if (v === undefined) delete pl.plan.layout.markScale;
+      else pl.plan.layout.markScale = v;
+    });
+  /** Boksene et valg i høyreklikkmenyen gjelder: alle valgte når boksen er blant dem, ellers bare den. */
+  const marksTargets = (plan: PlanFile, id: string): Box[] =>
+    (group.includes(id) ? group : [id]).map((x) => findBox(plan, x)).filter((x): x is Box => !!x && !x.resolved?.isMilestone);
   const stopFollowing = (id: string) => commit((pl) => delete findBox(pl, id)!.follows);
 
   const buildGroupPanel = (plan: PlanFile) => {
@@ -1211,6 +1223,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           else x.calloutWidthCm = cm;
         })),
     );
+
+    if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale);
 
     const sp = section('Plassering');
     const inLine = boxes.every((x) => x.critical);
@@ -1287,6 +1301,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!b && selectedTrade === FERIE_KEY) {
       panelHead('Ferie', 'Forklaringen nederst');
       return legendSection(plan, FERIE_KEY);
+    }
+    const markSel = !b && selectedTrade ? markOfKey(selectedTrade) : null;
+    if (markSel) {
+      panelHead(MARK_NAMES[markSel], 'Forklaringen nederst');
+      section('Ikonene').append(markScaleRow(markKit, plan, setMarkScale));
+      return legendSection(plan, selectedTrade!);
     }
     if (!b && selectedTrade && tradeColors(plan).some((c) => c.name === selectedTrade)) return buildTradePanel(plan, selectedTrade);
     if (!b) {
@@ -1562,6 +1582,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ),
       );
     }
+
+    if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale);
 
     const sp = section('Plassering');
     sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
@@ -2610,7 +2632,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (plan && legHit) {
       e.preventDefault();
       const key = legHit.getAttribute('data-trade') ?? legHit.getAttribute('data-legend')!;
-      const isTrade = key !== FERIE_KEY;
+      const legMark = markOfKey(key);
+      const isTrade = key !== FERIE_KEY && !legMark;
       // Valgte bokser (ikke milepæler) kan få faget herfra
       const ids = (group.length ? group : selected ? [selected] : []).filter((id) => {
         const x = findBox(plan, id);
@@ -2629,10 +2652,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
               }],
             }]
           : []),
+        ...(legMark && n
+          ? [{
+              items: [{
+                label: n === 1 ? 'Merk valgt boks' : `Merk ${n} valgte bokser`,
+                icon: legMark === 'loud' ? ('speaker' as const) : ('moon' as const),
+                hint: `Gir boksene merket ${MARK_NAMES[legMark].toLowerCase()}.`,
+                disabled: ids.every((id) => !!findBox(plan, id)![legMark]),
+                onSelect: () => commit((pl) => setMarks(pl, ids, legMark, true)),
+              }],
+            }]
+          : []),
         {
           items: [
             { label: isTrade ? 'Endre tekst og farge' : 'Endre tekst', icon: 'pencil', kbd: 'Klikk', hint: 'Åpner oppføringen i panelet til høyre.', onSelect: () => selectTrade(key) },
-            { label: 'Skjul i forklaringen', icon: 'hide', hint: 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
+            { label: 'Skjul i forklaringen', icon: 'hide', hint: legMark ? 'Ikonene står fortsatt på boksene. Vis oppføringen igjen fra panelet når ingenting er valgt.' : 'Boksene beholder fargen. Vis den igjen fra panelet når ingenting er valgt.', onSelect: () => setLegendItem(key, { hidden: true }) },
           ],
         },
         {
@@ -2719,6 +2753,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
                 { label: 'Multi Lane-boks', icon: 'span', checked: box.spanTo !== undefined, hint: 'Går ned over lanen under uten å gjøre lanene høyere. Velg hvor langt i panelet, eller dra i streken nederst.', onSelect: () => setSpan(id, box.spanTo === undefined) },
               ],
         },
+        // Høylytt arbeid og nattarbeid: gjelder alle valgte bokser når boksen er blant dem
+        ...(ms ? [] : [{ items: marksMenuItems(marksTargets(plan, id), (k: MarkKind, v: boolean) => commit((pl) => setMarks(pl, marksTargets(plan, id).map((x) => x.id), k, v))) }]),
         {
           items: [
             { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },

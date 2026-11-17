@@ -86,6 +86,8 @@ export interface PlanSettings {
     headerRightScale?: number;
     /** Forklaringen og datoen nederst i forhold til standardstørrelsen. Lik for alle oppføringer. */
     legendScale?: number;
+    /** Ikonene for høylytt arbeid og nattarbeid i forhold til standardstørrelsen (en tekstlinje). Lik for alle bokser. */
+    markScale?: number;
     /** Dagen planen sist ble endret i appen (YYYY-MM-DD). Datoen nederst er den nyeste av denne og eksporten. */
     editedAt?: string;
     /** Bilder satt inn i appen, tegnet oppå planen i denne rekkefølgen. */
@@ -372,6 +374,10 @@ export interface Box {
   };
   /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
   critical?: boolean;
+  /** Merket med høylytt arbeid (valgfritt). Vises som et ikon på høyre kant av boksen. */
+  loud?: boolean;
+  /** Merket med nattarbeid (valgfritt). Vises som et ikon på høyre kant av boksen. */
+  night?: boolean;
   /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
   textScale?: number;
 }
