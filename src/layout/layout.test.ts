@@ -158,7 +158,7 @@ describe('Excel-utseende', () => {
     const flag = boxes.find((b) => b.milestone?.symbol === 'flag')!;
     const diamond = boxes.find((b) => b.milestone?.symbol === 'diamond')!;
     flag.milestoneStyle = { rotation: -90 };
-    diamond.milestoneStyle = { rotation: 90 };
+    diamond.milestoneStyle = { rotation: 90, verticalLine: false };
     const L = computeLayout(f, opts, approxMeasure);
     const get = (lay: typeof L, id: string) => lay.items.find((i) => i.id === id)!;
     const fl = get(L, flag.id);
@@ -176,6 +176,11 @@ describe('Excel-utseende', () => {
     expect(di.labelBox.y).toBeGreaterThan(di.y + di.size / 2);
     expect(di.labelBox.x).toBeLessThan(di.x);
     expect(di.labelBox.x + di.labelBox.w).toBeGreaterThan(di.x);
+    // Med loddrett linje står teksten ved siden av linjen, ikke over den
+    diamond.milestoneStyle = { rotation: 90, verticalLine: true };
+    const dl = get(computeLayout(f, opts, approxMeasure), diamond.id);
+    if (dl.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(dl.labelBox.x > dl.x || dl.labelBox.x + dl.labelBox.w < dl.x).toBe(true);
   });
 
   it('rotert tekst fra Project gjelder til den velges bort i appen', () => {
