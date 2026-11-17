@@ -150,6 +150,54 @@ describe('Excel-utseende', () => {
     }
   });
 
+  it('milepælstekst kan roteres: flagget beholder teksten ved stangen, ruteren får teksten under seg', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: true };
+    const plain = computeLayout(example(), opts, approxMeasure);
+    const f = example();
+    const boxes = f.lanes.flatMap((l) => l.boxes);
+    const flag = boxes.find((b) => b.milestone?.symbol === 'flag')!;
+    const diamond = boxes.find((b) => b.milestone?.symbol === 'diamond')!;
+    flag.milestoneStyle = { rotation: -90 };
+    diamond.milestoneStyle = { rotation: 90, verticalLine: false };
+    const L = computeLayout(f, opts, approxMeasure);
+    const get = (lay: typeof L, id: string) => lay.items.find((i) => i.id === id)!;
+    const fl = get(L, flag.id);
+    const fl0 = get(plain, flag.id);
+    if (fl.kind !== 'milestone' || fl0.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(fl.label.rotate).toBe(-90);
+    expect(fl.label.anchor).toBe('end');
+    // Rotert blir teksten smalere og høyere
+    expect(fl.labelBox.w).toBeLessThan(fl0.labelBox.w);
+    expect(fl.labelBox.h).toBeGreaterThan(fl0.labelBox.h);
+    expect(fl.labelBox.y).toBeCloseTo(fl.y - fl.size / 2);
+    const di = get(L, diamond.id);
+    if (di.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(di.label.rotate).toBe(90);
+    expect(di.labelBox.y).toBeGreaterThan(di.y + di.size / 2);
+    expect(di.labelBox.x).toBeLessThan(di.x);
+    expect(di.labelBox.x + di.labelBox.w).toBeGreaterThan(di.x);
+    // Med loddrett linje står teksten ved siden av linjen, ikke over den
+    diamond.milestoneStyle = { rotation: 90, verticalLine: true };
+    const dl = get(computeLayout(f, opts, approxMeasure), diamond.id);
+    if (dl.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(dl.labelBox.x > dl.x || dl.labelBox.x + dl.labelBox.w < dl.x).toBe(true);
+  });
+
+  it('rotert tekst fra Project gjelder til den velges bort i appen', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: true };
+    const f = example();
+    const flag = f.lanes.flatMap((l) => l.boxes).find((b) => b.milestone?.symbol === 'flag')!;
+    flag.milestone!.rotateText = true;
+    const rotOf = () => {
+      const it = computeLayout(f, opts, approxMeasure).items.find((i) => i.id === flag.id)!;
+      return it.kind === 'milestone' ? it.label.rotate ?? 0 : null;
+    };
+    expect(rotOf()).toBe(-90);
+    flag.milestoneStyle = { rotation: 0 };
+    expect(rotOf()).toBe(0);
+    expect(validatePlan(f).errors).toEqual([]);
+  });
+
   it('ruter-milepæler har fet tekst og vanlig dato', () => {
     const L = computeLayout(example(), { orientation: 'landscape', heightMode: 'fill', textSizePt: 7, fitToSheet: true }, approxMeasure);
     const m = L.items.find((i) => i.kind === 'milestone' && i.symbol === 'diamond');

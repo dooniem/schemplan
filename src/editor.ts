@@ -2,6 +2,7 @@
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import { effectiveRange } from './layout/range';
 import { autoTextColor } from './layout/color';
+import { baseMilestoneRotation, milestoneRotation } from './layout/milestone';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { paintCriticalOnly, shownItems } from './criticalonly';
@@ -1421,11 +1422,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
       const stl = { ...base, ...b.milestoneStyle };
-      type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate';
+      type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate' | 'rotation';
+      const fromProject: Record<string, unknown> = { ...base, rotation: baseMilestoneRotation(b) };
       const setMs = (k: MsKey, v: unknown) =>
         change((x) => {
           const m: Record<string, unknown> = { ...x.milestoneStyle };
-          if ((base as Record<string, unknown>)[k] === v) delete m[k];
+          if (fromProject[k] === v) delete m[k];
           else m[k] = v;
           if (Object.keys(m).length) x.milestoneStyle = m as Box['milestoneStyle'];
           else delete x.milestoneStyle;
@@ -1446,6 +1448,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         cw,
         switchRow('Vis dato', stl.showDate, (v) => setMs('showDate', v)),
         switchRow('Loddrett linje', stl.verticalLine, (v) => setMs('verticalLine', v), 'Strek fra milepælen ned gjennom planen'),
+        segmented<Rotation>('Rotasjon', milestoneRotation(b), [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) => setMs('rotation', v)),
       );
       if (b.milestoneStyle) su.append(btn('Bruk utseendet fra Project', null, () => change((x) => delete x.milestoneStyle), undefined, 'linkish'));
     } else {
