@@ -195,7 +195,9 @@ describe('Excel-utseende', () => {
     const fl = L.items.find((i) => i.id === flag.id)!;
     const di = L.items.find((i) => i.id === diamond.id)!;
     if (fl.kind !== 'milestone' || di.kind !== 'milestone') throw new Error('ikke milepæl');
-    expect(fl.turned).toBeDefined();
+    // Stangen går mot venstre fra datoen, og teksten står under flagget
+    expect(fl.turned).toBe(-1);
+    expect(fl.labelBox.x + fl.labelBox.w).toBeCloseTo(fl.x);
     expect(fl.labelBox.y).toBeGreaterThan(fl.y + fl.size / 2);
     expect(di.y - di.size / 2).toBeGreaterThan(di.labelBox.y + di.labelBox.h);
     // Teksten står mot ruteren under den: −90 leses nedenfra og starter nederst
