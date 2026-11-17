@@ -1,5 +1,5 @@
 import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
-import { boxMarks, markScaleOf, MARK_KEYS, MARK_OUT, MARK_KINDS, MARK_NAMES, markSize, marksHeight, marksInset, type BoxMarks, type MarkKind } from './marks';
+import { boxMarks, markScaleOf, MARK_KEYS, MARK_OUT, MARK_KINDS, markName, markSize, marksHeight, marksInset, type BoxMarks, type MarkKind } from './marks';
 import { parseBoxText, splitLines } from '../format/text';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
@@ -308,6 +308,8 @@ export interface Layout {
   upcoming: TextBlock | null;
   /** Statuslinjen, eller null når den er av eller datoen er utenfor kalenderen. */
   status: StatusMark | null;
+  /** Bildet til planens eget merke (data-URL), eller null. */
+  customMark: string | null;
 }
 
 const MARGIN = 6;
@@ -784,7 +786,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure(footerText, legendSize, true) - 6;
     const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved' | MarkKind; key: string }[] = [
-      ...MARK_KINDS.filter((k) => usedMarks.has(k)).map((k) => ({ name: MARK_NAMES[k], symbol: k, key: MARK_KEYS[k] })),
+      ...MARK_KINDS.filter((k) => usedMarks.has(k)).map((k) => ({ name: markName(k, file.plan.layout.customMark?.name), symbol: k, key: MARK_KEYS[k] })),
       // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
       ...(ny && file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
       ...(['new', 'moved'] as const)
@@ -1223,6 +1225,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     overview,
     upcoming: overview ? null : upcoming,
     status: statusMark(file, items, opts.status, axis, plotTop - calH, plotTop, plotBottom, base, measure),
+    customMark: file.plan.layout.customMark?.image ?? null,
     dateAt(x: number) {
       let best = axis.start;
       for (let t = axis.start; t < axis.end; t = addDays(t, 1)) {
@@ -1337,7 +1340,7 @@ function buildPieces(
     let lines: string[] = [];
     // Høylytt arbeid og nattarbeid: ikonene står på høyre kant, så teksten får litt mindre bredde,
     // og boksen blir aldri lavere enn ikonene. Ikonene står under hverandre, eller på rad når det sparer høyde.
-    const kinds = boxMarks(box);
+    const kinds = boxMarks(box, !!file.plan.layout.customMark);
     const oneLine = Math.max(blh, lh) + 2 * PAD_Y;
     // Ikonene følger planens tekst (ikke boksens egen størrelse), så de er like store i hele planen
     const mk: BoxMarks | null = kinds.length ? { kinds, size: markSize(lh) * markScaleOf(file.plan.layout.markScale), row: false } : null;

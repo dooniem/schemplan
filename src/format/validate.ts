@@ -130,6 +130,11 @@ export function validatePlan(input: string | unknown): ValidationResult {
       for (const k of ['laneTitleScale', 'headerRightScale', 'legendScale', 'logoScale', 'markScale'] as const)
         if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
+      if (lay.customMark !== undefined) {
+        const cm = lay.customMark;
+        if (!isObj(cm) || typeof cm.name !== 'string' || typeof cm.image !== 'string' || !/^data:image\/(png|jpeg);base64,/.test(cm.image))
+          err('plan.layout.customMark', 'må ha name (tekst) og image (PNG eller JPEG som data-URL)');
+      }
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showChanges !== undefined) needBool(lay, 'showChanges', 'plan.layout');
       if (lay.todayLine !== undefined) needBool(lay, 'todayLine', 'plan.layout');
@@ -311,7 +316,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         optPos(b, 'height', bp);
         if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
         if (b.calloutWidthCm !== undefined && !(typeof b.calloutWidthCm === 'number' && b.calloutWidthCm >= 1 && b.calloutWidthCm <= 15)) err(`${bp}.calloutWidthCm`, 'må være et tall fra 1 til 15');
-        for (const k of ['hidden', 'manual', 'header', 'critical', 'loud', 'night', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        for (const k of ['hidden', 'manual', 'header', 'critical', 'loud', 'night', 'custom', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');

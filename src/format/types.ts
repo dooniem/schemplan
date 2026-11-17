@@ -88,6 +88,8 @@ export interface PlanSettings {
     legendScale?: number;
     /** Ikonene for høylytt arbeid og nattarbeid i forhold til standardstørrelsen (en tekstlinje). Lik for alle bokser. */
     markScale?: number;
+    /** Eget merke lastet opp i appen: navn og bilde (data-URL, PNG eller JPEG). Står ved siden av høylytt arbeid og nattarbeid. */
+    customMark?: { name: string; image: string };
     /** Dagen planen sist ble endret i appen (YYYY-MM-DD). Datoen nederst er den nyeste av denne og eksporten. */
     editedAt?: string;
     /** Bilder satt inn i appen, tegnet oppå planen i denne rekkefølgen. */
@@ -378,6 +380,8 @@ export interface Box {
   loud?: boolean;
   /** Merket med nattarbeid (valgfritt). Vises som et ikon på høyre kant av boksen. */
   night?: boolean;
+  /** Merket med planens eget merke (valgfritt). Vises bare når plan.layout.customMark finnes. */
+  custom?: boolean;
   /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
   textScale?: number;
 }

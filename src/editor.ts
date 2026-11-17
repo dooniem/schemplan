@@ -20,8 +20,8 @@ import { contentWords, createLanePick, laneName } from './lanepick';
 import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
-import { markScaleRow, marksMenuItems, marksSection, setMarks } from './marksui';
-import { MARK_NAMES, markOfKey, type MarkKind } from './layout/marks';
+import { customMarkSection, markScaleRow, marksMenuItems, marksSection, pickMarkImage, removeCustomMark, setMarks, type CustomActions } from './marksui';
+import { MARK_KEYS, MARK_NAMES, markName, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
 import { buildLaneGroupPanel, laneGroupItems, laneGroupMenu, type GroupKit } from './lanegroupui';
 import { imageFiles } from './imagefile';
@@ -1146,13 +1146,25 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ],
     };
   };
-  const markKit = { section, switchRow, el, segmented };
+  const markKit = { section, switchRow, el };
   /** Størrelsen på alle ikonene for høylytt arbeid og nattarbeid. */
   const setMarkScale = (v: number | undefined) =>
     commit((pl) => {
       if (v === undefined) delete pl.plan.layout.markScale;
       else pl.plan.layout.markScale = v;
     });
+  /** Eget merke fra panelet: last opp bildet og gi merket til boksene, eller åpne panelet for merket. */
+  const customActions = (ids: string[]): CustomActions => ({
+    add: async () => {
+      const image = await pickMarkImage((m) => host.notify(m));
+      if (!image) return;
+      commit((pl) => {
+        pl.plan.layout.customMark = { name: MARK_NAMES.custom, image };
+        setMarks(pl, ids, 'custom', true);
+      });
+    },
+    edit: () => selectTrade(MARK_KEYS.custom),
+  });
   /** Boksene et valg i høyreklikkmenyen gjelder: alle valgte når boksen er blant dem, ellers bare den. */
   const marksTargets = (plan: PlanFile, id: string): Box[] =>
     (group.includes(id) ? group : [id]).map((x) => findBox(plan, x)).filter((x): x is Box => !!x && !x.resolved?.isMilestone);
@@ -1224,7 +1236,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         })),
     );
 
-    if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale);
+    if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale, customActions(plain.map((x) => x.id)));
 
     const sp = section('Plassering');
     const inLine = boxes.every((x) => x.critical);
@@ -1303,6 +1315,23 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return legendSection(plan, FERIE_KEY);
     }
     const markSel = !b && selectedTrade ? markOfKey(selectedTrade) : null;
+    if (markSel === 'custom') {
+      panelHead(markName('custom', plan.plan.layout.customMark?.name), 'Eget merke');
+      customMarkSection(markKit, plan, {
+        rename: (name) => commit((pl) => pl.plan.layout.customMark && (pl.plan.layout.customMark.name = name || MARK_NAMES.custom)),
+        replace: async () => {
+          const image = await pickMarkImage((m) => host.notify(m));
+          if (image) commit((pl) => pl.plan.layout.customMark && (pl.plan.layout.customMark.image = image));
+        },
+        remove: () => {
+          selectedTrade = null;
+          commit(removeCustomMark);
+        },
+        button: btn,
+      });
+      section('Størrelse').append(markScaleRow(markKit, plan, setMarkScale));
+      return;
+    }
     if (markSel) {
       panelHead(MARK_NAMES[markSel], 'Forklaringen nederst');
       section('Ikonene').append(markScaleRow(markKit, plan, setMarkScale));
@@ -1583,7 +1612,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
     }
 
-    if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale);
+    if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale, customActions([b.id]));
 
     const sp = section('Plassering');
     sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
@@ -2656,8 +2685,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           ? [{
               items: [{
                 label: n === 1 ? 'Merk valgt boks' : `Merk ${n} valgte bokser`,
-                icon: legMark === 'loud' ? ('speaker' as const) : ('moon' as const),
-                hint: `Gir boksene merket ${MARK_NAMES[legMark].toLowerCase()}.`,
+                icon: legMark === 'loud' ? ('speaker' as const) : legMark === 'night' ? ('moon' as const) : ('image' as const),
+                hint: `Gir boksene merket ${legMark === 'custom' ? markName('custom', plan.plan.layout.customMark?.name) : MARK_NAMES[legMark].toLowerCase()}.`,
                 disabled: ids.every((id) => !!findBox(plan, id)![legMark]),
                 onSelect: () => commit((pl) => setMarks(pl, ids, legMark, true)),
               }],
@@ -2754,7 +2783,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
               ],
         },
         // Høylytt arbeid og nattarbeid: gjelder alle valgte bokser når boksen er blant dem
-        ...(ms ? [] : [{ items: marksMenuItems(marksTargets(plan, id), (k: MarkKind, v: boolean) => commit((pl) => setMarks(pl, marksTargets(plan, id).map((x) => x.id), k, v))) }]),
+        ...(ms ? [] : [{ items: marksMenuItems(plan, marksTargets(plan, id), (k: MarkKind, v: boolean) => commit((pl) => setMarks(pl, marksTargets(plan, id).map((x) => x.id), k, v))) }]),
         {
           items: [
             { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },

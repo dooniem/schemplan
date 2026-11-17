@@ -120,7 +120,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         changes: l.hidden ? [...changes, 'lanen er skjult'] : changes,
         hidden: !!b.hidden || !!l.hidden,
         critical: !!b.critical,
-        marks: markText(b),
+        marks: markText(b, plan.plan.layout.customMark?.name),
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         fromProject: changeText(plan.plan.layout.changes?.[b.id], ms),
         ...progressOf(b.taskIds.map((id) => taskOf.get(id)).filter((t): t is Task => !!t), r?.finish),
