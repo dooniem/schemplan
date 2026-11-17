@@ -1146,7 +1146,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       ],
     };
   };
-  const markKit = { section, switchRow, el, segmented };
+  const markKit = { section, switchRow, el };
   /** Størrelsen på alle ikonene for høylytt arbeid og nattarbeid. */
   const setMarkScale = (v: number | undefined) =>
     commit((pl) => {
