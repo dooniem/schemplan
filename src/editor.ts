@@ -2313,7 +2313,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     // Bilder velges når knappen trykkes ned
-    if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, g.note-arrows > g[data-arrow]')) return;
+    if ((e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, .note-bend, g.note-arrows > g[data-arrow]')) return;
     const g = itemOf(e);
     if (followPick) return pickFollowTarget(boxAt(e));
     if (lanePick?.from) return lanePick.click(laneAt(toMm(e.clientX, e.clientY).y)?.id ?? null);
@@ -2381,9 +2381,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
     const imgG = t.closest('g.images > g[data-image]');
     const areaT = t.closest('.area-pt, .area-mid, .area-edge');
-    const tipT = t.closest('.note-tip');
+    const tipT = t.closest('.note-tip, .note-bend');
     const arrowG = t.closest('g.note-arrows > g[data-arrow]');
-    if (tipT && images.selected) d = tipDrag(images.selected);
+    if (tipT && images.selected) d = tipDrag(images.selected, tipT.classList.contains('note-bend'));
     else if (arrowG) {
       // Et klikk på pilen velger teksten den kommer fra
       e.preventDefault();
@@ -2571,7 +2571,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       return;
     }
     // Høyreklikk på et bilde eller et punkt i punktbeskjæringen
-    const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, g.note-arrows > g[data-arrow]');
+    const imgT = (e.target as Element | null)?.closest?.('g.images > g[data-image], .img-size, .img-rot, .img-crop, .img-pt, .img-mid, .note-tip, .note-bend, g.note-arrows > g[data-arrow]');
     if (plan && imgT) {
       e.preventDefault();
       if (imgT.classList.contains('img-pt')) {

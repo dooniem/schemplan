@@ -170,7 +170,7 @@ export interface PlanNote {
   arrow?: NoteArrow;
 }
 
-/** Pil fra en fritekst. Streken starter på kanten av teksten og har samme farge som teksten. */
+/** Pil fra en fritekst. Streken starter på kanten av teksten. */
 export interface NoteArrow {
   /** Pilspissen, som andel av arkets bredde og høyde. */
   x: number;
@@ -180,6 +180,17 @@ export interface NoteArrow {
    * fra 0 til 1 fra venstre og fra toppen. Vises ikke boksen, brukes x og y.
    */
   to?: { id: string; u: number; v: number };
+  /** Strekbredde i pt; uten den følger den skriftstørrelsen. */
+  width?: number;
+  /** Farge på streken og pilspissen; uten den samme som teksten. */
+  color?: string;
+  /** Størrelsen på pilspissen; uten den middels. */
+  head?: 'small' | 'large';
+  /**
+   * Kurve: hvor langt midten av streken bøyes ut til siden, som andel av avstanden fra teksten
+   * til spissen. Positiv bøyer mot venstre sett fra teksten. Uten den er streken rett.
+   */
+  bend?: number;
 }
 
 export type NoteFont = 'arimo' | 'tinos' | 'cousine';

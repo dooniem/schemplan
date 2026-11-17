@@ -1,4 +1,4 @@
-// Pil fra en fritekst: en rett strek fra kanten av teksten til en pilspiss som kan stå hvor som helst.
+// Pil fra en fritekst: en rett eller kurvet strek fra kanten av teksten til en pilspiss som kan stå hvor som helst.
 // Pilspissen kan festes til en boks eller milepæl og følger den da når planen endres.
 import type { NoteArrow, PlanImage } from '../format/types';
 import { frameCenter, frameCorners, type PlacedImage, type Pt } from './image';
@@ -9,19 +9,29 @@ export type Rect = { x: number; y: number; w: number; h: number };
 export interface PlacedArrow {
   /** Id-en til friteksten. */
   id: string;
-  /** Fra kanten av teksten. */
-  x1: number;
-  y1: number;
-  /** Streken slutter inne i pilspissen, så den ikke stikker ut foran. */
-  lx: number;
-  ly: number;
+  /** Streken som SVG-sti (M, L og C), fra kanten av teksten til inne i pilspissen, så den ikke stikker ut foran. */
+  d: string;
+  /** Hele streken fra teksten til spissen, til å treffe med musen. */
+  hit: string;
   /** Pilspissen. */
   x2: number;
   y2: number;
+  /** Midt på streken: knotten for å kurve den. */
+  mid: Pt;
   width: number;
   color: string;
   /** Pilspissen som trekant: spissen og de to hjørnene bak. */
   head: [Pt, Pt, Pt];
+}
+
+/** Hvordan pilen ser ut: fra friteksten og pilens egne valg. */
+export interface ArrowStyle {
+  sizePt: number;
+  color: string;
+  /** Strekbredde i pt. */
+  width?: number;
+  head?: 'small' | 'large';
+  bend?: number;
 }
 
 const PT_TO_MM = 25.4 / 72;
@@ -78,32 +88,92 @@ export function arrowStart(p: PlacedImage, tip: Pt): Pt | null {
   return { x: c.x + dx * best, y: c.y + dy * best };
 }
 
+/** Strekbredder å velge mellom, i pt, som i Office. */
+export const ARROW_WIDTHS = [0.5, 0.75, 1, 1.5, 2.25, 3, 4.5, 6];
+const HEAD_SCALE = { small: 0.7, medium: 1, large: 1.5 } as const;
+/** Grensene for kurven, og hvor nær rett den fanges til rett. */
+export const MAX_BEND = 1.5;
+const SNAP_BEND = 0.04;
+
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
+const ptStr = (q: Pt) => `${r3(q.x)} ${r3(q.y)}`;
+
+/**
+ * Punktet streken bøyes mot. Regnes fra midten av teksten til spissen, så kurven står likt
+ * når teksten flyttes litt eller skrives om.
+ */
+export function bendControl(p: PlacedImage, tip: Pt, bend: number): Pt {
+  const c = frameCenter(p);
+  const dx = tip.x - c.x;
+  const dy = tip.y - c.y;
+  // Normalen til venstre for retningen fra teksten mot spissen (y nedover)
+  return { x: (c.x + tip.x) / 2 + dy * bend, y: (c.y + tip.y) / 2 - dx * bend };
+}
+
+/** Kurven som gir midten av streken nærmest q. Fanges til rett nær null. */
+export function bendThrough(p: PlacedImage, tip: Pt, q: Pt): number {
+  const c = frameCenter(p);
+  const s = arrowStart(p, tip) ?? c;
+  const dx = tip.x - c.x;
+  const dy = tip.y - c.y;
+  const L2 = dx * dx + dy * dy;
+  if (L2 < 1e-9) return 0;
+  // Midten av en andregradskurve er (s + 2k + t) / 4, så kontrollpunktet k = 2q − (s + t) / 2
+  const kx = 2 * q.x - (s.x + tip.x) / 2;
+  const ky = 2 * q.y - (s.y + tip.y) / 2;
+  const b = ((kx - (c.x + tip.x) / 2) * dy - (ky - (c.y + tip.y) / 2) * dx) / L2;
+  if (Math.abs(b) < SNAP_BEND) return 0;
+  return Math.round(Math.max(-MAX_BEND, Math.min(MAX_BEND, b)) * 1000) / 1000;
+}
+
+/** Strekbredden i mm: valgt i pt, ellers etter skriftstørrelsen. */
+export const styleWidth = (st: ArrowStyle) => (st.width ? st.width * PT_TO_MM : arrowWidth(st.sizePt));
+
 /** Pilen fra teksten til spissen, eller null når den blir for kort til å vises. */
-export function placeArrow(p: PlacedImage, tip: Pt, sizePt: number, color: string): PlacedArrow | null {
-  const s = arrowStart(p, tip);
+export function placeArrow(p: PlacedImage, tip: Pt, st: ArrowStyle): PlacedArrow | null {
+  const bend = st.bend ?? 0;
+  const k = bend ? bendControl(p, tip, bend) : null;
+  // Streken går ut av teksten i retning kontrollpunktet, så kurven starter pent
+  const s = (k && arrowStart(p, k)) || arrowStart(p, tip);
   if (!s) return null;
-  const width = arrowWidth(sizePt);
-  const hl = headLength(width);
-  const len = Math.hypot(tip.x - s.x, tip.y - s.y);
-  if (len < hl + GAP + 0.5) return null;
-  const ux = (tip.x - s.x) / len;
-  const uy = (tip.y - s.y) / len;
+  const width = styleWidth(st);
+  const hl = headLength(width) * HEAD_SCALE[st.head ?? 'medium'];
+  if (Math.hypot(tip.x - s.x, tip.y - s.y) < hl + GAP + 0.5) return null;
+  const unit = (from: Pt, to: Pt) => {
+    const l = Math.hypot(to.x - from.x, to.y - from.y);
+    return l > 1e-6 ? { x: (to.x - from.x) / l, y: (to.y - from.y) / l } : null;
+  };
+  const straight = unit(s, tip)!;
+  // Retningen inn mot spissen og ut fra teksten: langs kurven, eller langs streken
+  const uEnd = (k && unit(k, tip)) || straight;
+  const uStart = (k && unit(s, k)) || straight;
+  const a = { x: s.x + uStart.x * GAP, y: s.y + uStart.y * GAP };
+  const e = { x: tip.x - uEnd.x * hl * 0.6, y: tip.y - uEnd.y * hl * 0.6 };
+  // Andregradskurven skrives som C, som PDF-en kan tegne: kontrollpunktene 2/3 mot k fra hver ende
+  const curve = (from: Pt, to: Pt) =>
+    k ? `M ${ptStr(from)} C ${ptStr({ x: from.x + (2 / 3) * (k.x - from.x), y: from.y + (2 / 3) * (k.y - from.y) })} ${ptStr({ x: to.x + (2 / 3) * (k.x - to.x), y: to.y + (2 / 3) * (k.y - to.y) })} ${ptStr(to)}` : `M ${ptStr(from)} L ${ptStr(to)}`;
+  const mid = k ? { x: 0.25 * s.x + 0.5 * k.x + 0.25 * tip.x, y: 0.25 * s.y + 0.5 * k.y + 0.25 * tip.y } : { x: (s.x + tip.x) / 2, y: (s.y + tip.y) / 2 };
   const hw = hl * 0.42;
-  const bx = tip.x - ux * hl;
-  const by = tip.y - uy * hl;
+  const bx = tip.x - uEnd.x * hl;
+  const by = tip.y - uEnd.y * hl;
   return {
     id: p.id,
-    x1: s.x + ux * GAP,
-    y1: s.y + uy * GAP,
-    lx: tip.x - ux * hl * 0.6,
-    ly: tip.y - uy * hl * 0.6,
+    d: curve(a, e),
+    hit: curve(s, tip),
     x2: tip.x,
     y2: tip.y,
+    mid,
     width,
-    color,
-    head: [tip, { x: bx - uy * hw, y: by + ux * hw }, { x: bx + uy * hw, y: by - ux * hw }],
+    color: st.color,
+    head: [tip, { x: bx - uEnd.y * hw, y: by + uEnd.x * hw }, { x: bx + uEnd.y * hw, y: by - uEnd.x * hw }],
   };
 }
+
+/** Utseendet til pilen på en fritekst. */
+export const arrowStyleOf = (im: PlanImage): ArrowStyle => {
+  const a = im.note!.arrow!;
+  return { sizePt: im.note!.sizePt, color: a.color ?? im.note!.color ?? '#000000', width: a.width, head: a.head, bend: a.bend };
+};
 
 /** Pilene til friteksten som vises. placed er bildene slik de står på arket. */
 export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: number, H: number, rectOf: (id: string) => Rect | null): PlacedArrow[] {
@@ -113,7 +183,7 @@ export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: numbe
     const a = im.note?.arrow;
     const p = byId.get(im.id);
     if (!a || !p || !im.note) continue;
-    const pa = placeArrow(p, arrowTip(a, W, H, rectOf), im.note.sizePt, im.note.color ?? '#000000');
+    const pa = placeArrow(p, arrowTip(a, W, H, rectOf), arrowStyleOf(im));
     if (pa) out.push(pa);
   }
   return out;
@@ -123,8 +193,10 @@ const r4 = (v: number) => Math.round(v * 10000) / 10000;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Lagrer pilspissen: som andel av arket, og som plass i boksen den står på, hvis noen. */
-export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null): NoteArrow {
-  const a: NoteArrow = { x: r4(tip.x / W), y: r4(tip.y / H) };
+export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null, keep?: NoteArrow): NoteArrow {
+  // Utseendet beholdes; bare plassen og festet byttes
+  const a: NoteArrow = { ...keep, x: r4(tip.x / W), y: r4(tip.y / H) };
+  delete a.to;
   if (target) {
     const r = target.rect;
     a.to = { id: target.id, u: r4(clamp01(r.w ? (tip.x - r.x) / r.w : 0.5)), v: r4(clamp01(r.h ? (tip.y - r.y) / r.h : 0.5)) };

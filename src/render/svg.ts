@@ -83,11 +83,11 @@ export function drawImage(p: PlacedImage, parent: Element, suffix = '', opts: { 
 /** Pil fra en fritekst: streken og en fylt pilspiss. Bare path, så PDF-en tegner den som vektor. */
 export function drawArrow(a: PlacedArrow, parent: Element) {
   const g = node('g', { 'data-arrow': a.id }, parent);
-  node('path', { d: `M ${r(a.x1)} ${r(a.y1)} L ${r(a.lx)} ${r(a.ly)}`, fill: 'none', stroke: a.color, 'stroke-width': r(a.width) }, g);
+  node('path', { d: a.d, fill: 'none', stroke: a.color, 'stroke-width': r(a.width) }, g);
   const [t, b1, b2] = a.head;
   node('path', { d: `M ${r(t.x)} ${r(t.y)} L ${r(b1.x)} ${r(b1.y)} L ${r(b2.x)} ${r(b2.y)} Z`, fill: a.color }, g);
   // Bred, usynlig strek som er lett å treffe med musen ved redigering
-  node('path', { d: `M ${r(a.x1)} ${r(a.y1)} L ${r(t.x)} ${r(t.y)}`, fill: 'none', stroke: 'transparent', 'stroke-width': 2.5, class: 'arrow-hit' }, g);
+  node('path', { d: a.hit, fill: 'none', stroke: 'transparent', 'stroke-width': Math.max(2.5, r(a.width * 3)), class: 'arrow-hit' }, g);
   return g;
 }
 
