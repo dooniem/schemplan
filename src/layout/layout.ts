@@ -1033,7 +1033,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         y: (tTop + tBot) / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
         size: laneSize,
-        color: '#000000',
+        color: lane.whiteText ? '#FFFFFF' : '#000000',
         anchor: 'middle',
         bold: true,
       },
