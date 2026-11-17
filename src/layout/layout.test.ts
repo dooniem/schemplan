@@ -183,6 +183,30 @@ describe('Excel-utseende', () => {
     expect(dl.labelBox.x > dl.x || dl.labelBox.x + dl.labelBox.w < dl.x).toBe(true);
   });
 
+  it('snudd flagg henger ned fra stangen med teksten under, ruteren kan stå under teksten', () => {
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: true };
+    const f = example();
+    const boxes = f.lanes.flatMap((l) => l.boxes);
+    const flag = boxes.find((b) => b.milestone?.symbol === 'flag')!;
+    const diamond = boxes.find((b) => b.milestone?.symbol === 'diamond')!;
+    flag.milestoneStyle = { rotation: 90, flagTurned: true };
+    diamond.milestoneStyle = { rotation: -90, diamondBelow: true, verticalLine: false };
+    const L = computeLayout(f, opts, approxMeasure);
+    const fl = L.items.find((i) => i.id === flag.id)!;
+    const di = L.items.find((i) => i.id === diamond.id)!;
+    if (fl.kind !== 'milestone' || di.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(fl.turned).toBeDefined();
+    expect(fl.labelBox.y).toBeGreaterThan(fl.y + fl.size / 2);
+    expect(di.y - di.size / 2).toBeGreaterThan(di.labelBox.y + di.labelBox.h);
+    // Teksten står mot ruteren under den: −90 leses nedenfra og starter nederst
+    expect(di.label.anchor).toBe('start');
+    expect(validatePlan(f).errors).toEqual([]);
+    // Uten rotert tekst gjelder ikke valgene
+    flag.milestoneStyle = { flagTurned: true };
+    const plain = computeLayout(f, opts, approxMeasure).items.find((i) => i.id === flag.id)!;
+    expect(plain.kind === 'milestone' && plain.turned).toBeFalsy();
+  });
+
   it('rotert tekst fra Project gjelder til den velges bort i appen', () => {
     const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: true };
     const f = example();
