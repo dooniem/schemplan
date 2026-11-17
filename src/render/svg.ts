@@ -256,6 +256,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
       const left = lb.x >= it.x;
       if (it.imageSymbol) {
         // Bildet er symbolet og tegnes oppå planen sammen med de andre bildene
+      } else if (it.symbol === 'diamond' && it.label.rotate) {
+        // Rotert: strek ned fra ruteren til en vannrett strek over teksten
+        // Med loddrett linje står teksten ved siden av: streken går da skrått bort til den vannrette streken
+        const ex = it.verticalLine ? (lb.x >= it.x ? lb.x + Math.min(lb.w, 2) / 2 : lb.x + lb.w - Math.min(lb.w, 2) / 2) : Math.min(Math.max(it.x - s * 0.3, lb.x + 0.2), lb.x + lb.w - 0.2);
+        node('line', { x1: it.x, x2: ex, y1: it.y, y2: lb.y, stroke: LEADER, 'stroke-width': 0.3 }, g);
+        node('line', { x1: lb.x, x2: lb.x + lb.w, y1: lb.y, y2: lb.y, stroke: LEADER, 'stroke-width': 0.35 }, g);
+        node('path', { d: `M${r(it.x)} ${r(it.y - s)} L${r(it.x + s)} ${r(it.y)} L${r(it.x)} ${r(it.y + s)} L${r(it.x - s)} ${r(it.y)} Z`, fill: it.color, stroke: '#000000', 'stroke-width': 0.3 }, g);
       } else if (it.symbol === 'diamond') {
         // Ruter, strek bort til en loddrett strek foran teksten
         const bar = left ? lb.x : lb.x + lb.w;

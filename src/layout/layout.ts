@@ -16,6 +16,7 @@ import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
 import { boxTrade, tradeColors } from '../trades';
 import { groupRuns } from '../lanegroup';
+import { milestoneRotation } from './milestone';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -1549,7 +1550,10 @@ function milestonePiece(
   const textLines = wrapLines(rawLines, calloutMax, base, measure, !flag);
   const lines = [...(style.showDate ? [formatShort(finishIso)] : []), ...textLines];
   const boldLines = [...(style.showDate ? [false] : []), ...textLines.map(() => !flag)];
-  const lw = Math.max(widest(lines.filter((_, i) => !boldLines[i]), base, measure), widest(lines.filter((_, i) => boldLines[i]), base, measure, true)) + 2 * PAD_X;
+  const textW = Math.max(widest(lines.filter((_, i) => !boldLines[i]), base, measure), widest(lines.filter((_, i) => boldLines[i]), base, measure, true));
+  const rot = milestoneRotation(box);
+  if (rot !== 0) return rotatedMilestonePiece(box, style, color.fill, rot, lines, boldLines, textW, x, base, lh, size, rightLimit, leftLimit);
+  const lw = textW + 2 * PAD_X;
   const lhTot = lines.length * lh + 2 * PAD_Y;
   // Flagg: stangen står på datoen og teksten rett til høyre. Ruter: teksten litt til høyre for symbolet.
   // Teksten kan også stå til venstre når det gir lavere plassering i lanen.
@@ -1576,6 +1580,67 @@ function milestonePiece(
   const alts = [right, left].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map(make);
   if (!alts.length) alts.push(make(right + lw <= rightLimit ? right : left));
   return { ...alts[0], alts, sortX: sx0, sortW: 0 };
+}
+
+/**
+ * Milepæl med rotert tekst. Linjene står side om side og henger ned fra toppen, nærmest symbolet.
+ * Flagg: teksten står ved stangen, til høyre eller til venstre for duken, som uten rotasjon.
+ * Ruter: alt er dreid en kvart omgang, så teksten står under ruteren. Streken går ned fra ruteren
+ * til en vannrett strek over teksten.
+ */
+function rotatedMilestonePiece(
+  box: Box,
+  style: { symbol: string; verticalLine?: boolean },
+  fill: string,
+  rot: 90 | -90,
+  lines: string[],
+  boldLines: boolean[],
+  textW: number,
+  x: number,
+  base: number,
+  lh: number,
+  size: number,
+  rightLimit: number,
+  leftLimit: number,
+): Piece {
+  const flag = style.symbol === 'flag';
+  const lw = lines.length * lh + 2 * PAD_Y;
+  const lhTot = textW + 2 * PAD_X;
+  const make = (lx: number, ly: number): Variant => {
+    const item: MilestoneItem = {
+      kind: 'milestone',
+      id: box.id,
+      x,
+      y: size / 2,
+      size,
+      symbol: flag ? 'flag' : 'diamond',
+      color: fill,
+      // Leses ovenfra (90) eller nedenfra (−90): enden av teksten mot symbolet i begge tilfeller
+      label: { x: lx + lw / 2, y: ly + PAD_X, lines, boldLines, size: base, color: '#000000', anchor: rot === 90 ? 'start' : 'end', rotate: rot },
+      labelBox: { x: lx, y: ly, w: lw, h: lhTot },
+      verticalLine: !!style.verticalLine,
+    };
+    const sx0 = flag ? x - size * 1.25 : x - size / 2;
+    return { item, fx0: Math.min(sx0, lx), fx1: Math.max(x + size / 2, lx + lw), h: Math.max(size, ly + lhTot) };
+  };
+  if (flag) {
+    const right = x + 0.4;
+    const left = x - size * 1.25 - 0.4 - lw;
+    const alts = [right, left].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map((lx) => make(lx, 0));
+    if (!alts.length) alts.push(make(right + lw <= rightLimit ? right : left, 0));
+    return { ...alts[0], alts, sortX: x - size * 1.25, sortW: 0 };
+  }
+  const ly = size + 1.5;
+  if (style.verticalLine) {
+    // Den loddrette linjen går rett ned fra ruteren: teksten står ved siden av den, ikke over den
+    const alts = [x + 0.4, x - 0.4 - lw].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map((lx) => make(lx, ly));
+    if (!alts.length) alts.push(make(x + 0.4 + lw <= rightLimit ? x + 0.4 : x - 0.4 - lw, ly));
+    return { ...alts[0], alts, sortX: x - size / 2, sortW: 0 };
+  }
+  // Midt under ruteren, men innenfor kalenderen. Streken ned fra ruteren må treffe teksten.
+  const lx = Math.min(Math.max(x - lw / 2, leftLimit, x - lw + 0.3), rightLimit - lw, x - 0.3);
+  const v = make(lx, ly);
+  return { ...v, alts: [v], sortX: x - size / 2, sortW: 0 };
 }
 
 const MONTH_DARK = '#B4B4B4';

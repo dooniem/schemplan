@@ -329,6 +329,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
             if (m.symbol !== undefined) needEnum(m, 'symbol', mp, ['flag', 'diamond']);
             if (m.color !== undefined) needEnum(m, 'color', mp, ['red', 'yellow', 'green', 'blue', 'orange', 'black']);
             for (const k of ['verticalLine', 'showDate'] as const) if (m[k] !== undefined) needBool(m, k, mp);
+            if (m.rotation !== undefined) needEnum(m, 'rotation', mp, [0, 90, -90]);
           }
         }
         if (b.top !== undefined && !(typeof b.top === 'number' && Number.isFinite(b.top) && b.top >= 0)) err(`${bp}.top`, 'må være et tall, 0 eller større');
