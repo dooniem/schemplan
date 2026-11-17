@@ -1,8 +1,8 @@
 // Pil fra en fritekst i redigeringen: slå pilen av og på, dra pilspissen, og fest den til boksen
 // den slippes på. Pilen tegnes på nytt mens teksten eller spissen dras, uten å tegne hele planen.
-import type { PlanFile, PlanImage } from './format/types';
+import type { NoteArrow, PlanFile, PlanImage } from './format/types';
 import { itemRect, type Layout } from './layout/layout';
-import { arrowTip, defaultTip, placeArrow, storeTip, targetAt, type Rect } from './layout/arrow';
+import { arrowStyleOf, arrowTip, bendThrough, defaultTip, placeArrow, storeTip, targetAt, type Rect } from './layout/arrow';
 import type { PlacedImage, Pt } from './layout/image';
 import { drawArrow } from './render/svg';
 
@@ -39,11 +39,15 @@ export interface NoteArrows {
   draw(g: SVGGElement, im: PlanImage): void;
   /** Dra i pilspissen til den valgte friteksten. */
   startTipDrag(id: string): { moveXY(x: number, y: number): void; end(): void } | null;
+  /** Dra i knotten midt på streken for å kurve den. */
+  startBendDrag(id: string): { moveXY(x: number, y: number): void; end(): void } | null;
+  /** Endrer utseendet (tykkelse, farge, pilspiss, kurve) som ett angresteg. Udefinert fjerner valget. */
+  setStyle(id: string, change: Partial<Pick<NoteArrow, 'width' | 'color' | 'head' | 'bend'>>): void;
 }
 
 export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: string) => string): NoteArrows {
   /** Pilspissen mens den dras, og boksen den står på. */
-  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null } | null = null;
+  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null; bend?: number } | null = null;
 
   const rectOf = (id: string) => {
     const it = h.layout()?.items.find((i) => i.id === id);
@@ -56,6 +60,17 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
     return L && im.note?.arrow ? arrowTip(im.note.arrow, L.width, L.height, rectOf) : null;
   };
 
+  /** Utseendet, med kurven slik den dras akkurat nå. */
+  const styleOf = (im: PlanImage) => {
+    const st = arrowStyleOf(im);
+    return live?.id === im.id && live.bend !== undefined ? { ...st, bend: live.bend } : st;
+  };
+  const placedArrow = (im: PlanImage) => {
+    const p = h.placedOf(im.id);
+    const tip = tipOf(im);
+    return p && tip ? placeArrow(p, tip, styleOf(im)) : null;
+  };
+
   const redraw = (id: string) => {
     const plan = h.getPlan();
     const svg = h.svg();
@@ -65,7 +80,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
     if (!im?.note || !p || !layer) return;
     const old = layer.querySelector(`g[data-arrow="${CSS.escape(id)}"]`);
     const tip = tipOf(im);
-    const a = tip ? placeArrow(p, tip, im.note.sizePt, im.note.color ?? '#000000') : null;
+    const a = tip ? placeArrow(p, tip, styleOf(im)) : null;
     if (!a) return old?.remove();
     const g = drawArrow(a, layer);
     if (old) old.replaceWith(g);
@@ -94,7 +109,17 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
       if (!L || !tip) return;
       h.commit((pl) => {
         const x = h.findImage(pl, id);
-        if (x?.note?.arrow) x.note.arrow = storeTip(tip, L.width, L.height, null);
+        if (x?.note?.arrow) x.note.arrow = storeTip(tip, L.width, L.height, null, x.note.arrow);
+      });
+    },
+    setStyle(id, change) {
+      h.commit((pl) => {
+        const a = h.findImage(pl, id)?.note?.arrow;
+        if (!a) return;
+        for (const [k, v] of Object.entries(change) as [keyof typeof change, unknown][]) {
+          if (v === undefined) delete a[k];
+          else Object.assign(a, { [k]: v });
+        }
       });
     },
     targetOf(plan, im) {
@@ -119,8 +144,44 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
         const pad = 0.6;
         add('rect', { x: r.x - pad, y: r.y - pad, width: r.w + 2 * pad, height: r.h + 2 * pad, rx: 0.6, fill: 'none', stroke: h.accent, 'stroke-width': 1.5, 'stroke-dasharray': '4 3', 'vector-effect': 'non-scaling-stroke' });
       }
+      // Knotten midt på streken kurver den. En rute, så den ikke forveksles med spissen eller rotasjonen.
+      const pa = placedArrow(im);
+      if (pa) {
+        const m = pa.mid;
+        const s = 5 * k;
+        const b = add('rect', { x: m.x - s, y: m.y - s, width: 2 * s, height: 2 * s, transform: `rotate(45 ${m.x} ${m.y})`, fill: '#FFFFFF', stroke: h.accent, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle note-bend', 'pointer-events': 'all', cursor: 'move' });
+        b.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra for å kurve streken. Dra tilbake til midten for rett strek.' }));
+      }
       const c = add('circle', { cx: tip.x, cy: tip.y, r: 6 * k, fill: h.accent, 'fill-opacity': 0.18, stroke: h.accent, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle note-tip', 'pointer-events': 'all', cursor: 'move' });
       c.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra pilspissen dit pilen skal peke. Slipp den på en boks for at pilen skal følge boksen. Alt: ikke fest.' }));
+    },
+    startBendDrag(id) {
+      const plan = h.getPlan();
+      const im = plan ? h.findImage(plan, id) : null;
+      const tip = im ? tipOf(im) : null;
+      const p = h.placedOf(id);
+      if (!im?.note?.arrow || !tip || !p) return null;
+      const to = im.note.arrow.to;
+      const r = to ? rectOf(to.id) : null;
+      const target = to && r ? { id: to.id, rect: r } : null;
+      return {
+        moveXY(x, y) {
+          live = { id, tip, target, bend: bendThrough(p, tip, { x, y }) };
+          redraw(id);
+          h.overlay();
+        },
+        end() {
+          const done = live;
+          live = null;
+          if (done?.bend === undefined) return h.overlay();
+          h.commit((pl) => {
+            const a = h.findImage(pl, id)?.note?.arrow;
+            if (!a) return;
+            if (done.bend) a.bend = done.bend;
+            else delete a.bend;
+          });
+        },
+      };
     },
     startTipDrag(id) {
       const plan = h.getPlan();
@@ -142,7 +203,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
           if (!done || !L) return h.overlay();
           h.commit((pl) => {
             const x = h.findImage(pl, id);
-            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target);
+            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target, x.note.arrow);
           });
         },
       };

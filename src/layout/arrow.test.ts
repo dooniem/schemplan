@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanImage } from '../format/types';
-import { arrowStart, arrowTip, arrowWidth, defaultTip, placeArrow, placeArrows, storeTip, targetAt } from './arrow';
+import { arrowStart, bendControl, bendThrough, type ArrowStyle, arrowTip, arrowWidth, defaultTip, placeArrow, placeArrows, storeTip, targetAt } from './arrow';
 import { placeImage } from './image';
 
 const W = 420;
@@ -19,6 +19,7 @@ const note = (o: Partial<PlanImage> = {}): PlanImage => ({
   ...o,
 });
 const place = (o: Partial<PlanImage> = {}) => placeImage(note(o), W, H)!;
+const st = (o: Partial<ArrowStyle> = {}): ArrowStyle => ({ sizePt: 12, color: '#000000', ...o });
 
 describe('pil fra fritekst', () => {
   it('starter på kanten av teksten, på linjen fra midten mot spissen', () => {
@@ -43,16 +44,19 @@ describe('pil fra fritekst', () => {
   it('tegnes ikke når spissen står inne i teksten eller for nær', () => {
     const p = place();
     expect(arrowStart(p, { x: 105, y: 101 })).toBeNull();
-    expect(placeArrow(p, { x: 121, y: 100 }, 12, '#000000')).toBeNull();
-    expect(placeArrow(p, { x: 140, y: 100 }, 12, '#000000')).not.toBeNull();
+    expect(placeArrow(p, { x: 121, y: 100 }, st())).toBeNull();
+    expect(placeArrow(p, { x: 140, y: 100 }, st())).not.toBeNull();
   });
 
   it('har pilspissen på spissen, og streken slutter inne i den', () => {
-    const a = placeArrow(place(), { x: 200, y: 100 }, 12, '#C00000')!;
+    const a = placeArrow(place(), { x: 200, y: 100 }, st({ color: '#C00000' }))!;
     expect(a.head[0]).toEqual({ x: 200, y: 100 });
     expect(a.x2).toBe(200);
-    expect(a.lx).toBeLessThan(200);
-    expect(a.lx).toBeGreaterThan(a.head[1].x);
+    // Streken går fra kanten av teksten og slutter inne i pilspissen
+    const [, x1, , , lx] = a.d.split(' ');
+    expect(Number(x1)).toBeCloseTo(120.4);
+    expect(Number(lx)).toBeLessThan(200);
+    expect(Number(lx)).toBeGreaterThan(a.head[1].x);
     // Bakkant av spissen står loddrett på streken
     expect(a.head[1].x).toBeCloseTo(a.head[2].x);
     expect(a.color).toBe('#C00000');
@@ -103,5 +107,47 @@ describe('pil fra fritekst', () => {
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe('n');
     expect(out[0].color).toBe('#0070C0');
+  });
+
+  it('egen tykkelse i pt og pilspiss i tre størrelser', () => {
+    const p = place();
+    const tip = { x: 200, y: 100 };
+    expect(placeArrow(p, tip, st({ width: 3 }))!.width).toBeCloseTo((3 * 25.4) / 72);
+    const len = (h?: 'small' | 'large') => {
+      const a = placeArrow(p, tip, st({ head: h }))!;
+      return a.x2 - a.head[1].x;
+    };
+    expect(len('small')).toBeLessThan(len());
+    expect(len('large')).toBeGreaterThan(len());
+  });
+
+  it('kurvet strek: midten bøyes ut, og pilspissen peker langs kurven', () => {
+    const p = place();
+    const tip = { x: 200, y: 100 };
+    const a = placeArrow(p, tip, st({ bend: 0.3 }))!;
+    expect(a.d).toContain(' C ');
+    // Positiv bøyer mot venstre sett fra teksten: oppover når pilen går mot høyre
+    expect(a.mid.y).toBeLessThan(100);
+    // Pilspissen kommer skrått ovenfra, ikke rett fra venstre
+    expect(a.head[1].y).not.toBeCloseTo(a.head[2].y);
+    // Rett strek har ingen C
+    expect(placeArrow(p, tip, st())!.d).not.toContain(' C ');
+  });
+
+  it('kurven som går gjennom et punkt, og rett nær null', () => {
+    const p = place();
+    const tip = { x: 200, y: 100 };
+    const b = bendThrough(p, tip, { x: 160, y: 80 });
+    const a = placeArrow(p, tip, st({ bend: b }))!;
+    // Bare avstanden til siden teller; startpunktet på teksten flytter seg litt med kurven
+    expect(Math.abs(a.mid.y - 80)).toBeLessThan(2);
+    expect(bendThrough(p, tip, { x: 160, y: 100.5 })).toBe(0);
+    expect(bendControl(p, tip, 0)).toEqual({ x: 150, y: 100 });
+  });
+
+  it('flytter spissen uten å miste utseendet', () => {
+    const a = storeTip({ x: 10, y: 10 }, W, H, null, { x: 0, y: 0, to: { id: 'b', u: 0, v: 0 }, width: 2, color: '#FF0000', head: 'large', bend: 0.2 });
+    expect(a.to).toBeUndefined();
+    expect(a).toMatchObject({ width: 2, color: '#FF0000', head: 'large', bend: 0.2 });
   });
 });

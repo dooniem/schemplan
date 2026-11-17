@@ -161,7 +161,13 @@ export function validatePlan(input: string | unknown): ValidationResult {
           if (a === undefined) return true;
           if (!isObj(a) || !fin((a as Obj).x) || !fin((a as Obj).y)) return false;
           const to = (a as Obj).to;
-          return to === undefined || (isObj(to) && typeof (to as Obj).id === 'string' && uv((to as Obj).u) && uv((to as Obj).v));
+          const x = a as Obj;
+          const style =
+            (x.width === undefined || (fin(x.width) && (x.width as number) > 0)) &&
+            (x.color === undefined || (typeof x.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(x.color))) &&
+            (x.head === undefined || x.head === 'small' || x.head === 'large') &&
+            (x.bend === undefined || fin(x.bend));
+          return style && (to === undefined || (isObj(to) && typeof (to as Obj).id === 'string' && uv((to as Obj).u) && uv((to as Obj).v)));
         };
         const padOk = (p: unknown) => p === undefined || (Array.isArray(p) && p.length === 2 && p.every((v) => fin(v) && (v as number) >= 0));
         const ok = (im: unknown) => {

@@ -3,7 +3,8 @@
 // Valgt bilde får håndtak for størrelse og rotasjon. «Beskjær» gir kanthåndtak, «Rediger punkter» en mangekant.
 import type { PlanFile, NoteFont, PlanImage, PlanNote } from './format/types';
 import type { Layout } from './layout/layout';
-import type { createCtxMenu, CtxItem, IconName } from './ctxmenu';
+import { icon, type createCtxMenu, type CtxItem, type IconName } from './ctxmenu';
+import { ARROW_WIDTHS, arrowWidth } from './layout/arrow';
 import { loadNoteFont, NOTE_COLORS, NOTE_MAX_PAD, notePad, NOTE_DEFAULT, NOTE_FONTS, NOTE_MAX_PT, NOTE_MIN_PT, noteFontReady, PX_PER_MM, renderNote, shownPt } from './note';
 import { cropTo, frameCenter, frameCorners, frameUv, FULL, handleAt, HANDLES, keepPoint, movePoint, naturalSize, newImage, normDeg, rectPoints, resetSize, resizeBy, rotateBy, rotateTo, storeImage, toSheet, type Handle, type PlacedImage, type Pt } from './layout/image';
 import { drawImage } from './render/svg';
@@ -80,6 +81,29 @@ export function createImageEdit(ed: ImageEditHost) {
   let imageMode: ImageMode = 'none';
   /** Punktet som sist ble dratt i punktbeskjæringen (Delete sletter det). */
   let activePoint = -1;
+  /** Delen av tekstpanelet som er foldet ut, så den står åpen når panelet tegnes på nytt. Bare én om gangen. */
+  let openGroup: string | null = null;
+  const join = (parts: (string | false | undefined | null)[]) => parts.filter(Boolean).join(' · ');
+  /**
+   * Del av panelet som foldes ut, med en kort oppsummering av valgene når den er lukket, som
+   * «Formater figur» i Office. Gir innholdet.
+   */
+  const group = (key: string, title: string, summary: string) => {
+    const d = el('details', { class: 'psec pgroup', name: 'note-groups' }) as HTMLDetailsElement;
+    d.open = openGroup === key;
+    const sum = el('summary');
+    const head = el('span', { class: 'pg-head' });
+    head.append(el('h3', {}, title), el('span', { class: 'pg-sum' }, summary));
+    sum.append(icon('chevron', 'pico pg-chev'), head);
+    const body = el('div', { class: 'pg-body' });
+    d.append(sum, body);
+    d.addEventListener('toggle', () => {
+      if (d.open) openGroup = key;
+      else if (openGroup === key) openGroup = null;
+    });
+    panel.append(d);
+    return body;
+  };
   // Settes inn fra fildialogen (høyreklikk), utklippstavlen (Ctrl+V) eller ved å dra en fil inn på arket.
   // Valgt bilde får håndtak for størrelse og rotasjon. «Beskjær» gir kanthåndtak, «Rediger punkter» en mangekant.
   /** Siste punkt musen var over arket, i mm. Bilder fra utklippstavlen havner der. */
@@ -108,9 +132,9 @@ export function createImageEdit(ed: ImageEditHost) {
       return `«${(b && plainText(b.text)) || (b?.resolved?.isMilestone ? 'milepæl' : 'boks')}»`;
     },
   );
-  /** Dra i pilspissen til en fritekst. */
-  const tipDrag = (id: string): Drag | null => {
-    const d = noteArrows.startTipDrag(id);
+  /** Dra i pilspissen til en fritekst, eller i knotten midt på streken for å kurve den. */
+  const tipDrag = (id: string, bend = false): Drag | null => {
+    const d = bend ? noteArrows.startBendDrag(id) : noteArrows.startTipDrag(id);
     return d && { startY: 0, startClient: 0, moved: false, move() {}, moveXY: d.moveXY, end: d.end };
   };
   const milestonePt = (id: string): Pt | null => {
@@ -612,6 +636,17 @@ export function createImageEdit(ed: ImageEditHost) {
       lab.append(inp);
       return lab;
     };
+    const nb1 = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
+    const fwOf = (q: PlacedImage) => {
+      const f = frameUv(q.crop, q.points);
+      return (f[2] - f[0]) * q.w;
+    };
+    const fhOf = (q: PlacedImage) => {
+      const f = frameUv(q.crop, q.points);
+      return (f[3] - f[1]) * q.h;
+    };
+    /** Fritekst: delene av panelet kan foldes sammen, så panelet ikke blir for høyt. Bilder har vanlige deler. */
+    const block = (key: string, title: string, summary: string) => (im.note ? group(key, title, summary) : section(title));
 
     if (im.note) {
       const sn = section('Tekst');
@@ -622,8 +657,13 @@ export function createImageEdit(ed: ImageEditHost) {
       const pt = layoutNow ? shownPt(n, im.px, im.w, layoutNow.width) : n.sizePt;
       row.append(numField('Størrelse, pt', pt, 1, (v) => v >= NOTE_MIN_PT && v <= NOTE_MAX_PT && setNote(im.id, { sizePt: v }), 'note-size'));
       sn.append(row);
+      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med.'));
       // Skriften lastes nå, så den er klar hvis teksten dras større eller mindre
       if (!noteFontReady(n)) void loadNoteFont(n);
+
+      const fontName = NOTE_FONTS.find(([k]) => k === (n.font ?? ''))?.[1].split(' (')[0] ?? 'Carlito';
+      const colorName = (hex: string | undefined) => NOTE_COLORS.find(([c]) => c.toUpperCase() === (hex ?? '#000000').toUpperCase())?.[1] ?? 'Egen farge';
+      const sf = group('skrift', 'Skrift', join([fontName, n.bold && 'Fet', n.italic && 'Kursiv', n.underline && 'Understreket', colorName(n.color), n.align === 'center' ? 'Midtstilt' : n.align === 'right' ? 'Høyrejustert' : '']));
       const fontWrap = el('label', { class: 'prop prop-inline' });
       fontWrap.append(el('span', { class: 'prop-label' }, 'Skrift'));
       const fontSel = el('select', { id: 'note-font' }) as HTMLSelectElement;
@@ -635,7 +675,7 @@ export function createImageEdit(ed: ImageEditHost) {
       }
       fontSel.addEventListener('change', () => setNote(im.id, { font: (fontSel.value || undefined) as NoteFont | undefined }));
       fontWrap.append(fontSel);
-      sn.append(fontWrap);
+      sf.append(fontWrap);
       // Fet, kursiv og understreket kan kombineres, så de er av/på-knapper hver for seg
       const styleWrap = el('div', { class: 'prop prop-inline' });
       styleWrap.append(el('span', { class: 'prop-label' }, 'Stil'));
@@ -646,8 +686,8 @@ export function createImageEdit(ed: ImageEditHost) {
         styles.append(b);
       }
       styleWrap.append(styles);
-      sn.append(styleWrap);
-      sn.append(
+      sf.append(styleWrap);
+      sf.append(
         segmented<'left' | 'center' | 'right'>('Justering', n.align ?? 'left', [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
           setNote(im.id, { align: v === 'left' ? undefined : v }),
         ),
@@ -656,12 +696,16 @@ export function createImageEdit(ed: ImageEditHost) {
       const tc = trial(`note:${im.id}`, color, (fill) => setNote(im.id, { color: fill === '#000000' ? undefined : fill }));
       const colorWrap = el('div', { class: 'prop' });
       colorWrap.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(color, NOTE_COLORS, tc), colorRow(color, tc));
-      sn.append(colorWrap);
-      sn.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
+      sf.append(colorWrap);
+      sf.append(el('p', { class: 'hint' }, 'Justeringen gjelder når teksten har flere linjer.'));
+
+      const mm = (v: number) => Math.round(v * 10) / 10;
+      const [px, py] = notePad(n);
+      const nb = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
+      const sr = group('ramme', 'Ramme', n.frame ? `Hvit med ramme · luft ${nb(mm(px))} × ${nb(mm(py))} mm` : 'Av');
+      sr.append(switchRow('Hvit bakgrunn med ramme', !!n.frame, (v) => setNote(im.id, { frame: v })));
       if (n.frame) {
         // Luft inni rammen: sideveis og opp/ned hver for seg, så teksten kan stå løst i en stor ramme
-        const [px, py] = notePad(n);
-        const mm = (v: number) => Math.round(v * 10) / 10;
         const setPad = (i: 0 | 1, v: number) => {
           if (!(v >= 0 && v <= NOTE_MAX_PAD)) return;
           const pad: [number, number] = [mm(px), mm(py)];
@@ -670,22 +714,54 @@ export function createImageEdit(ed: ImageEditHost) {
         };
         const padRow = el('div', { class: 'row dates' });
         padRow.append(numField('Luft sideveis, mm', mm(px), 0.5, (v) => setPad(0, v), 'note-pad-x'), numField('Luft opp/ned, mm', mm(py), 0.5, (v) => setPad(1, v), 'note-pad-y'));
-        sn.append(padRow);
-        if (n.pad) sn.append(lockedRow('Egen luft i rammen', 'Standard', 'En halv skrifthøyde på alle sider', () => setNote(im.id, { pad: undefined })));
+        sr.append(padRow);
+        if (n.pad) sr.append(lockedRow('Egen luft i rammen', 'Standard', 'En halv skrifthøyde på alle sider', () => setNote(im.id, { pad: undefined })));
       }
-      sn.append(el('p', { class: 'hint' }, 'Enter gir ny linje. Justeringen gjelder når teksten har flere linjer. Dra i et hjørne for å endre størrelsen; skriftstørrelsen følger med. Teksten kan flyttes, roteres og festes til en dato som et bilde.'));
 
-      const sa = section('Pil');
-      sa.append(switchRow('Pil fra teksten', !!n.arrow, (v) => noteArrows.toggle(im.id, v), 'En strek med pilspiss fra kanten av teksten, som kan peke hvor som helst'));
-      if (n.arrow) {
-        const to = noteArrows.targetOf(plan, im);
+      const a = n.arrow;
+      const to = a ? noteArrows.targetOf(plan, im) : null;
+      const autoPt = Math.round(((arrowWidth(n.sizePt) * 72) / 25.4) * 4) / 4;
+      const widthPt = a?.width ?? autoPt;
+      const nb2 = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
+      const sa = group('pil', 'Pil', a ? join([to ? `Til ${to}` : 'Fri spiss', `${nb2(widthPt)} pt`, a.bend ? 'Kurvet' : '', a.color ? colorName(a.color) : '']) : 'Av');
+      sa.append(switchRow('Pil fra teksten', !!a, (v) => {
+        openGroup = 'pil';
+        noteArrows.toggle(im.id, v);
+      }, 'En strek med pilspiss fra kanten av teksten, som kan peke hvor som helst'));
+      if (a) {
         if (to) sa.append(lockedRow(`Peker på ${to}`, 'Løsne', 'Pilspissen blir stående der den er, og følger ikke boksen lenger', () => noteArrows.detach(im.id)));
+        // Tykkelse: som i Office, pluss «som teksten», som følger skriftstørrelsen
+        const wWrap = el('label', { class: 'prop prop-inline' });
+        wWrap.append(el('span', { class: 'prop-label' }, 'Tykkelse'));
+        const wSel = el('select', { id: 'arrow-width' }) as HTMLSelectElement;
+        const opt = (value: string, text: string, on: boolean) => {
+          const o = el('option', { value }, text) as HTMLOptionElement;
+          o.selected = on;
+          wSel.append(o);
+        };
+        opt('', `Etter teksten (${nb2(autoPt)} pt)`, a.width === undefined);
+        const widths = a.width !== undefined && !ARROW_WIDTHS.includes(a.width) ? [...ARROW_WIDTHS, a.width].sort((x, y) => x - y) : ARROW_WIDTHS;
+        for (const w of widths) opt(String(w), `${nb2(w)} pt`, a.width === w);
+        wSel.addEventListener('change', () => noteArrows.setStyle(im.id, { width: wSel.value ? Number(wSel.value) : undefined }));
+        wWrap.append(wSel);
+        sa.append(wWrap);
+        sa.append(segmented<'small' | 'medium' | 'large'>('Pilspiss', a.head ?? 'medium', [['small', 'Liten'], ['medium', 'Middels'], ['large', 'Stor']], (v) => noteArrows.setStyle(im.id, { head: v === 'medium' ? undefined : v })));
+        sa.append(segmented<'straight' | 'curved'>('Strek', a.bend ? 'curved' : 'straight', [['straight', 'Rett'], ['curved', 'Kurvet']], (v) => {
+          if (v === 'straight') noteArrows.setStyle(im.id, { bend: undefined });
+          else if (!a.bend) noteArrows.setStyle(im.id, { bend: 0.25 });
+        }));
+        const ac = (a.color ?? n.color ?? '#000000').toUpperCase();
+        const tca = trial(`arrow:${im.id}`, ac, (fill) => noteArrows.setStyle(im.id, { color: fill.toUpperCase() === (n.color ?? '#000000').toUpperCase() ? undefined : fill }));
+        const acWrap = el('div', { class: 'prop' });
+        acWrap.append(el('span', { class: 'prop-label' }, 'Farge'), swatches(ac, NOTE_COLORS, tca), colorRow(ac, tca));
+        sa.append(acWrap);
+        if (a.color) sa.append(lockedRow('Egen farge på pilen', 'Som teksten', 'Pilen får samme farge som teksten igjen', () => noteArrows.setStyle(im.id, { color: undefined })));
         sa.append(el('p', { class: 'hint' }, to
-          ? 'Pilen følger boksen når planen endres. Dra den runde knotten på pilspissen for å peke et annet sted.'
-          : 'Dra den runde knotten på pilspissen dit pilen skal peke. Slipper du den på en boks eller milepæl, følger pilen den når planen endres; hold Alt for å la være. Pilen har samme farge som teksten.'));
+          ? 'Pilen følger boksen når planen endres. Dra den runde knotten på spissen for å peke et annet sted, og ruten midt på streken for å kurve den.'
+          : 'Dra den runde knotten på spissen dit pilen skal peke. Slipper du den på en boks eller milepæl, følger pilen den; hold Alt for å la være. Dra ruten midt på streken for å kurve den.'));
       }
     }
-    const ss = section('Størrelse og rotasjon');
+    const ss = block('str', 'Størrelse og rotasjon', p ? `${nb1(cm(fwOf(p)))} × ${nb1(cm(fhOf(p)))} cm · ${nb1(Math.round(p.rotation * 10) / 10)}°` : '');
     if (p) {
       const f = frameUv(p.crop, p.points);
       const fw = (f[2] - f[0]) * p.w;
@@ -737,7 +813,7 @@ export function createImageEdit(ed: ImageEditHost) {
       );
     }
 
-    const sp = section('Plassering');
+    const sp = block('plass', 'Plassering', where);
     if (im.milestone) {
       sp.append(lockedRow('Følger milepælen', 'Løsne', 'Bildet blir stående der det er, og milepælen får sitt eget symbol igjen', () => pinImage(im.id, false)));
       const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
@@ -819,7 +895,10 @@ export function createImageEdit(ed: ImageEditHost) {
           { label: 'Roter 90° med klokken', icon: 'rotate', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, 90), x0)) },
           { label: 'Roter 90° mot klokken', icon: 'rotateLeft', hint: 'Dra i den runde knotten over bildet for å rotere fritt.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -90), x0)) },
           ...(im.note
-            ? [{ label: 'Pil fra teksten', icon: 'arrow' as const, checked: !!im.note.arrow, hint: im.note.arrow ? 'Fjerner pilen. Angre med Ctrl+Z.' : 'En strek med pilspiss fra kanten av teksten. Dra spissen dit den skal peke.', onSelect: () => noteArrows.toggle(id, !im.note!.arrow) }]
+            ? [{ label: 'Pil fra teksten', icon: 'arrow' as const, checked: !!im.note.arrow, hint: im.note.arrow ? 'Fjerner pilen. Angre med Ctrl+Z.' : 'En strek med pilspiss fra kanten av teksten. Dra spissen dit den skal peke.', onSelect: () => {
+                  openGroup = 'pil';
+                  noteArrows.toggle(id, !im.note!.arrow);
+                } }]
             : []),
           { label: 'Rett opp', icon: 'undo', disabled: !im.rotation, hint: im.rotation ? 'Fjerner rotasjonen.' : 'Bildet er ikke rotert.', onSelect: () => changePlaced(id, (q) => keepX(rotateBy(q, -q.rotation), x0)) },
         ],

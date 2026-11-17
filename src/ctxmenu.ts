@@ -45,6 +45,7 @@ const ICONS = {
   unpin: 'M12 16v5 M8 3h8 M9 3v5l-3 5h12l-3-5V3 M3 3l18 18',
   share: 'M12 15V3 M8 7l4-4 4 4 M5 12v8h14v-8',
   arrow: 'M5 19L19 5 M10 5h9v9',
+  chevron: 'M9 6l6 6-6 6',
 } as const;
 export type IconName = keyof typeof ICONS;
 
