@@ -365,6 +365,10 @@ export interface Box {
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>> & {
     /** Rotert milepælstekst. Uten valg gjelder `rotation`, eller −90 når `milestone.rotateText` er satt. */
     rotation?: Rotation;
+    /** Bare rotert tekst og flagg: stangen ligger øverst og flagget henger ned, teksten står under. */
+    flagTurned?: boolean;
+    /** Bare rotert tekst og ruter: ruteren står under teksten i stedet for over. */
+    diamondBelow?: boolean;
   };
   /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
   critical?: boolean;

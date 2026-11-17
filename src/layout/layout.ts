@@ -131,6 +131,8 @@ export interface MilestoneItem {
   verticalLine: boolean;
   /** Et bilde satt inn i appen er symbolet; flagget eller ruteren tegnes ikke. */
   imageSymbol?: boolean;
+  /** Snudd flagg: stangen ligger vannrett øverst og går mot høyre (1) eller venstre (−1) fra datoen. */
+  turned?: 1 | -1;
 }
 
 export type Item = BoxItem | MilestoneItem;
@@ -1585,12 +1587,13 @@ function milestonePiece(
 /**
  * Milepæl med rotert tekst. Linjene står side om side og henger ned fra toppen, nærmest symbolet.
  * Flagg: teksten står ved stangen, til høyre eller til venstre for duken, som uten rotasjon.
- * Ruter: alt er dreid en kvart omgang, så teksten står under ruteren. Streken går ned fra ruteren
- * til en vannrett strek over teksten.
+ * Snudd flagg: stangen ligger øverst, flagget henger ned fra den, og teksten står under flagget.
+ * Ruter: alt er dreid en kvart omgang, så teksten står under ruteren (eller over, når ruteren er
+ * valgt under teksten). Streken går fra ruteren til en vannrett strek langs teksten.
  */
 function rotatedMilestonePiece(
   box: Box,
-  style: { symbol: string; verticalLine?: boolean },
+  style: { symbol: string; verticalLine?: boolean; flagTurned?: boolean; diamondBelow?: boolean },
   fill: string,
   rot: 90 | -90,
   lines: string[],
@@ -1606,42 +1609,63 @@ function rotatedMilestonePiece(
   const flag = style.symbol === 'flag';
   const lw = lines.length * lh + 2 * PAD_Y;
   const lhTot = textW + 2 * PAD_X;
-  const make = (lx: number, ly: number): Variant => {
+  const s = size / 2;
+  const fits = (lx: number) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6;
+  // up: teksten henger ned fra toppen (mot symbolet over). Ellers står den mot symbolet under.
+  const make = (lx: number, ly: number, cy: number, ext: { x0: number; x1: number }, turned?: 1 | -1, up = true): Variant => {
+    const anchor: TextBlock['anchor'] = (rot === 90) === up ? 'start' : 'end';
     const item: MilestoneItem = {
       kind: 'milestone',
       id: box.id,
       x,
-      y: size / 2,
+      y: cy,
       size,
       symbol: flag ? 'flag' : 'diamond',
       color: fill,
-      // Leses ovenfra (90) eller nedenfra (−90): enden av teksten mot symbolet i begge tilfeller
-      label: { x: lx + lw / 2, y: ly + PAD_X, lines, boldLines, size: base, color: '#000000', anchor: rot === 90 ? 'start' : 'end', rotate: rot },
+      label: { x: lx + lw / 2, y: up ? ly + PAD_X : ly + lhTot - PAD_X, lines, boldLines, size: base, color: '#000000', anchor, rotate: rot },
       labelBox: { x: lx, y: ly, w: lw, h: lhTot },
       verticalLine: !!style.verticalLine,
+      ...(turned ? { turned } : {}),
     };
-    const sx0 = flag ? x - size * 1.25 : x - size / 2;
-    return { item, fx0: Math.min(sx0, lx), fx1: Math.max(x + size / 2, lx + lw), h: Math.max(size, ly + lhTot) };
+    return { item, fx0: Math.min(ext.x0, lx), fx1: Math.max(ext.x1, lx + lw), h: Math.max(cy + s, ly + lhTot) };
   };
+  const pick = (alts: Variant[], fallback: Variant, sortX: number): Piece => {
+    if (!alts.length) alts.push(fallback);
+    return { ...alts[0], alts, sortX, sortW: 0 };
+  };
+  const lxOf = (v: Variant) => (v.item.kind === 'milestone' ? v.item.labelBox.x : 0);
+  if (flag && style.flagTurned) {
+    // Stangen ligger langs toppen fra datoen og bortover, flagget henger ned fra den
+    const ly = FLAG_WAVE * s + 0.4;
+    const right = make(x, ly, s, { x0: x - 0.3, x1: x + FLAG_HOIST * s }, 1);
+    const left = make(x - lw, ly, s, { x0: x - FLAG_HOIST * s, x1: x + 0.3 }, -1);
+    return pick([right, left].filter((v) => fits(lxOf(v))), x + lw <= rightLimit ? right : left, x - s);
+  }
   if (flag) {
-    const right = x + 0.4;
-    const left = x - size * 1.25 - 0.4 - lw;
-    const alts = [right, left].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map((lx) => make(lx, 0));
-    if (!alts.length) alts.push(make(right + lw <= rightLimit ? right : left, 0));
-    return { ...alts[0], alts, sortX: x - size * 1.25, sortW: 0 };
+    const ext = { x0: x - size * 1.25, x1: x + s };
+    const right = make(x + 0.4, 0, s, ext);
+    const left = make(x - size * 1.25 - 0.4 - lw, 0, s, ext);
+    return pick([right, left].filter((v) => fits(lxOf(v))), x + 0.4 + lw <= rightLimit ? right : left, x - size * 1.25);
   }
-  const ly = size + 1.5;
+  const below = !!style.diamondBelow;
+  // Ruteren over: teksten under den. Ruteren under: teksten øverst, ruteren under den.
+  const ly = below ? 0 : size + 1.5;
+  const cy = below ? lhTot + 1.5 + s : s;
+  const ext = { x0: x - s, x1: x + s };
   if (style.verticalLine) {
-    // Den loddrette linjen går rett ned fra ruteren: teksten står ved siden av den, ikke over den
-    const alts = [x + 0.4, x - 0.4 - lw].filter((lx) => lx >= leftLimit - 1e-6 && lx + lw <= rightLimit + 1e-6).map((lx) => make(lx, ly));
-    if (!alts.length) alts.push(make(x + 0.4 + lw <= rightLimit ? x + 0.4 : x - 0.4 - lw, ly));
-    return { ...alts[0], alts, sortX: x - size / 2, sortW: 0 };
+    // Den loddrette linjen går gjennom ruteren: teksten står ved siden av den, ikke over den
+    const alts = [x + 0.4, x - 0.4 - lw].map((lx) => make(lx, ly, cy, ext, undefined, !below));
+    return pick(alts.filter((v) => fits(lxOf(v))), x + 0.4 + lw <= rightLimit ? alts[0] : alts[1], x - s);
   }
-  // Midt under ruteren, men innenfor kalenderen. Streken ned fra ruteren må treffe teksten.
+  // Midt under (eller over) ruteren, men innenfor kalenderen. Streken fra ruteren må treffe teksten.
   const lx = Math.min(Math.max(x - lw / 2, leftLimit, x - lw + 0.3), rightLimit - lw, x - 0.3);
-  const v = make(lx, ly);
-  return { ...v, alts: [v], sortX: x - size / 2, sortW: 0 };
+  const v = make(lx, ly, cy, ext, undefined, !below);
+  return { ...v, alts: [v], sortX: x - s, sortW: 0 };
 }
+
+/** Flagget: hvor langt duken vaier ut fra stangen, og hvor langt langs stangen den er festet, i halve symbolstørrelser. */
+export const FLAG_WAVE = 2.4;
+export const FLAG_HOIST = 1.1;
 
 const MONTH_DARK = '#B4B4B4';
 const MONTH_LIGHT = '#F7F7F7';

@@ -1422,8 +1422,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
       const stl = { ...base, ...b.milestoneStyle };
-      type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate' | 'rotation';
-      const fromProject: Record<string, unknown> = { ...base, rotation: baseMilestoneRotation(b) };
+      type MsKey = 'symbol' | 'color' | 'verticalLine' | 'showDate' | 'rotation' | 'flagTurned' | 'diamondBelow';
+      const fromProject: Record<string, unknown> = { ...base, rotation: baseMilestoneRotation(b), flagTurned: false, diamondBelow: false };
       const setMs = (k: MsKey, v: unknown) =>
         change((x) => {
           const m: Record<string, unknown> = { ...x.milestoneStyle };
@@ -1450,6 +1450,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         switchRow('Loddrett linje', stl.verticalLine, (v) => setMs('verticalLine', v), 'Strek fra milepælen ned gjennom planen'),
         segmented<Rotation>('Rotasjon', milestoneRotation(b), [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) => setMs('rotation', v)),
       );
+      // Symbolet kan bare snus når teksten er rotert
+      if (milestoneRotation(b) !== 0)
+        su.append(
+          stl.symbol === 'flag'
+            ? switchRow('Roter flagget', !!b.milestoneStyle?.flagTurned, (v) => setMs('flagTurned', v), 'Stangen øverst og flagget hengende ned, teksten under')
+            : switchRow('Ruteren under teksten', !!b.milestoneStyle?.diamondBelow, (v) => setMs('diamondBelow', v), 'Teksten står over ruteren i stedet for under'),
+        );
       if (b.milestoneStyle) su.append(btn('Bruk utseendet fra Project', null, () => change((x) => delete x.milestoneStyle), undefined, 'linkish'));
     } else {
       // Fag: valgt i appen går foran faget fra Project

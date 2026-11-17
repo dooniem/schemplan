@@ -1,4 +1,4 @@
-import { CHANGE_COLOR, type Layout, type TextBlock } from '../layout/layout';
+import { CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type Layout, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
@@ -257,11 +257,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
       if (it.imageSymbol) {
         // Bildet er symbolet og tegnes oppå planen sammen med de andre bildene
       } else if (it.symbol === 'diamond' && it.label.rotate) {
-        // Rotert: strek ned fra ruteren til en vannrett strek over teksten
+        // Rotert: strek fra ruteren til en vannrett strek langs teksten, over den eller under den
+        const below = lb.y < it.y;
+        const barY = below ? lb.y + lb.h : lb.y;
         // Med loddrett linje står teksten ved siden av: streken går da skrått bort til den vannrette streken
         const ex = it.verticalLine ? (lb.x >= it.x ? lb.x + Math.min(lb.w, 2) / 2 : lb.x + lb.w - Math.min(lb.w, 2) / 2) : Math.min(Math.max(it.x - s * 0.3, lb.x + 0.2), lb.x + lb.w - 0.2);
-        node('line', { x1: it.x, x2: ex, y1: it.y, y2: lb.y, stroke: LEADER, 'stroke-width': 0.3 }, g);
-        node('line', { x1: lb.x, x2: lb.x + lb.w, y1: lb.y, y2: lb.y, stroke: LEADER, 'stroke-width': 0.35 }, g);
+        node('line', { x1: it.x, x2: ex, y1: it.y, y2: barY, stroke: LEADER, 'stroke-width': 0.3 }, g);
+        node('line', { x1: lb.x, x2: lb.x + lb.w, y1: barY, y2: barY, stroke: LEADER, 'stroke-width': 0.35 }, g);
         node('path', { d: `M${r(it.x)} ${r(it.y - s)} L${r(it.x + s)} ${r(it.y)} L${r(it.x)} ${r(it.y + s)} L${r(it.x - s)} ${r(it.y)} Z`, fill: it.color, stroke: '#000000', 'stroke-width': 0.3 }, g);
       } else if (it.symbol === 'diamond') {
         // Ruter, strek bort til en loddrett strek foran teksten
@@ -270,12 +272,17 @@ export function renderPlan(L: Layout): SVGSVGElement {
         node('line', { x1: bar, x2: bar, y1: lb.y, y2: lb.y + lb.h, stroke: LEADER, 'stroke-width': 0.35 }, g);
         node('path', { d: `M${r(it.x)} ${r(it.y - s)} L${r(it.x + s)} ${r(it.y)} L${r(it.x)} ${r(it.y + s)} L${r(it.x - s)} ${r(it.y)} Z`, fill: it.color, stroke: '#000000', 'stroke-width': 0.3 }, g);
       } else {
-        // Flagg: stangen står på datoen og går ned langs teksten, duken vaier mot venstre
+        // Flagg: stangen står på datoen og går ned langs teksten, duken vaier mot venstre.
+        // Snudd flagg: stangen ligger øverst og går bortover fra datoen, duken henger ned fra den.
         const top = it.y - s;
-        node('line', { x1: it.x, x2: it.x, y1: top, y2: Math.max(it.y + s, lb.y + lb.h), stroke: '#404040', 'stroke-width': 0.3 }, g);
-        const fw = s * 2.4;
+        const d = it.turned;
+        // Punkt på duken, målt fra toppen av stangen: ut fra stangen (u) og langs den (v)
+        const at = (u: number, v: number) => (d ? `${r(it.x + d * v)} ${r(top + u)}` : `${r(it.x - u)} ${r(top + v)}`);
+        if (d) node('line', { x1: it.x, x2: it.x + d * Math.max(FLAG_HOIST * s + 0.3, lb.w), y1: top, y2: top, stroke: '#404040', 'stroke-width': 0.3 }, g);
+        else node('line', { x1: it.x, x2: it.x, y1: top, y2: Math.max(it.y + s, lb.y + lb.h), stroke: '#404040', 'stroke-width': 0.3 }, g);
+        const fw = s * FLAG_WAVE;
         node('path', {
-          d: `M${r(it.x)} ${r(top)} C${r(it.x - fw * 0.35)} ${r(top + s * 0.35)} ${r(it.x - fw * 0.6)} ${r(top - s * 0.15)} ${r(it.x - fw)} ${r(top + s * 0.45)} C${r(it.x - fw * 0.6)} ${r(top + s * 0.6)} ${r(it.x - fw * 0.35)} ${r(top + s)} ${r(it.x)} ${r(top + s * 1.1)} Z`,
+          d: `M${at(0, 0)} C${at(fw * 0.35, s * 0.35)} ${at(fw * 0.6, -s * 0.15)} ${at(fw, s * 0.45)} C${at(fw * 0.6, s * 0.6)} ${at(fw * 0.35, s)} ${at(0, s * FLAG_HOIST)} Z`,
           fill: it.color,
           stroke: '#1E4D1E',
           'stroke-width': 0.12,
