@@ -233,7 +233,7 @@ export const BOX_PALETTE: Swatch[] = (<[string, string][]>[
 
 /** Har brukeren endret lanen? */
 export function isLaneEdited(l: Lane): boolean {
-  return !!(l.original || l.height || l.hidden || l.manual || l.order || l.tintBackground);
+  return !!(l.original || l.height || l.hidden || l.manual || l.order || l.tintBackground || l.whiteText);
 }
 
 /** Tar vare på navn og farge fra Project før første endring. */
@@ -253,6 +253,7 @@ export function resetLane(l: Lane): void {
   delete l.order;
   delete l.mergedInto;
   delete l.tintBackground;
+  delete l.whiteText;
 }
 
 /** Ny lane laget i appen, rett etter lanen med id `afterId` (eller først). */

@@ -298,6 +298,8 @@ export interface Lane {
   mergedInto?: string;
   /** Lanefargen vises også dempet som bakgrunn bak boksene (valgfritt). */
   tintBackground?: boolean;
+  /** Hvit skrift på lanenavnet (valgfritt). Uten den er navnet svart. */
+  whiteText?: boolean;
 }
 
 export type Rotation = 0 | 90 | -90;

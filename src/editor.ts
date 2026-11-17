@@ -951,6 +951,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         }, { typing: true, rebuild: false }),
       ),
       el('p', { class: 'hint' }, 'Skriv | for linjeskift.'),
+      segmented('Tekstfarge', l.whiteText ? 'white' : 'black', [['black', 'Svart'], ['white', 'Hvit']], (v) =>
+        changeLane((x) => {
+          if (v === 'white') x.whiteText = true;
+          else delete x.whiteText;
+        }),
+      ),
     );
     // Lane-titlene har én felles størrelse, så korte navn ikke blir større enn lange
     if (layoutNow) {
@@ -1062,7 +1068,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const del = btn(l.manual ? 'Slett' : 'Skjul', l.manual ? 'trash' : 'hide', () => removeLaneById(l.id),
       l.manual ? 'Slett lanen. Egne bokser i den slettes, bokser fra Project flyttes tilbake. (Delete)' : 'Skjul lanen. Høyreklikk et lane-navn for å vise den igjen. (Delete)');
     del.disabled = vis.length <= 1 && pos >= 0;
-    const reset = btn('Tilbakestill', 'undo', () => changeLane((x) => resetLane(x)), 'Navn og farge fra Project, og automatisk høyde', 'button push');
+    const reset = btn('Tilbakestill', 'undo', () => changeLane((x) => resetLane(x)), 'Navn og farge fra Project, svart tekst og automatisk høyde', 'button push');
     reset.disabled = l.manual || !isLaneEdited(l);
     foot.append(btn('Ny lane', 'laneAdd', () => addLane(l.id), 'Ny lane rett under denne'), del, reset);
     panel.append(foot);
