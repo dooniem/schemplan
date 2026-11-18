@@ -41,12 +41,23 @@ function text(t: TextBlock, parent: Element) {
     attrs.transform = `rotate(${t.rotate} ${t.x} ${t.y})`;
   }
   const el = node('text', attrs, parent);
-  const n = t.lines.length;
+  // Datoraden (sub) er mindre enn resten, så linjeavstanden regnes per linje
+  const sub = t.sub;
+  const isSub = (i: number) => !!sub && i >= sub.from;
+  const hOf = (i: number) => (isSub(i) ? sub!.size * LINE_HEIGHT : lh);
+  const total = t.lines.reduce((sum, _l, i) => sum + hOf(i), 0);
   t.lines.forEach((line, i) => {
     const span = node('tspan', { x: t.x }, el);
-    if (t.rotate) span.setAttribute('dy', String(i === 0 ? (-(n - 1) * lh) / 2 : lh));
-    else if (i > 0) span.setAttribute('dy', String(lh));
+    // Rotert: linjene står side om side, sentrert om (x, y)
+    if (t.rotate) span.setAttribute('dy', String(i === 0 ? -(total - hOf(0)) / 2 : (hOf(i - 1) + hOf(i)) / 2));
+    else if (i > 0) span.setAttribute('dy', String(hOf(i)));
     if (t.boldLines?.[i]) span.setAttribute('font-weight', 'bold');
+    if (isSub(i)) {
+      span.setAttribute('font-size', String(Math.round(sub!.size * 1000) / 1000));
+      span.setAttribute('fill', sub!.color);
+      span.setAttribute('font-weight', 'normal');
+      span.setAttribute('class', 'box-dates');
+    }
     span.textContent = line;
   });
   return el;

@@ -94,6 +94,10 @@ export interface PlanSettings {
     legendScale?: number;
     /** Ikonene for høylytt arbeid og nattarbeid i forhold til standardstørrelsen (en tekstlinje). Lik for alle bokser. */
     markScale?: number;
+    /** Start- og sluttdato som egen rad i alle boksene. Hver boks kan ha eget valg (Box.showDates). */
+    showDates?: boolean;
+    /** Formatet på datoraden i boksene. Uten valg: dd.mm–dd.mm. */
+    dateFormat?: BoxDateFormat;
     /** Eget merke lastet opp i appen: navn og bilde (data-URL, PNG eller JPEG). Står ved siden av høylytt arbeid og nattarbeid. */
     customMark?: { name: string; image: string };
     /** Dagen planen sist ble endret i appen (YYYY-MM-DD). Datoen nederst er den nyeste av denne og eksporten. */
@@ -400,7 +404,20 @@ export interface Box {
   custom?: boolean;
   /** Tekststørrelse i boksen i forhold til planens tekst, valgt i appen (valgfritt). 1 = som planen, høyst 2. */
   textScale?: number;
+  /** Start- og sluttdato under teksten, valgt for boksen (valgfritt). Uten valg gjelder plan.layout.showDates. */
+  showDates?: boolean;
 }
+
+/** Formatet på datoraden i boksene. Eksemplene gjelder 03.11–14.11.2026. */
+export type BoxDateFormat =
+  | 'dm' // 03.11–14.11
+  | 'dmShort' // 3.11–14.11
+  | 'dmy' // 03.11.26–14.11.26
+  | 'dmyyyy' // 03.11.2026–14.11.2026
+  | 'dmon' // 3. nov–14. nov
+  | 'dmonyyyy' // 3. nov 2026–14. nov 2026
+  | 'wdm' // ti 03.11–lø 14.11
+  | 'week'; // uke 45–46
 
 export interface BoxFollow {
   /** Id-en til boksen det følges etter. */

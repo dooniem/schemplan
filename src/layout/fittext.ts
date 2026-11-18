@@ -4,6 +4,7 @@
 import { snapshotOf } from '../editmodel';
 import type { Box, PlanFile } from '../format/types';
 import { parseBoxText } from '../format/text';
+import { boxDateText, dateMinWidth, dateRows, DATE_SCALE, linesHeight } from './boxdates';
 import { computeLayout, defaultLaneTitleScale, layoutAtScale, laneTitleScaleOf, MAX_TEXT_SCALE, PAD_X, PAD_Y, rotatedLines, type BoxItem, type Layout, type LayoutOptions } from './layout';
 import { marksInset } from './marks';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
@@ -47,20 +48,28 @@ function candidates(planPt: number, scale = MAX_TEXT_SCALE): number[] {
 
 const sameFit = (a: Layout, b: Layout) => Math.abs(a.textScale - b.textScale) < EPS && (!b.overflow || a.overflow) && b.plot.y1 <= a.plot.y1 + EPS;
 
-/** Høyden teksten trenger i en boks med bredde w, eller null når den ikke får plass uten callout eller delte ord. */
-export function textHeightInBox(box: Pick<Box, 'text' | 'rotation' | 'callout'>, w: number, sizeMm: number, measure: Measure): number | null {
-  const raw = parseBoxText(box.text).lines;
+/**
+ * Høyden teksten trenger i en boks med bredde w, eller null når den ikke får plass uten callout eller delte ord.
+ * `dates` er datoraden under teksten, når den vises.
+ */
+export function textHeightInBox(box: Pick<Box, 'text' | 'rotation' | 'callout'>, w: number, sizeMm: number, measure: Measure, dates: string | null = null): number | null {
+  const parsed = parseBoxText(box.text).lines;
+  const raw = dates && parsed.every((l) => !l.trim()) ? [] : parsed;
   const lh = sizeMm * LINE_HEIGHT;
+  const ds = sizeMm * DATE_SCALE;
   if (box.rotation !== 0) {
-    const lines = rotatedLines(raw, w - 2 * PAD_X, sizeMm, measure);
-    if (lines.length * lh > w - 2 * PAD_X + EPS) return null;
-    return widest(lines, sizeMm, measure) + 2 * PAD_Y + 1;
+    const dRoom = dates ? ds * LINE_HEIGHT : 0;
+    const lines = rotatedLines(raw, w - 2 * PAD_X - dRoom, sizeMm, measure);
+    if (lines.length * lh + dRoom > w - 2 * PAD_X + EPS) return null;
+    return Math.max(widest(lines, sizeMm, measure), dates ? measure(dates, ds) : 0) + 2 * PAD_Y + 1;
   }
   const inner = Math.max(w - 2 * PAD_X, 0.5);
   const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
   if (words.some((wd) => measure(wd, sizeMm) > inner + EPS)) return null;
+  if (dates && dateMinWidth(dates, ds, measure) > inner + EPS) return null;
   const lines = wrapLines(raw, inner, sizeMm, measure);
-  const h = lines.length * lh + 2 * PAD_Y;
+  const dr = dates ? dateRows(dates, inner, ds, measure) : [];
+  const h = linesHeight(lines.length + dr.length, sizeMm, dr.length, ds) + 2 * PAD_Y;
   // Samme grense som gir callout når planen tegnes
   if (box.callout !== 'off' && w / h < 0.25) return null;
   return h;
@@ -114,7 +123,7 @@ export function fitTextToBoxes(file: PlanFile, opts: LayoutOptions, measure: Mea
       const w = textWidth(it);
       let best: { pt: number; h: number } | null = null;
       for (const pt of candidates(planPt)) {
-        const h = textHeightInBox(box, w, pt * PT_TO_MM, measure);
+        const h = textHeightInBox(box, w, pt * PT_TO_MM, measure, boxDateText(box, next));
         if (h !== null && h <= it.h + EPS) {
           best = { pt, h };
           break;
@@ -211,7 +220,7 @@ function growOnce(input: PlanFile, opts: LayoutOptions, measure: Measure, scope:
           const t = list[j];
           if (!t || t.done) continue;
           const pt = Math.floor((t.pt + STEP_PT + EPS) / STEP_PT) * STEP_PT;
-          if (pt > cap + EPS || textHeightInBox(t.box, t.w, pt * PT_TO_MM, measure) === null) {
+          if (pt > cap + EPS || textHeightInBox(t.box, t.w, pt * PT_TO_MM, measure, boxDateText(t.box, plan)) === null) {
             t.done = true;
             continue;
           }

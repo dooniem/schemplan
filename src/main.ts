@@ -1,4 +1,5 @@
 import './style.css';
+import { DATE_FORMAT_LABELS, DATE_FORMATS, DEFAULT_DATE_FORMAT, setDateFormat, setPlanDates, type DateFormat } from './layout/boxdates';
 import { fileTitle, lastPart } from './filename';
 import { checkOutboundBlocked } from './csp';
 import { a3Size, renderSheet, type Orientation } from './sheet';
@@ -777,6 +778,7 @@ function syncControls() {
   $<HTMLInputElement>('#show-today').checked = !!plan?.plan.layout.todayLine;
   $<HTMLInputElement>('#show-progress').checked = !!plan?.plan.layout.showProgress;
   $<HTMLInputElement>('#show-baseline').checked = !!plan?.plan.layout.showBaseline;
+  syncDateControls();
   $<HTMLInputElement>('#show-baseline').disabled = !plan?.tasks.some((t) => t.baselineFinish);
   const rev = plan?.plan.layout.revision;
   $<HTMLInputElement>('#rev-on').checked = !!rev?.on;
@@ -918,6 +920,27 @@ for (const [id, key] of [['#show-progress', 'showProgress'], ['#show-baseline', 
     plan.plan.layout[key] = (e.target as HTMLInputElement).checked;
     draw();
   });
+// Datoer på boksene: gjelder hele planen, og hver boks kan ha eget valg i redigeringen
+const dateFormatSel = $<HTMLSelectElement>('#date-format');
+for (const f of DATE_FORMATS) dateFormatSel.append(new Option(DATE_FORMAT_LABELS[f], f));
+function syncDateControls() {
+  const on = !!plan?.plan.layout.showDates;
+  $<HTMLInputElement>('#show-dates').checked = on;
+  $<HTMLInputElement>('#show-dates').disabled = !plan;
+  $<HTMLElement>('#date-format-row').hidden = !plan || !(on || plan.lanes.some((l) => l.boxes.some((b) => b.showDates)));
+  dateFormatSel.value = plan?.plan.layout.dateFormat ?? DEFAULT_DATE_FORMAT;
+}
+$<HTMLInputElement>('#show-dates').addEventListener('change', (e) => {
+  if (!plan) return;
+  setPlanDates(plan, (e.target as HTMLInputElement).checked);
+  syncDateControls();
+  draw();
+});
+dateFormatSel.addEventListener('change', () => {
+  if (!plan) return;
+  setDateFormat(plan, dateFormatSel.value as DateFormat);
+  draw();
+});
 $<HTMLInputElement>('#show-today').addEventListener('change', (e) => {
   if (!plan) return;
   plan.plan.layout.todayLine = (e.target as HTMLInputElement).checked;

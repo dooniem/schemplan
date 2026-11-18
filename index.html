@@ -190,6 +190,14 @@
               <input type="checkbox" id="show-baseline" role="switch" />
             </label>
             <label class="set-switch">
+              <span><strong>Datoer på boksene</strong><small>Start og slutt under teksten. Kan endres per boks i redigeringen.</small></span>
+              <input type="checkbox" id="show-dates" role="switch" />
+            </label>
+            <div class="set-switch-sub" id="date-format-row" hidden>
+              <label for="date-format">Format</label>
+              <select id="date-format"></select>
+            </div>
+            <label class="set-switch">
               <span><strong>Dagens dato</strong><small>Tynn stiplet linje på dagen i dag, også på PDF</small></span>
               <input type="checkbox" id="show-today" role="switch" />
             </label>
@@ -469,6 +477,7 @@
             <li>Hold musen over en boks for datoer.</li>
             <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Høylytt arbeid og nattarbeid i forklaringen fremheves på samme måte; med begge valgt kan du vise bare boksene som har begge. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
             <li>Start og slutt på tidsaksen velges under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Kalender og stil</span>. Bokser som stikker utenfor, får pil. Bokser helt utenfor vises ikke, men ligger urørt og kommer tilbake når kalenderen utvides.</li>
+            <li>Start- og sluttdato på boksene slås på under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Vis på arket</span>, der du også velger format. Datoen står under teksten, også i callouts. Høyreklikk en boks for å skru datoene av eller på for den.</li>
             <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
           </ul>
           <h4>Rediger</h4>

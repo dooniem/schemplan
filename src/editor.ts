@@ -23,6 +23,8 @@ import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
 import { inLine, styleOf } from './criticallines';
+import { datesMenuItem, datesRows } from './boxdatesui';
+import { setBoxDates } from './layout/boxdates';
 import { customMarkSection, markScaleRow, marksMenuItems, marksSection, pickMarkImage, removeCustomMark, setMarks, type CustomActions } from './marksui';
 import { MARK_KEYS, MARK_NAMES, markName, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
@@ -1225,6 +1227,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         })),
     );
 
+    if (plain.length) section('Tekst').append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
+
     const so = section('Callout');
     so.append(
       segmented('Vis', same((x) => x.callout ?? 'auto') ?? '', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
@@ -1474,6 +1478,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       el('p', { class: 'hint' }, 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.'),
     );
     if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
+    if (!ms) st.append(...datesRows(markKit, plan, [b], (v) => commit((pl) => setBoxDates(pl, [b.id], v))));
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
@@ -2868,6 +2873,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         },
         // Høylytt arbeid og nattarbeid: gjelder alle valgte bokser når boksen er blant dem
         ...(ms ? [] : [{ items: marksMenuItems(plan, marksTargets(plan, id), (k: MarkKind, v: boolean) => commit((pl) => setMarks(pl, marksTargets(plan, id).map((x) => x.id), k, v))) }]),
+        // Datoene: gjelder alle valgte bokser når boksen er blant dem
+        ...(ms ? [] : [{ items: [datesMenuItem(plan, marksTargets(plan, id), (v) => commit((pl) => setBoxDates(pl, marksTargets(plan, id).map((x) => x.id), v)))] }]),
         {
           items: [
             { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
