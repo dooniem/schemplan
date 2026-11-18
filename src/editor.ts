@@ -227,7 +227,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.plan.layout.markScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(critical.mode));
     sheet.classList.toggle('critical-mode', active && critical.mode);
@@ -3069,6 +3069,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     delete plan.plan.layout.headerRightScale;
     delete plan.plan.layout.legendScale;
     delete plan.plan.layout.logoScale;
+    delete plan.plan.layout.markScale;
     host.redraw();
     buildPanel();
     syncTools();

@@ -32,7 +32,9 @@ export function giveHeight(b: Box, h: number, need: number): HeightResult {
 export function heightsOf(L: Layout, id: string): { h: number; need: number } | null {
   const it = L.items.find((i) => i.id === id);
   if (!it || it.kind !== 'box') return null;
-  return { h: lines(it.h, L.unit), need: lines((it as BoxItem).minH ?? it.h, L.unit) };
+  // Høyden lagres med flere desimaler enn ellers, så boksene blir helt like høye som kilden
+  const exact = (mm: number) => Math.round((mm / L.unit) * 10000) / 10000;
+  return { h: exact(it.h), need: lines((it as BoxItem).minH ?? it.h, L.unit) };
 }
 
 /** Gir boksene `ids` samme høyde som `src`. Gir hvor mange som fikk callout eller ble høyere. */

@@ -18,6 +18,13 @@ describe('tilbakestill boks', () => {
     expect(isEdited(b)).toBe(false);
     expect('fill' in b || 'callout' in b || 'original' in b).toBe(false);
   });
+  it('eget valg for datoer på boksen er en endring som tilbakestilles', () => {
+    const b = testplan().lanes[0].boxes[0];
+    b.showDates = false;
+    expect(isEdited(b)).toBe(true);
+    resetBox(b);
+    expect('showDates' in b).toBe(false);
+  });
 });
 
 describe('nye, kopierte, flyttede og skjulte bokser', () => {

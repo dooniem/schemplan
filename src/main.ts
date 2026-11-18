@@ -886,7 +886,8 @@ for (const menu of [$<HTMLElement>('#menu-sheet'), $<HTMLElement>('#menu-lookahe
     'change',
     (e) => {
       const t = e.target as HTMLInputElement;
-      if (plan && (t.type === 'checkbox' || t.type === 'date' || t.type === 'file')) editor.record();
+      // Nedtrekkslister (f.eks. datoformatet) endrer også planen
+      if (plan && (t.type === 'checkbox' || t.type === 'date' || t.type === 'file' || t.tagName === 'SELECT')) editor.record();
     },
     true,
   );
