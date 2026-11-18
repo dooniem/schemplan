@@ -492,6 +492,8 @@ details summary { cursor: pointer; font-size: 13px; }
 .trial-chip { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1px solid var(--border); border-radius: 3px; vertical-align: -2px; }
 .range-value { min-width: 48px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .prop-inline .row input[type='range'] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.prop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.prop.transparency input[type='range'] { width: 100%; margin: 0; accent-color: var(--accent); }
 .panel-foot { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface); }
 .panel-foot .button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; white-space: nowrap; font-size: 12px; }
 .panel-foot .button .pico { width: 14px; height: 14px; }

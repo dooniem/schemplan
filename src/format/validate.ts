@@ -3,6 +3,7 @@ import { migrate } from './migrate';
 import { readLookahead } from '../layout/lookahead';
 import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
+import { transparencyOk } from '../layout/transparency';
 
 export interface ValidationResult {
   /** Satt når filen kan brukes. Advarsler kan likevel finnes. */
@@ -328,6 +329,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.critical !== undefined && typeof b.critical !== 'boolean' && !(Array.isArray(b.critical) && b.critical.length && b.critical.every((n, i, a) => (n === 1 || n === 2 || n === 3) && a.indexOf(n) === i)))
           err(`${bp}.critical`, 'må være true, false eller en liste med linjenumre fra 1 til 3');
         for (const k of ['hidden', 'manual', 'header', 'loud', 'night', 'custom', 'textMiddle', 'bold', 'showDates'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        if (b.transparency !== undefined && !transparencyOk(b.transparency)) err(`${bp}.transparency`, 'må være et helt tall fra 0 til 90');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');

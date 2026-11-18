@@ -34,7 +34,7 @@ export interface MergeReport {
 }
 
 /** Felt som bare settes i appen og følger boksen. */
-const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'spanEnd', 'compactTop', 'compactSpanEnd', 'textMiddle', 'bold', 'milestoneStyle', 'critical', 'loud', 'night', 'custom', 'textScale', 'calloutWidthCm', 'showDates'] as const;
+const APP_FIELDS = ['fill', 'textColor', 'callout', 'calloutSide', 'height', 'top', 'hidden', 'header', 'spanTo', 'spanEnd', 'compactTop', 'compactSpanEnd', 'textMiddle', 'bold', 'transparency', 'milestoneStyle', 'critical', 'loud', 'night', 'custom', 'textScale', 'calloutWidthCm', 'showDates'] as const;
 /** Valg fra appen som ligger i plan.layout. */
 const APP_LAYOUT = ['orientation', 'heightMode', 'textSize', 'paper', 'style', 'fitToSheet', 'minTextSize', 'titleSize', 'title', 'headerRight', 'showLegend', 'showBottomCalendar', 'minHolidayDays', 'calendarMode', 'calendarRange', 'logo', 'tradeColors', 'appTrades', 'criticalLine', 'criticalLine2', 'criticalLine3', 'lookahead', 'statusLine', 'laneTitleScale', 'legendItems', 'headerRightScale', 'legendScale', 'markScale', 'customMark', 'editedAt', 'logoScale', 'calloutMaxWidthCm', 'images', 'planArea', 'showChanges', 'todayLine', 'revision', 'showProgress', 'showBaseline', 'laneGroups', 'showDates', 'dateFormat'] as const;
 

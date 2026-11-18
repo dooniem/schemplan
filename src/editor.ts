@@ -22,6 +22,8 @@ import { contentWords, createLanePick, laneName } from './lanepick';
 import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
+import { transparencyRow, type TransparencyKit } from './transparencyui';
+import { canBeTransparent } from './layout/transparency';
 import { inLine, styleOf } from './criticallines';
 import { datesMenuItem, datesRows } from './boxdatesui';
 import { setBoxDates } from './layout/boxdates';
@@ -1157,6 +1159,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
   const markKit = { section, switchRow, el };
+  const transparencyKit: TransparencyKit = {
+    el,
+    snapshot,
+    box: () => {
+      const pl = host.getPlan();
+      return pl && selected ? findBox(pl, selected) : null;
+    },
+    redraw: () => host.redraw(),
+    syncTools,
+  };
   /** Størrelsen på alle ikonene for høylytt arbeid og nattarbeid. */
   const setMarkScale = (v: number | undefined) =>
     commit((pl) => {
@@ -1547,6 +1559,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           }),
         ),
       );
+      // Bokser som ligger bak de andre kan gjøres gjennomsiktige, så linjene bak synes
+      if (canBeTransparent(b)) sc.lastElementChild!.before(transparencyRow(transparencyKit, b));
 
       const so = section('Callout');
       so.append(

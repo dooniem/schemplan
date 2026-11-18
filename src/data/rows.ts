@@ -68,6 +68,7 @@ function changesOf(b: Box): string[] {
   if (b.spanTo !== undefined) c.push('multi lane-boks');
   if (b.bold) c.push('fet skrift');
   if (b.textMiddle) c.push('tekst i midten');
+  if (b.transparency) c.push('gjennomsiktig');
   if (b.milestoneStyle) c.push('milepælsutseende');
   if (b.textScale !== undefined) c.push('tekststørrelse');
   if (b.follows) c.push('følger en annen boks');

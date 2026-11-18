@@ -382,6 +382,11 @@ export interface Box {
   textMiddle?: boolean;
   /** Fet tekst i overskrifts- og Multi Lane-bokser (valgfritt). */
   bold?: boolean;
+  /**
+   * Gjennomsiktig fyll på overskrifts- og Multi Lane-bokser, i prosent fra 0 til 90 (valgfritt).
+   * Kanten og teksten er hele.
+   */
+  transparency?: number;
   /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>> & {
     /** Rotert milepælstekst. Uten valg gjelder `rotation`, eller −90 når `milestone.rotateText` er satt. */

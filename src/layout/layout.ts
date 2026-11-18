@@ -11,6 +11,7 @@ import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
+import { seenFill, transparencyOf } from './transparency';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
@@ -122,6 +123,8 @@ export interface BoxItem {
   header?: boolean;
   /** Multi Lane-boks: går ned til bunnen av en lane lenger ned, uten å gjøre noen lane høyere. */
   span?: boolean;
+  /** Gjennomsiktig fyll (0–1) på overskrifts- og Multi Lane-bokser. Uten er fyllet helt. */
+  fillOpacity?: number;
   /** Ikoner for høylytt arbeid og nattarbeid på høyre kant. */
   marks?: BoxMarks;
   /** Høyden på boksen med én tekstlinje, som ikonene stilles etter. */
@@ -1327,8 +1330,11 @@ function buildPieces(
     const c = colors.get(trade) ?? noneColor;
     // Farge valgt i appen går foran fagets farge
     const fill = box.fill ?? c.fill ?? '#FFFFFF';
-    // Ny stil, eller egen farge: svart eller hvit tekst etter kontrast. Kant i mørkere utgave av fyllet.
-    const textColor = box.textColor ?? (ny || box.fill ? autoTextColor(fill) : (c.text ?? '#000000'));
+    // Gjennomsiktig boks bak de andre: teksten og datoen velges etter fargen slik den ser ut på arket
+    const see = transparencyOf(box);
+    const bg = seenFill(fill, see);
+    // Ny stil, egen farge eller gjennomsiktig: svart eller hvit tekst etter kontrast. Kant i mørkere utgave av fyllet.
+    const textColor = box.textColor ?? (ny || box.fill || see ? autoTextColor(bg) : (c.text ?? '#000000'));
     // Datoraden under teksten: litt mindre og dempet. En boks uten tekst viser bare datoen.
     const dt = boxDateText(box, file);
     const ds = bs * DATE_SCALE;
@@ -1353,6 +1359,7 @@ function buildPieces(
       callout: null,
       arrowLeft: s < axis.start,
       arrowRight: f >= axis.end,
+      ...(see ? { fillOpacity: 1 - see / 100 } : {}),
     };
 
     // Brukerens valg går foran forslaget. "*" først i teksten (fra Excel) betyr callout.
@@ -1378,7 +1385,7 @@ function buildPieces(
       // Datoraden står ved siden av teksten, så teksten får litt mindre plass i bredden
       lines = rotatedLines(nameLines, tw - 2 * PAD_X - (dt ? ds * LINE_HEIGHT : 0), bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
       item.h = Math.max(Math.max(widest(lines, bs, measure), dt ? measure(dt, ds) : 0) + 2 * PAD_Y + 1, marksH());
-      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, fill) };
+      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, bg) };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
@@ -1418,7 +1425,7 @@ function buildPieces(
           if (best.m) item.marks = best.m;
           item.h = Math.max(h, marksH());
           const tw = w - inset();
-          item.text = { x: bx0 + tw / 2, y: firstBase(best.ls.length), lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}), ...sub(best.ls.length, textColor, fill) };
+          item.text = { x: bx0 + tw / 2, y: firstBase(best.ls.length), lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}), ...sub(best.ls.length, textColor, bg) };
         }
       }
     }
