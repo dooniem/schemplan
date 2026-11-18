@@ -2,6 +2,7 @@
 // der endringen kan beholdes eller angres. Boksene som ble flyttet, merkes til det er avgjort.
 import type { PlanFile } from './format/types';
 import type { ArrangeOptions, ArrangeResult, Item, Layout } from './layout/layout';
+import { plainText } from './format/text';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { bounds, findBox, findLane, inHeaderBox, laneOf, lines, samePlanApartFromImages, snapshotOf, unpinBox } from './editmodel';
 
@@ -52,8 +53,8 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
     const lane = selectedLane ? findLane(plan, selectedLane) : selected ? laneOf(plan, selected) : null;
     // Lane-navnene har én felles størrelse, så med et lane-navn valgt gjelder tekstknappene alle navnene
     if (lane && selectedLane)
-      return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}». Tekstknappene gjelder også navnene på alle lanes.`, titles: true };
-    if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${lane.name.replace(/\|/g, ' ')}».` };
+      return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${plainText(lane.name)}». Tekstknappene gjelder også navnene på alle lanes.`, titles: true };
+    if (lane) return { laneIds: [lane.id], boxIds: null, text: `Gjelder lanen «${plainText(lane.name)}».` };
     return { laneIds: shownLanes.map((l) => l.id), boxIds: null, text: 'Gjelder hele planen. Velg en lane eller bokser først for at det bare skal gjelde dem.', whole: true, titles: true };
   };
 

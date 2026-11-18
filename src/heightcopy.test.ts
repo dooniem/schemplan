@@ -22,6 +22,17 @@ describe('samme høyde som en annen boks', () => {
     expect(validatePlan(p).errors).toEqual([]);
   });
 
+  it('blir helt like høy, uten avrundingsavvik', () => {
+    const p = testplan();
+    const [src, a] = boxes(p);
+    // Høyden kilden har på arket, er sjelden et rundt antall tekstlinjer
+    src.height = 4.123;
+    const L = computeLayout(p, opts, approxMeasure);
+    sameHeight(p, L, src.id, [a.id]);
+    const after = computeLayout(p, opts, approxMeasure);
+    expect(Math.abs(item(after, a.id).h - item(after, src.id).h)).toBeLessThan(0.002);
+  });
+
   it('flytter teksten ut i callout når den ikke får plass i den lavere høyden', () => {
     const p = testplan();
     const [src, a] = boxes(p);

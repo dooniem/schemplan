@@ -71,6 +71,7 @@ function changesOf(b: Box): string[] {
   if (b.transparency) c.push('gjennomsiktig');
   if (b.milestoneStyle) c.push('milepælsutseende');
   if (b.textScale !== undefined) c.push('tekststørrelse');
+  if (b.showDates !== undefined) c.push(b.showDates ? 'datoer vist' : 'datoer skjult');
   if (b.follows) c.push('følger en annen boks');
   if (b.hidden) c.push('skjult');
   return c;
