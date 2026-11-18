@@ -42,7 +42,7 @@ export interface ImageEditKit {
   swatches: (current: string | null, list: Swatch[], t: Trial | ((fill: string) => void)) => HTMLDivElement;
   colorRow: (value: string, t: Trial, back?: Back | Back[]) => DocumentFragment;
   lockedRow: (text: string, button: string, title: string, onClick: () => void) => HTMLDivElement;
-  textField: (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => HTMLTextAreaElement;
+  textField: (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks?: boolean) => HTMLElement;
   buildPanel: () => void;
   overlay: () => void;
   toMm: (clientX: number, clientY: number) => { x: number; y: number };

@@ -13,7 +13,7 @@ export interface GroupKit {
   panel: HTMLElement;
   panelHead: (title: string, sub?: string) => void;
   section: (title: string) => HTMLElement;
-  textField: (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => HTMLTextAreaElement;
+  textField: (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks?: boolean) => HTMLElement;
   btn: (text: string, ico: IconName | null, onClick: () => void, title?: string, cls?: string) => HTMLButtonElement;
   swatches: (current: string | null, list: Swatch[], t: Trial) => HTMLElement;
   colorRow: (value: string, t: Trial) => DocumentFragment;
@@ -41,8 +41,8 @@ export function buildLaneGroupPanel(k: GroupKit, plan: PlanFile, g: LaneGroup): 
 
   const st = k.section('Tekst');
   st.append(
-    k.textField('group-name', 'Tekst', g.name, '2', (v) => k.change(g.id, (x) => (x.name = v), { typing: true, rebuild: false })),
-    el('p', { class: 'hint' }, 'Står loddrett i baren, lest nedenfra. Skriv | for linjeskift.'),
+    k.textField('group-name', 'Tekst', g.name, '2', (v) => k.change(g.id, (x) => (x.name = v), { typing: true, rebuild: false }), true),
+    el('p', { class: 'hint' }, 'Står loddrett i baren, lest nedenfra. Enter eller | gir linjeskift.'),
   );
 
   const sc = k.section('Farge');
