@@ -44,10 +44,56 @@ export const arrowWidth = (sizePt: number) => Math.min(1.4, Math.max(0.2, sizePt
 export const headLength = (width: number) => Math.max(1.8, width * 6.5);
 
 /** Hvor pilspissen står: i boksen den er festet til, eller der den ble sluppet. */
-export function arrowTip(a: NoteArrow, W: number, H: number, rectOf: (id: string) => Rect | null): Pt {
+export function arrowTip(a: NoteArrow, W: number, H: number, rectOf: (id: string) => Rect | null, line?: number[] | null): Pt {
+  const onLine = a.line !== undefined && line ? polyAt(line, a.line) : null;
+  if (onLine) return onLine;
   const r = a.to ? rectOf(a.to.id) : null;
   if (r && a.to) return { x: r.x + a.to.u * r.w, y: r.y + a.to.v * r.h };
   return { x: a.x * W, y: a.y * H };
+}
+
+/** Lengden av en brutt linje gitt som x0,y0,x1,y1,… */
+const polyLen = (pts: number[]) => {
+  let len = 0;
+  for (let i = 2; i + 1 < pts.length; i += 2) len += Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
+  return len;
+};
+
+/** Punktet så langt ut langs linjen (0 til 1), eller null uten linje. */
+export function polyAt(pts: number[], t: number): Pt | null {
+  if (pts.length < 4) return null;
+  let left = Math.min(1, Math.max(0, t)) * polyLen(pts);
+  for (let i = 2; i + 1 < pts.length; i += 2) {
+    const seg = Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
+    if (left <= seg || i + 3 >= pts.length) {
+      const k = seg > 1e-9 ? Math.min(1, left / seg) : 0;
+      return { x: pts[i - 2] + (pts[i] - pts[i - 2]) * k, y: pts[i - 1] + (pts[i + 1] - pts[i - 1]) * k };
+    }
+    left -= seg;
+  }
+  return { x: pts[0], y: pts[1] };
+}
+
+/** Nærmeste punkt på linjen, hvor langt ut det er (0 til 1) og avstanden dit. */
+export function nearestOnPoly(pts: number[], q: Pt): { pt: Pt; t: number; dist: number } | null {
+  if (pts.length < 4) return null;
+  const total = polyLen(pts);
+  let best: { pt: Pt; t: number; dist: number } | null = null;
+  let run = 0;
+  for (let i = 2; i + 1 < pts.length; i += 2) {
+    const ax = pts[i - 2];
+    const ay = pts[i - 1];
+    const dx = pts[i] - ax;
+    const dy = pts[i + 1] - ay;
+    const seg2 = dx * dx + dy * dy;
+    const k = seg2 > 1e-12 ? Math.min(1, Math.max(0, ((q.x - ax) * dx + (q.y - ay) * dy) / seg2)) : 0;
+    const pt = { x: ax + dx * k, y: ay + dy * k };
+    const dist = Math.hypot(q.x - pt.x, q.y - pt.y);
+    const seg = Math.sqrt(seg2);
+    if (!best || dist < best.dist) best = { pt, t: total > 0 ? (run + seg * k) / total : 0, dist };
+    run += seg;
+  }
+  return best;
 }
 
 /** Er punktet inne i mangekanten? */
@@ -176,14 +222,14 @@ export const arrowStyleOf = (im: PlanImage): ArrowStyle => {
 };
 
 /** Pilene til friteksten som vises. placed er bildene slik de står på arket. */
-export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: number, H: number, rectOf: (id: string) => Rect | null): PlacedArrow[] {
+export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: number, H: number, rectOf: (id: string) => Rect | null, line?: number[] | null): PlacedArrow[] {
   const byId = new Map(placed.map((p) => [p.id, p]));
   const out: PlacedArrow[] = [];
   for (const im of images) {
     const a = im.note?.arrow;
     const p = byId.get(im.id);
     if (!a || !p || !im.note) continue;
-    const pa = placeArrow(p, arrowTip(a, W, H, rectOf), arrowStyleOf(im));
+    const pa = placeArrow(p, arrowTip(a, W, H, rectOf, line), arrowStyleOf(im));
     if (pa) out.push(pa);
   }
   return out;
@@ -193,10 +239,15 @@ const r4 = (v: number) => Math.round(v * 10000) / 10000;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Lagrer pilspissen: som andel av arket, og som plass i boksen den står på, hvis noen. */
-export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null, keep?: NoteArrow): NoteArrow {
+export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null, keep?: NoteArrow, line?: number): NoteArrow {
   // Utseendet beholdes; bare plassen og festet byttes
   const a: NoteArrow = { ...keep, x: r4(tip.x / W), y: r4(tip.y / H) };
   delete a.to;
+  delete a.line;
+  if (line !== undefined) {
+    a.line = r4(clamp01(line));
+    return a;
+  }
   if (target) {
     const r = target.rect;
     a.to = { id: target.id, u: r4(clamp01(r.w ? (tip.x - r.x) / r.w : 0.5)), v: r4(clamp01(r.h ? (tip.y - r.y) / r.h : 0.5)) };

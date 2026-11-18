@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanImage } from '../format/types';
-import { arrowStart, bendControl, bendThrough, type ArrowStyle, arrowTip, arrowWidth, defaultTip, placeArrow, placeArrows, storeTip, targetAt } from './arrow';
+import { nearestOnPoly, polyAt, arrowStart, bendControl, bendThrough, type ArrowStyle, arrowTip, arrowWidth, defaultTip, placeArrow, placeArrows, storeTip, targetAt } from './arrow';
 import { placeImage } from './image';
 
 const W = 420;
@@ -149,5 +149,23 @@ describe('pil fra fritekst', () => {
     const a = storeTip({ x: 10, y: 10 }, W, H, null, { x: 0, y: 0, to: { id: 'b', u: 0, v: 0 }, width: 2, color: '#FF0000', head: 'large', bend: 0.2 });
     expect(a.to).toBeUndefined();
     expect(a).toMatchObject({ width: 2, color: '#FF0000', head: 'large', bend: 0.2 });
+  });
+
+  it('festet til den kritiske linjen: står like langt ut langs linjen når den endres', () => {
+    // Trapp: 10 bort, 10 ned, 20 bort (lengde 40)
+    const line = [0, 0, 10, 0, 10, 10, 30, 10];
+    expect(polyAt(line, 0.5)).toEqual({ x: 10, y: 10 });
+    expect(polyAt(line, 0.75)).toEqual({ x: 20, y: 10 });
+    const near = nearestOnPoly(line, { x: 12, y: 13 })!;
+    expect(near.pt).toEqual({ x: 12, y: 10 });
+    expect(near.t).toBeCloseTo(22 / 40);
+    expect(near.dist).toBeCloseTo(3);
+    const a = storeTip(near.pt, W, H, { id: 'b', rect: { x: 0, y: 0, w: 5, h: 5 } }, undefined, near.t);
+    expect(a.to).toBeUndefined();
+    expect(a.line).toBeCloseTo(0.55);
+    // Linjen er flyttet ned: spissen følger
+    expect(arrowTip(a, W, H, () => null, [0, 20, 10, 20, 10, 30, 30, 30]).y).toBeCloseTo(30);
+    // Ingen kritisk linje: der den ble sluppet
+    expect(arrowTip(a, W, H, () => null, null).x).toBeCloseTo(12, 0);
   });
 });

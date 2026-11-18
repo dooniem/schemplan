@@ -729,7 +729,7 @@ export function createImageEdit(ed: ImageEditHost) {
         noteArrows.toggle(im.id, v);
       }, 'En strek med pilspiss fra kanten av teksten, som kan peke hvor som helst'));
       if (a) {
-        if (to) sa.append(lockedRow(`Peker på ${to}`, 'Løsne', 'Pilspissen blir stående der den er, og følger ikke boksen lenger', () => noteArrows.detach(im.id)));
+        if (to) sa.append(lockedRow(`Peker på ${to}`, 'Løsne', 'Pilspissen blir stående der den er, og følger den ikke lenger', () => noteArrows.detach(im.id)));
         // Tykkelse: som i Office, pluss «som teksten», som følger skriftstørrelsen
         const wWrap = el('label', { class: 'prop prop-inline' });
         wWrap.append(el('span', { class: 'prop-label' }, 'Tykkelse'));
@@ -757,8 +757,8 @@ export function createImageEdit(ed: ImageEditHost) {
         sa.append(acWrap);
         if (a.color) sa.append(lockedRow('Egen farge på pilen', 'Som teksten', 'Pilen får samme farge som teksten igjen', () => noteArrows.setStyle(im.id, { color: undefined })));
         sa.append(el('p', { class: 'hint' }, to
-          ? 'Pilen følger boksen når planen endres. Dra den runde knotten på spissen for å peke et annet sted, og ruten midt på streken for å kurve den.'
-          : 'Dra den runde knotten på spissen dit pilen skal peke. Slipper du den på en boks eller milepæl, følger pilen den; hold Alt for å la være. Dra ruten midt på streken for å kurve den.'));
+          ? `Pilen følger ${to === 'den kritiske linjen' ? 'linjen' : 'boksen'} når planen endres. Dra den runde knotten på spissen for å peke et annet sted, og ruten midt på streken for å kurve den.`
+          : 'Dra den runde knotten på spissen dit pilen skal peke. Slipper du den på en boks, en milepæl eller den kritiske linjen, følger pilen den; hold Alt for å la være. Dra ruten midt på streken for å kurve den.'));
       }
     }
     const ss = block('str', 'Størrelse og rotasjon', p ? `${nb1(cm(fwOf(p)))} × ${nb1(cm(fhOf(p)))} cm · ${nb1(Math.round(p.rotation * 10) / 10)}°` : '');
