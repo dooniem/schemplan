@@ -14,7 +14,7 @@ import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from 
 import type { PlanImage } from './format/types';
 import { type AreaEdge, createAreaEdit } from './areaedit';
 import { createArrangeUi } from './arrangeui';
-import { createPushHint, pinAt, pinOffset, pushDown, settle } from './pushmove';
+import { createPushHint, pieceHeight, pieceRect, pinAt, pinOffset, pushDown, settle } from './pushmove';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
@@ -1948,6 +1948,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       span: boolean;
       /** Høyden som teller i lanen: for Multi Lane-bokser bare teksten øverst. */
       fh: number;
+      /** Fra toppen av tegningen (bounds) ned til der plassen i lanen regnes fra (milepæler). */
+      off: number;
       /** Kanten som snapper: selve boksen, ikke callouten. */
       bh: number;
       sideways: boolean;
@@ -1966,12 +1968,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (!home) return null;
       // Multi Lane-boks: i lanen tar den bare plass til teksten øverst, så det er den som flyttes innenfor lanen
       const span = o.kind === 'box' && !!o.span;
-      const fh = span ? Math.min((o as BoxItem).minH ?? r.y1 - r.y0, r.y1 - r.y0) : r.y1 - r.y0;
+      const fh = span ? Math.min((o as BoxItem).minH ?? r.y1 - r.y0, r.y1 - r.y0) : pieceHeight(o);
       // Egne bokser og milepæler kan også dras sidelengs til nye datoer (ikke når de følger en annen boks)
       const b = plan0 ? findBox(plan0, o.id) : null;
       const sideways = !!b?.manual && !b.follows && !!b.resolved && !(o.kind === 'box' && (o.header || o.span));
       const kids = o.kind === 'box' && o.header && !o.span ? L.items.filter((k) => inHeaderBox(o, k)).map((k) => ({ id: k.id, dy: bounds(k).y0 - r.y0 })) : [];
-      return { it: o, r, home, span, fh, bh: o.kind === 'box' ? o.h : fh, sideways, kids, lane: home, y: r.y0 };
+      return { it: o, r, home, span, fh, off: pinOffset(o), bh: o.kind === 'box' ? o.h : fh, sideways, kids, lane: home, y: r.y0 };
     };
     const lead = unitOf(it);
     if (!lead) return null;
@@ -2004,14 +2006,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     /** Plassen for `u` når toppen ønskes ved `top`. `exact`: toppen skal ikke rundes av (snappet, eller fulgt av en annen). */
     const place = (u: Unit, top: number, exact: boolean) => {
       // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
-      const lane = laneAt(clamp(top + u.fh / 2, first.y0, lastLane.y1 - 1e-3)) ?? u.home;
+      // Regnes fra plassen i lanen; for en milepæl ligger den litt under toppen av tegningen (u.off)
+      const lane = laneAt(clamp(top + u.off + u.fh / 2, first.y0, lastLane.y1 - 1e-3)) ?? u.home;
       const pad = lane.top - lane.y0;
-      const maxY = Math.max(lane.top, lane.y1 - pad - u.fh);
+      const maxY = Math.max(lane.top, lane.y1 - pad - u.fh) - u.off;
       // Ellers trinn på en kvart tekstlinje
-      const want = exact ? top : lane.top + Math.round((top - lane.top) / (unit / 4)) * (unit / 4);
+      const want = exact ? top : lane.top - u.off + Math.round((top + u.off - lane.top) / (unit / 4)) * (unit / 4);
       // I samme lane står bunnen av en Multi Lane-boks fast, så toppen kan flyttes ned uten at bunnen følger
       u.lane = lane;
-      u.y = clamp(want, lane.top, u.span && lane === u.home ? Math.min(maxY, u.r.y1 - u.fh) : maxY);
+      u.y = clamp(want, lane.top - u.off, u.span && lane === u.home ? Math.min(maxY, u.r.y1 - u.fh) : maxY);
       return want;
     };
     /** Med Ctrl: hvilke bokser som skyves ned, og skyggene som viser hvor de havner. */
@@ -2020,15 +2023,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (pushOn)
         for (const lane of new Set(moving.map((u) => u.lane))) {
           const dx = (u: Unit) => (u.sideways ? xShift : 0);
-          const movers = moving.filter((u) => u.lane === lane).map((u) => ({ id: u.it.id, x0: u.r.x0 + dx(u), x1: u.r.x1 + dx(u), y0: u.y, y1: u.y + (u.span ? u.fh : u.r.y1 - u.r.y0) }));
+          const movers = moving.filter((u) => u.lane === lane).map((u) => ({ id: u.it.id, x0: u.r.x0 + dx(u), x1: u.r.x1 + dx(u), y0: u.y + u.off, y1: u.y + u.off + u.fh }));
           // Overskrifts- og Multi Lane-bokser skyves ikke; boksene inni en overskriftsboks som flyttes, følger den
-          const others = L.items.filter((o) => laneOfId.get(o.id) === lane.id && !skip.has(o.id) && !(o.kind === 'box' && (o.header || o.span))).map((o) => ({ id: o.id, ...bounds(o) }));
+          const others = L.items.filter((o) => laneOfId.get(o.id) === lane.id && !skip.has(o.id) && !(o.kind === 'box' && (o.header || o.span))).map(pieceRect);
           for (const [id, y] of pushDown(movers, others)) pushed.set(id, { y, lane });
         }
       for (const [id, e] of pushGhosts) if (!pushed.has(id)) (e.remove(), pushGhosts.delete(id));
       for (const [id, { y }] of pushed) {
         const o = L.items.find((i) => i.id === id)!;
-        const b = bounds(o);
+        const b = pieceRect(o);
         let e = pushGhosts.get(id);
         if (!e) {
           e = shape(g, 'rect', { x: b.x0, width: b.x1 - b.x0, height: b.y1 - b.y0, fill: ACCENT, 'fill-opacity': 0.08, stroke: ACCENT, 'stroke-width': 0.3, 'stroke-dasharray': '0.6 0.6' });
@@ -2129,8 +2132,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           applyMove(plan);
           for (const [id, { y, lane }] of pushed) {
             const b = findBox(plan, id);
-            const o = L.items.find((i) => i.id === id);
-            if (b) pinAt(b, lines(y + (o ? pinOffset(o) : 0) - lane.top, unit), L.compact);
+            if (b) pinAt(b, lines(y - lane.top, unit), L.compact);
           }
         };
         const trial = snapshotOf(plan0!);
