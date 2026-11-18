@@ -171,7 +171,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
             (x.width === undefined || (fin(x.width) && (x.width as number) > 0)) &&
             (x.color === undefined || (typeof x.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(x.color))) &&
             (x.head === undefined || x.head === 'small' || x.head === 'large') &&
-            (x.bend === undefined || fin(x.bend));
+            (x.bend === undefined || fin(x.bend)) &&
+            (x.line === undefined || uv(x.line));
           return style && (to === undefined || (isObj(to) && typeof (to as Obj).id === 'string' && uv((to as Obj).u) && uv((to as Obj).v)));
         };
         const padOk = (p: unknown) => p === undefined || (Array.isArray(p) && p.length === 2 && p.every((v) => fin(v) && (v as number) >= 0));

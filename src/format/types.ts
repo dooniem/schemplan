@@ -184,6 +184,11 @@ export interface NoteArrow {
    * fra 0 til 1 fra venstre og fra toppen. Vises ikke boksen, brukes x og y.
    */
   to?: { id: string; u: number; v: number };
+  /**
+   * Pilspissen står på den kritiske linjen, så langt ut langs den (0 er starten, 1 slutten), og
+   * følger linjen når den endres. Uten kritisk linje brukes x og y.
+   */
+  line?: number;
   /** Strekbredde i pt; uten den følger den skriftstørrelsen. */
   width?: number;
   /** Farge på streken og pilspissen; uten den samme som teksten. */

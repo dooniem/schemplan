@@ -1180,6 +1180,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     if (!(t >= axis.start && t < axis.end)) return null;
     return (axis.xStart(t) + axis.xEnd(t)) / 2;
   };
+  const critical = criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT);
   const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
   return {
     width: W,
@@ -1218,9 +1219,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     arrows: placeArrows(file.plan.layout.images ?? [], images, W, H, (id) => {
       const it = items.find((i) => i.id === id);
       return it ? itemRect(it) : null;
-    }),
+    }, critical?.points),
     xOfDate,
-    critical: criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT),
+    critical,
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,

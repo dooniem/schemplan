@@ -2,7 +2,7 @@
 // den slippes på. Pilen tegnes på nytt mens teksten eller spissen dras, uten å tegne hele planen.
 import type { NoteArrow, PlanFile, PlanImage } from './format/types';
 import { itemRect, type Layout } from './layout/layout';
-import { arrowStyleOf, arrowTip, bendThrough, defaultTip, placeArrow, storeTip, targetAt, type Rect } from './layout/arrow';
+import { arrowStyleOf, arrowTip, bendThrough, nearestOnPoly, defaultTip, placeArrow, storeTip, targetAt, type Rect } from './layout/arrow';
 import type { PlacedImage, Pt } from './layout/image';
 import { drawArrow } from './render/svg';
 
@@ -47,7 +47,14 @@ export interface NoteArrows {
 
 export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: string) => string): NoteArrows {
   /** Pilspissen mens den dras, og boksen den står på. */
-  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null; bend?: number } | null = null;
+  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null; bend?: number; line?: number } | null = null;
+  /** Den kritiske linjen slik den er tegnet, eller null. */
+  const linePts = () => {
+    const pts = h.layout()?.critical?.points;
+    return pts && pts.length >= 4 ? pts : null;
+  };
+  /** Står pilspissen på den kritiske linjen (nå, eller der den slippes)? */
+  const onLine = (im: PlanImage) => (live?.id === im.id ? live.line !== undefined : im.note?.arrow?.line !== undefined && !!linePts());
 
   const rectOf = (id: string) => {
     const it = h.layout()?.items.find((i) => i.id === id);
@@ -57,7 +64,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
   const tipOf = (im: PlanImage): Pt | null => {
     const L = h.layout();
     if (live?.id === im.id) return live.tip;
-    return L && im.note?.arrow ? arrowTip(im.note.arrow, L.width, L.height, rectOf) : null;
+    return L && im.note?.arrow ? arrowTip(im.note.arrow, L.width, L.height, rectOf, linePts()) : null;
   };
 
   /** Utseendet, med kurven slik den dras akkurat nå. */
@@ -123,6 +130,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
       });
     },
     targetOf(plan, im) {
+      if (onLine(im)) return 'den kritiske linjen';
       const to = im.note?.arrow?.to;
       return to && rectOf(to.id) ? nameOf(plan, to.id) : null;
     },
@@ -138,7 +146,13 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
         return e;
       };
       // Boksen pilen er festet til (eller blir festet til når den slippes)
-      const target = live?.id === im.id ? live.target : im.note.arrow.to ? { id: im.note.arrow.to.id, rect: rectOf(im.note.arrow.to.id) } : null;
+      const target = onLine(im) ? null : live?.id === im.id ? live.target : im.note.arrow.to ? { id: im.note.arrow.to.id, rect: rectOf(im.note.arrow.to.id) } : null;
+      // Festet til den kritiske linjen: linjen markeres stiplet
+      const pts = onLine(im) ? linePts() : null;
+      if (pts) {
+        const d = pts.reduce((acc, v, i) => acc + (i % 2 ? ` ${v}` : `${i ? ' L' : 'M'} ${v}`), '');
+        add('path', { d, fill: 'none', stroke: h.accent, 'stroke-width': 3, 'stroke-opacity': 0.35, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' });
+      }
       if (target?.rect) {
         const r = target.rect;
         const pad = 0.6;
@@ -153,7 +167,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
         b.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra for å kurve streken. Dra tilbake til midten for rett strek.' }));
       }
       const c = add('circle', { cx: tip.x, cy: tip.y, r: 6 * k, fill: h.accent, 'fill-opacity': 0.18, stroke: h.accent, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', class: 'edit-handle note-tip', 'pointer-events': 'all', cursor: 'move' });
-      c.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra pilspissen dit pilen skal peke. Slipp den på en boks for at pilen skal følge boksen. Alt: ikke fest.' }));
+      c.append(Object.assign(document.createElementNS(NS, 'title'), { textContent: 'Dra pilspissen dit pilen skal peke. Slipp den på en boks eller den kritiske linjen for at pilen skal følge den. Alt: ikke fest.' }));
     },
     startBendDrag(id) {
       const plan = h.getPlan();
@@ -164,9 +178,10 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
       const to = im.note.arrow.to;
       const r = to ? rectOf(to.id) : null;
       const target = to && r ? { id: to.id, rect: r } : null;
+      const line = im.note.arrow.line !== undefined && linePts() ? im.note.arrow.line : undefined;
       return {
         moveXY(x, y) {
-          live = { id, tip, target, bend: bendThrough(p, tip, { x, y }) };
+          live = { id, tip, target, line, bend: bendThrough(p, tip, { x, y }) };
           redraw(id);
           h.overlay();
         },
@@ -192,7 +207,12 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
         // Knotten sitter på spissen, så spissen følger musen
         moveXY(x, y) {
           const tip = { x, y };
-          live = { id, tip, target: h.snapOff() ? null : targetAt(tip, targets()) };
+          // Nær den kritiske linjen (omtrent åtte skjermpunkter) fanges spissen av den, foran boksene den går langs
+          const pts = h.snapOff() ? null : linePts();
+          const near = pts ? nearestOnPoly(pts, tip) : null;
+          if (near && near.dist <= 8 * h.mmPerPx()) {
+            live = { id, tip: near.pt, target: null, line: near.t };
+          } else live = { id, tip, target: h.snapOff() ? null : targetAt(tip, targets()) };
           redraw(id);
           h.overlay();
         },
@@ -203,7 +223,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
           if (!done || !L) return h.overlay();
           h.commit((pl) => {
             const x = h.findImage(pl, id);
-            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target, x.note.arrow);
+            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target, x.note.arrow, done.line);
           });
         },
       };
