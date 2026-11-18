@@ -172,7 +172,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
             (x.color === undefined || (typeof x.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(x.color))) &&
             (x.head === undefined || x.head === 'small' || x.head === 'large') &&
             (x.bend === undefined || fin(x.bend)) &&
-            (x.line === undefined || uv(x.line));
+            (x.line === undefined || uv(x.line)) &&
+            (x.lineNo === undefined || x.lineNo === 2 || x.lineNo === 3);
           return style && (to === undefined || (isObj(to) && typeof (to as Obj).id === 'string' && uv((to as Obj).u) && uv((to as Obj).v)));
         };
         const padOk = (p: unknown) => p === undefined || (Array.isArray(p) && p.length === 2 && p.every((v) => fin(v) && (v as number) >= 0));
@@ -202,12 +203,13 @@ export function validatePlan(input: string | unknown): ValidationResult {
       }
       if (lay.appTrades !== undefined && !(Array.isArray(lay.appTrades) && lay.appTrades.every((v) => typeof v === 'string' && v.trim())))
         err('plan.layout.appTrades', 'må være en liste med fagnavn');
-      if (lay.criticalLine !== undefined) {
-        const c = lay.criticalLine;
+      for (const key of ['criticalLine', 'criticalLine2', 'criticalLine3'] as const) {
+        const c = lay[key];
+        if (c === undefined) continue;
         if (!isObj(c) || !(typeof c.width === 'number' && c.width > 0 && c.width <= 10) || !(typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color)))
-          err('plan.layout.criticalLine', 'må ha width (mm, over 0 og høyst 10) og color som #RRGGBB');
+          err(`plan.layout.${key}`, 'må ha width (mm, over 0 og høyst 10) og color som #RRGGBB');
         else if (c.dash !== undefined && !['solid', 'dashed', 'dotted'].includes(c.dash as string))
-          err('plan.layout.criticalLine.dash', 'må være solid, dashed eller dotted');
+          err(`plan.layout.${key}.dash`, 'må være solid, dashed eller dotted');
       }
       if (lay.lookahead !== undefined && !readLookahead(lay.lookahead))
         err('plan.layout.lookahead', 'må ha on, from (null, status eller år og uke), prevWeek, length (weeks eller år og uke) og hideEmptyLanes');
@@ -317,7 +319,9 @@ export function validatePlan(input: string | unknown): ValidationResult {
         optPos(b, 'height', bp);
         if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
         if (b.calloutWidthCm !== undefined && !(typeof b.calloutWidthCm === 'number' && b.calloutWidthCm >= 1 && b.calloutWidthCm <= 15)) err(`${bp}.calloutWidthCm`, 'må være et tall fra 1 til 15');
-        for (const k of ['hidden', 'manual', 'header', 'critical', 'loud', 'night', 'custom', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        if (b.critical !== undefined && typeof b.critical !== 'boolean' && !(Array.isArray(b.critical) && b.critical.length && b.critical.every((n, i, a) => (n === 1 || n === 2 || n === 3) && a.indexOf(n) === i)))
+          err(`${bp}.critical`, 'må være true, false eller en liste med linjenumre fra 1 til 3');
+        for (const k of ['hidden', 'manual', 'header', 'loud', 'night', 'custom', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');

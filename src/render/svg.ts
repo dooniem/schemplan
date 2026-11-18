@@ -339,11 +339,12 @@ export function renderPlan(L: Layout): SVGSVGElement {
       node('rect', { 'data-for': c.id, x: c.x0 - pad, y: c.y - pad, width: c.x1 - c.x0 + pad * 2, height: c.h + pad * 2, rx: 0.6, fill: 'none', stroke: CHANGE_COLOR, 'stroke-width': c.kind === 'new' ? 0.6 : 0.4, ...(c.kind === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, cg);
   }
 
-  if (L.critical && L.critical.points.length >= 4) {
-    const pts = L.critical.points;
-    const d = pts.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
-    const dash = dashArray(L.critical.dash, L.critical.width);
-    node('path', { class: 'critical-line', d, fill: 'none', stroke: L.critical.color, 'stroke-width': L.critical.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...(dash ? { 'stroke-dasharray': dash.map(r).join(' ') } : {}), 'pointer-events': 'none' }, svg);
+  // Linje 1 tegnes sist, så den ligger øverst der linjene møtes
+  for (const c of [...L.criticals].reverse()) {
+    if (c.points.length < 4) continue;
+    const d = c.points.reduce((acc, v, k) => acc + (k % 2 === 0 ? `${k === 0 ? 'M' : ' L'}${r(v)}` : ` ${r(v)}`), '');
+    const dash = dashArray(c.dash, c.width);
+    node('path', { class: 'critical-line', 'data-line': c.n, d, fill: 'none', stroke: c.color, 'stroke-width': c.width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...(dash ? { 'stroke-dasharray': dash.map(r).join(' ') } : {}), 'pointer-events': 'none' }, svg);
   }
 
   // Linjen for i dag: tynn og stiplet, så den ikke forveksles med statuslinjen

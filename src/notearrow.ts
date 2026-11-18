@@ -47,14 +47,19 @@ export interface NoteArrows {
 
 export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: string) => string): NoteArrows {
   /** Pilspissen mens den dras, og boksen den står på. */
-  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null; bend?: number; line?: number } | null = null;
-  /** Den kritiske linjen slik den er tegnet, eller null. */
-  const linePts = () => {
-    const pts = h.layout()?.critical?.points;
+  let live: { id: string; tip: Pt; target: { id: string; rect: Rect } | null; bend?: number; line?: number; lineNo?: number } | null = null;
+  /** Kritisk linje n slik den er tegnet, eller null. */
+  const linePts = (n = 1) => {
+    const pts = h.layout()?.criticals.find((c) => c.n === n)?.points;
     return pts && pts.length >= 4 ? pts : null;
   };
-  /** Står pilspissen på den kritiske linjen (nå, eller der den slippes)? */
-  const onLine = (im: PlanImage) => (live?.id === im.id ? live.line !== undefined : im.note?.arrow?.line !== undefined && !!linePts());
+  /** Linjen pilspissen står på (nå, eller der den slippes), eller null. */
+  const lineOfTip = (im: PlanImage): number | null => {
+    if (live?.id === im.id) return live.line !== undefined ? (live.lineNo ?? 1) : null;
+    const a = im.note?.arrow;
+    return a?.line !== undefined && linePts(a.lineNo ?? 1) ? (a.lineNo ?? 1) : null;
+  };
+  const onLine = (im: PlanImage) => lineOfTip(im) !== null;
 
   const rectOf = (id: string) => {
     const it = h.layout()?.items.find((i) => i.id === id);
@@ -64,7 +69,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
   const tipOf = (im: PlanImage): Pt | null => {
     const L = h.layout();
     if (live?.id === im.id) return live.tip;
-    return L && im.note?.arrow ? arrowTip(im.note.arrow, L.width, L.height, rectOf, linePts()) : null;
+    return L && im.note?.arrow ? arrowTip(im.note.arrow, L.width, L.height, rectOf, linePts) : null;
   };
 
   /** Utseendet, med kurven slik den dras akkurat nå. */
@@ -147,8 +152,9 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
       };
       // Boksen pilen er festet til (eller blir festet til når den slippes)
       const target = onLine(im) ? null : live?.id === im.id ? live.target : im.note.arrow.to ? { id: im.note.arrow.to.id, rect: rectOf(im.note.arrow.to.id) } : null;
-      // Festet til den kritiske linjen: linjen markeres stiplet
-      const pts = onLine(im) ? linePts() : null;
+      // Festet til en kritisk linje: linjen markeres
+      const n = lineOfTip(im);
+      const pts = n !== null ? linePts(n) : null;
       if (pts) {
         const d = pts.reduce((acc, v, i) => acc + (i % 2 ? ` ${v}` : `${i ? ' L' : 'M'} ${v}`), '');
         add('path', { d, fill: 'none', stroke: h.accent, 'stroke-width': 3, 'stroke-opacity': 0.35, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' });
@@ -178,10 +184,11 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
       const to = im.note.arrow.to;
       const r = to ? rectOf(to.id) : null;
       const target = to && r ? { id: to.id, rect: r } : null;
-      const line = im.note.arrow.line !== undefined && linePts() ? im.note.arrow.line : undefined;
+      const lineNo = im.note.arrow.lineNo ?? 1;
+      const line = im.note.arrow.line !== undefined && linePts(lineNo) ? im.note.arrow.line : undefined;
       return {
         moveXY(x, y) {
-          live = { id, tip, target, line, bend: bendThrough(p, tip, { x, y }) };
+          live = { id, tip, target, line, lineNo, bend: bendThrough(p, tip, { x, y }) };
           redraw(id);
           h.overlay();
         },
@@ -207,11 +214,15 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
         // Knotten sitter på spissen, så spissen følger musen
         moveXY(x, y) {
           const tip = { x, y };
-          // Nær den kritiske linjen (omtrent åtte skjermpunkter) fanges spissen av den, foran boksene den går langs
-          const pts = h.snapOff() ? null : linePts();
-          const near = pts ? nearestOnPoly(pts, tip) : null;
+          // Nær en kritisk linje (omtrent åtte skjermpunkter) fanges spissen av den nærmeste, foran boksene den går langs
+          let near: { pt: Pt; t: number; dist: number; n: number } | null = null;
+          if (!h.snapOff())
+            for (const c of h.layout()?.criticals ?? []) {
+              const q = c.points.length >= 4 ? nearestOnPoly(c.points, tip) : null;
+              if (q && (!near || q.dist < near.dist)) near = { ...q, n: c.n };
+            }
           if (near && near.dist <= 8 * h.mmPerPx()) {
-            live = { id, tip: near.pt, target: null, line: near.t };
+            live = { id, tip: near.pt, target: null, line: near.t, lineNo: near.n };
           } else live = { id, tip, target: h.snapOff() ? null : targetAt(tip, targets()) };
           redraw(id);
           h.overlay();
@@ -223,7 +234,7 @@ export function createNoteArrows(h: NoteArrowHost, nameOf: (plan: PlanFile, id: 
           if (!done || !L) return h.overlay();
           h.commit((pl) => {
             const x = h.findImage(pl, id);
-            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target, x.note.arrow, done.line);
+            if (x?.note?.arrow) x.note.arrow = storeTip(done.tip, L.width, L.height, done.target, x.note.arrow, done.line, done.lineNo);
           });
         },
       };

@@ -20,6 +20,7 @@ import { contentWords, createLanePick, laneName } from './lanepick';
 import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
+import { inLine, styleOf } from './criticallines';
 import { customMarkSection, markScaleRow, marksMenuItems, marksSection, pickMarkImage, removeCustomMark, setMarks, type CustomActions } from './marksui';
 import { MARK_KEYS, MARK_NAMES, markName, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
@@ -1239,8 +1240,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale, customActions(plain.map((x) => x.id)));
 
     const sp = section('Plassering');
-    const inLine = boxes.every((x) => x.critical);
-    sp.append(switchRow('Med i kritisk linje', inLine, (v) => setCritical(boxes.map((x) => x.id), v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    sp.append(critical.boxLineRow(plan, boxes));
     if (plain.some((x) => x.textScale)) sp.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
     if (boxes.some(pinned)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all(unpinBox, false)));
@@ -1615,7 +1615,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale, customActions([b.id]));
 
     const sp = section('Plassering');
-    sp.append(switchRow('Med i kritisk linje', !!b.critical, (v) => setCritical([b.id], v), 'Den kritiske linjen trekkes gjennom de merkede boksene'));
+    sp.append(critical.boxLineRow(plan, [b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));
     sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt.'));
@@ -1662,9 +1662,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
-      if (critical.mode && b?.critical) {
+      if (critical.mode && plan && b && inLine(b, critical.line)) {
+        // Boksene i linjen som tegnes, i linjens farge
+        const c = styleOf(plan.plan.layout, critical.line).color;
         const rect = document.createElementNS(NS, 'rect');
-        for (const [k, v] of Object.entries({ x: r.x0 - 0.5, y: r.y0 - 0.5, width: r.x1 - r.x0 + 1, height: r.y1 - r.y0 + 1, fill: '#E00000', 'fill-opacity': 0.08, stroke: '#E00000', 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
+        for (const [k, v] of Object.entries({ x: r.x0 - 0.5, y: r.y0 - 0.5, width: r.x1 - r.x0 + 1, height: r.y1 - r.y0 + 1, fill: c, 'fill-opacity': 0.08, stroke: c, 'stroke-width': 0.4, 'stroke-dasharray': '1 0.6', rx: 0.5 }))
           rect.setAttribute(k, String(v));
         g.append(rect);
       }
@@ -2387,7 +2389,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (critical.mode) {
       const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
-      if (b) setCritical([b.id], !b.critical);
+      if (b) setCritical([b.id], !inLine(b, critical.line));
       return;
     }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');

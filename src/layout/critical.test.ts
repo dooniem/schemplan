@@ -62,13 +62,14 @@ describe('kritisk linje', () => {
   it('er tom uten merkede bokser, tegnes i planen og overlever oppdatering fra Project', () => {
     const p = testplan();
     const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 9, fitToSheet: true };
-    expect(computeLayout(p, opts, approxMeasure).critical).toBeNull();
+    expect(computeLayout(p, opts, approxMeasure).criticals).toEqual([]);
     p.lanes[0].boxes[0].critical = true;
     p.lanes[1].boxes[0].critical = true;
     p.plan.layout.criticalLine = { width: 1.2, color: '#0050D0' };
     const L = computeLayout(p, opts, approxMeasure);
-    expect(L.critical?.width).toBe(1.2);
-    expect(L.critical!.points.length).toBeGreaterThanOrEqual(4);
+    expect(L.criticals.map((c) => c.n)).toEqual([1]);
+    expect(L.criticals[0].width).toBe(1.2);
+    expect(L.criticals[0].points.length).toBeGreaterThanOrEqual(4);
     expect(validatePlan(JSON.parse(JSON.stringify(p))).errors).toEqual([]);
     const fresh = testplan();
     const { plan: merged } = mergePlans(p, fresh);
