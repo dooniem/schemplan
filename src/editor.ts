@@ -14,6 +14,7 @@ import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from 
 import type { PlanImage } from './format/types';
 import { type AreaEdge, createAreaEdit } from './areaedit';
 import { createArrangeUi } from './arrangeui';
+import { createPushHint, pinAt, pinOffset, pushDown, settle } from './pushmove';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
@@ -43,6 +44,8 @@ export interface Drag {
   moveXY?(x: number, y: number): void;
   startClientX?: number;
   end(): void;
+  /** Tegner dragningen på nytt der den står, f.eks. når Ctrl trykkes eller slippes. */
+  again?(): void;
 }
 /** Fargeprøving: se editor.trial. */
 export type Trial = { key: string; run: (fn: () => void, live?: boolean) => void; pick: (fill: string, live?: boolean) => void };
@@ -1344,7 +1347,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const groups: [string, string[]][] = [
         ['Bokser', [
           'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
-          'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit.',
+          'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit. Hold Ctrl mens du drar for å skyve boksene under ned, så de beholder formen.',
           'Dra i den blå streken under valgt boks for å endre høyden. Bunnen snapper til kanten av andre bokser, så de kan stilles på linje (hold Alt for å dra fritt).',
           'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
           'Omplasser i verktøylinjen pakker lanene på nytt, f.eks. etter at du har endret høyder. Angre om du ikke liker forslaget.',
@@ -1618,7 +1621,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sp.append(critical.boxLineRow(plan, [b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));
-    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt.'));
+    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt. Hold Ctrl mens du drar for å skyve boksene under ned i stedet for at lanen pakkes på nytt.'));
 
     const foot = el('div', { class: 'panel-foot' });
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
@@ -1778,6 +1781,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
   /** Alt holdt nede under dra: ingen snapping. */
   let snapOff = false;
+  /** Ctrl holdt nede under dra: boksene under skyves ned (se pushmove.ts). */
+  let pushOn = false;
+  const pushHint = createPushHint();
   /**
    * Snapping mot kanten av andre bokser når høyde eller plass dras, så bunner og topper kan
    * stilles på linje uten øyemål. En stiplet hjelpelinje viser kanten, og boksen den hører til
@@ -1988,12 +1994,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const anySideways = moving.some((u) => u.sideways);
     let days = 0;
     let xShift = 0;
+    let last = { dy: 0, dx: 0 };
+    // Ctrl: bokser i lanen som treffes, skyves ned, med ny topp og lanen de står i
+    const laneOfId = new Map((plan0?.lanes ?? []).flatMap((l) => l.boxes.map((b) => [b.id, l.id] as const)));
+    let pushed = new Map<string, { y: number; lane: LaneLayout }>();
+    const pushGhosts = new Map<string, SVGRectElement>();
     const first = L.lanes[0];
-    const last = L.lanes[L.lanes.length - 1];
+    const lastLane = L.lanes[L.lanes.length - 1];
     /** Plassen for `u` når toppen ønskes ved `top`. `exact`: toppen skal ikke rundes av (snappet, eller fulgt av en annen). */
     const place = (u: Unit, top: number, exact: boolean) => {
       // Boksen kan dras til en annen lane; midten av boksen bestemmer hvilken
-      const lane = laneAt(clamp(top + u.fh / 2, first.y0, last.y1 - 1e-3)) ?? u.home;
+      const lane = laneAt(clamp(top + u.fh / 2, first.y0, lastLane.y1 - 1e-3)) ?? u.home;
       const pad = lane.top - lane.y0;
       const maxY = Math.max(lane.top, lane.y1 - pad - u.fh);
       // Ellers trinn på en kvart tekstlinje
@@ -2003,11 +2014,39 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       u.y = clamp(want, lane.top, u.span && lane === u.home ? Math.min(maxY, u.r.y1 - u.fh) : maxY);
       return want;
     };
-    return {
+    /** Med Ctrl: hvilke bokser som skyves ned, og skyggene som viser hvor de havner. */
+    const showPush = (g: SVGGElement) => {
+      pushed = new Map();
+      if (pushOn)
+        for (const lane of new Set(moving.map((u) => u.lane))) {
+          const dx = (u: Unit) => (u.sideways ? xShift : 0);
+          const movers = moving.filter((u) => u.lane === lane).map((u) => ({ id: u.it.id, x0: u.r.x0 + dx(u), x1: u.r.x1 + dx(u), y0: u.y, y1: u.y + (u.span ? u.fh : u.r.y1 - u.r.y0) }));
+          // Overskrifts- og Multi Lane-bokser skyves ikke; boksene inni en overskriftsboks som flyttes, følger den
+          const others = L.items.filter((o) => laneOfId.get(o.id) === lane.id && !skip.has(o.id) && !(o.kind === 'box' && (o.header || o.span))).map((o) => ({ id: o.id, ...bounds(o) }));
+          for (const [id, y] of pushDown(movers, others)) pushed.set(id, { y, lane });
+        }
+      for (const [id, e] of pushGhosts) if (!pushed.has(id)) (e.remove(), pushGhosts.delete(id));
+      for (const [id, { y }] of pushed) {
+        const o = L.items.find((i) => i.id === id)!;
+        const b = bounds(o);
+        let e = pushGhosts.get(id);
+        if (!e) {
+          e = shape(g, 'rect', { x: b.x0, width: b.x1 - b.x0, height: b.y1 - b.y0, fill: ACCENT, 'fill-opacity': 0.08, stroke: ACCENT, 'stroke-width': 0.3, 'stroke-dasharray': '0.6 0.6' });
+          pushGhosts.set(id, e);
+        }
+        set(e, { y });
+      }
+      pushHint.show(pushOn);
+    };
+    const drag: Drag = {
       startY: r.y0,
       startClient: 0,
       moved: false,
+      again() {
+        if (g) drag.move(last.dy, last.dx);
+      },
       move(dy, dx) {
+        last = { dy, dx };
         if (anySideways) {
           // Hele dager: datoen under venstre kant (midten for milepæler) bestemmer forskyvningen
           const x = clamp(refX + dx, L.plot.x0, L.plot.x1 - 1e-3);
@@ -2036,9 +2075,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           set(u.ghost!, { x: u.r.x0 + (u.sideways ? xShift : 0) });
         }
         if (target) set(target, { y: lead.lane.y0, height: lead.lane.y1 - lead.lane.y0, 'fill-opacity': lead.lane === lead.home ? 0 : 0.06 });
+        showPush(g);
       },
       end() {
         g?.remove();
+        pushHint.hide();
         const vertical = moving.some((u) => !(Math.abs(u.y - u.r.y0) < 1e-6 && u.lane === u.home));
         if (!vertical && !days) return;
         if (!many) selected = it.id;
@@ -2049,8 +2090,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             if (b?.resolved) b.resolved = { ...b.resolved, start: addDaysIso(b.resolved.start, days), finish: addDaysIso(b.resolved.finish, days) };
           }
         };
-        if (!vertical) return commit(shiftDates);
-        commit((plan) => {
+        const pushing = pushOn;
+        const applyMove = (plan: PlanFile) => {
+          if (!vertical) return shiftDates(plan);
           shiftDates(plan);
           for (const u of moving) {
             const { lane, home, y } = u;
@@ -2066,7 +2108,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
               // I Kompakt lagres plassen bare for Kompakt, så «Fyll hele arket» er som før.
               // Til en annen lane gjelder plassen begge, den gamle hører til forrige lane.
               if (b) {
-                const at = lines(y + m.dy - lane.top, unit);
+                const mi = L.items.find((i) => i.id === m.id);
+                const at = lines(y + m.dy + (mi ? pinOffset(mi) : 0) - lane.top, unit);
                 if (!L.compact || lane !== home) b.top = at;
                 if (L.compact) b.compactTop = at;
                 else if (lane !== home) delete b.compactTop;
@@ -2079,9 +2122,33 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
               }
             }
           }
+        };
+        if (!pushing) return commit(applyMove);
+        // Ctrl: de skjøvne boksene festes der de havner. Løse bokser som ellers ville hoppet, festes der de står.
+        const apply = (plan: PlanFile) => {
+          applyMove(plan);
+          for (const [id, { y, lane }] of pushed) {
+            const b = findBox(plan, id);
+            const o = L.items.find((i) => i.id === id);
+            if (b) pinAt(b, lines(y + (o ? pinOffset(o) : 0) - lane.top, unit), L.compact);
+          }
+        };
+        const trial = snapshotOf(plan0!);
+        apply(trial);
+        const lanes = new Set(moving.flatMap((u) => [u.lane.id, u.home.id]));
+        const extra = settle(trial, L, lanes, (p) => host.layoutOf(p), new Set(pushed.keys()));
+        commit((plan) => {
+          apply(plan);
+          for (const [id, { at, side }] of extra) {
+            const b = findBox(plan, id);
+            if (!b) continue;
+            if (!Number.isNaN(at)) pinAt(b, at, L.compact);
+            if (side) b.calloutSide = side;
+          }
         });
       },
     };
+    return drag;
   };
 
   const startLaneResize = (ln: LaneLayout): Drag | null => {
@@ -2527,6 +2594,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     if (!drag.moved && Math.abs(e.clientY - drag.startClient) < 4 && Math.abs(e.clientX - (drag.startClientX ?? e.clientX)) < 4) return;
     drag.moved = true;
     snapOff = e.altKey;
+    pushOn = e.ctrlKey || e.metaKey;
     images.shift = e.shiftKey;
     const p = toMm(e.clientX, e.clientY);
     if (drag.moveXY) drag.moveXY(p.x, p.y);
@@ -2545,6 +2613,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
+  // Ctrl trykket eller sluppet mens musen står stille: vis skyvingen med en gang
+  const pushKey = (e: KeyboardEvent) => {
+    if (!drag?.moved || !drag.again || (e.key !== 'Control' && e.key !== 'Meta')) return;
+    pushOn = e.type === 'keydown';
+    drag.again();
+  };
+  window.addEventListener('keydown', pushKey);
+  window.addEventListener('keyup', pushKey);
 
   // Høyreklikkmenyen følger det du høyreklikket: lane-navnet gir lanevalg, en boks gir
   // boksvalg, og tomt sted i lanen gir ny boks og skjulte bokser.
