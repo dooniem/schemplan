@@ -60,6 +60,8 @@ export interface PlanSettings {
     showLegend?: boolean;
     /** Vis kalenderen også under planen. Mangler den, gjelder valget fra Project. */
     showBottomCalendar?: boolean;
+    /** Ferier vises bare når de er minst så mange dager sammenhengende, helg inntil medregnet. Standard 4. */
+    minHolidayDays?: number;
     /** Måneds- eller ukesvisning valgt i appen. Mangler den, gjelder valget fra Project. */
     calendarMode?: 'month' | 'week';
     /** Kalenderens start og slutt valgt i appen. En ende som mangler, følger Project. */

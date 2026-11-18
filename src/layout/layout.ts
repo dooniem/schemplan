@@ -7,7 +7,7 @@ import { placeArrows, type PlacedArrow, type Rect } from './arrow';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
+import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { criticalLine, type CriticalLine } from './critical';
@@ -19,6 +19,7 @@ import type { LookaheadExtras } from './lookahead';
 import { boxTrade, tradeColors } from '../trades';
 import { groupRuns } from '../lanegroup';
 import { milestoneRotation } from './milestone';
+import { holidaySpans, minHolidayDays } from './holidays';
 
 export interface LayoutOptions {
   orientation: Orientation;
@@ -781,6 +782,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const legendSize = legendBase * clampScale(file.plan.layout.legendScale);
   // Nede til høyre: revisjonen (når den er slått på) og datoen
   const footerText = footerLine(file);
+  // Ferier: sammenhengende fridager, bare de som er lange nok
+  const workDays = Math.min(7, Math.max(1, Math.round(file.plan.calendar.workingDaysPerWeek || 5)));
+  const spans = holidaySpans(file.holidays, minHolidayDays(file.plan.layout.minHolidayDays), workDays);
   const legendEntries: LegendEntry[] = [];
   let legendH = 0;
   if (opts.showLegend ?? file.plan.options.legend) {
@@ -789,7 +793,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved' | MarkKind; key: string }[] = [
       ...MARK_KINDS.filter((k) => usedMarks.has(k)).map((k) => ({ name: markName(k, file.plan.layout.customMark?.name), symbol: k, key: MARK_KEYS[k] })),
       // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
-      ...(ny && file.holidays.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
+      ...(ny && spans.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
       ...(['new', 'moved'] as const)
         .filter((k) => changeKinds.has(k))
         .map((k) => ({ name: k === 'new' ? 'Ny fra Project' : 'Ny dato fra Project', symbol: k, key: CHANGE_KEYS[k] })),
@@ -1164,10 +1168,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
   const bands: Band[] = monthBands(axis, ny, laneLayouts.map((ln, i) => ({ ...ln, tint: lanes[i].tintBackground ? laneTint(ln.fill, ny) : null })));
-  const holidays = file.holidays
-    .map((h) => ({ s: parseIso(h.start), e: parseIso(h.end) }))
+  const holidays = spans
     .filter((h) => h.e >= axis.start && h.s < axis.end)
-    .map((h) => ({ x0: axis.xStart(Math.max(h.s, axis.start)), x1: axis.xEnd(Math.min(h.e, addDays(axis.end, -1))) }));
+    .map((h) => {
+      let s = Math.max(h.s, axis.start);
+      // I ukesvisning har helgen ingen bredde: start på første arbeidsdag, ellers begynner skraveringen fredag
+      if (axis.mode === 'week') while (s < h.e && weekday(s) >= workDays) s = addDays(s, 1);
+      return { x0: axis.xStart(s), x1: axis.xEnd(Math.min(h.e, addDays(axis.end, -1))) };
+    });
 
   // Milepæler med bilde som symbol: symbolet tegnes ikke, bildet står der i stedet
   const symbolImages = new Set((file.plan.layout.images ?? []).flatMap((im) => (im.milestone ? [im.milestone.id] : [])));

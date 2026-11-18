@@ -124,6 +124,10 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .set-row { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 12px; }
 .set-row + .set-row { margin-top: 10px; }
 .set-row.set-note { margin-top: 6px; }
+.set-inline { display: flex; align-items: center; gap: 8px; }
+.settings .set-inline .pop-hint { margin: 0; font-size: 13px; }
+.set-inline .num { width: 7.5em; }
+.set-switches + .set-row { margin-top: 12px; }
 .set-label { color: var(--text); }
 /* Segmentert kontroll som et spor: valgt del løftes frem i stedet for å fylles med farge,
    så mange valg under hverandre ikke blir en vegg av blått */
