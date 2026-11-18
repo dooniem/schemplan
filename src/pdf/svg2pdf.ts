@@ -252,10 +252,13 @@ function drawText(c: Ctx, el: SVGTextElement) {
     const txt = s.textContent ?? '';
     if (!txt) return;
     const bold = (attr(s, 'font-weight') ?? 'normal') === 'bold';
+    // En linje kan ha egen størrelse og farge (datoraden i boksene)
+    const ls = s === el ? size : num(s, 'font-size', size);
+    const lc = s === el ? color : (rgb(s.getAttribute('fill') ?? '') ?? color);
     const f = bold ? c.fonts.bold : c.fonts.regular;
     const set = f.getCharacterSet();
     const safe = safeText(txt, (cp) => set.includes(cp), c.missing);
-    const w = f.widthOfTextAtSize(safe, size);
+    const w = f.widthOfTextAtSize(safe, ls);
     let x = num(s, 'x', num(el, 'x'));
     if (anchor === 'middle') x -= w / 2;
     else if (anchor === 'end') x -= w;
@@ -271,9 +274,9 @@ function drawText(c: Ctx, el: SVGTextElement) {
       [a, b, cc, d] = [cos, sin, sin, -cos];
     }
     c.ops.push(
-      setFillingRgbColor(...color),
+      setFillingRgbColor(...lc),
       beginText(),
-      setFontAndSize(fontName(c, f), size),
+      setFontAndSize(fontName(c, f), ls),
       setTextMatrix(a, b, cc, d, e, ff),
       showText(f.encodeText(safe)),
       endText(),

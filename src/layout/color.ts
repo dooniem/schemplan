@@ -63,3 +63,10 @@ export function derivedBorder(fill: string, amount = 0.45): string {
   if (contrast(darker, fill) >= BORDER_CONTRAST) return darker;
   return toHex(c.map((v) => v + (1 - v) * amount));
 }
+
+/** Fargen a blandet med b: t = 0 gir a, t = 1 gir b. */
+export function mixColor(a: string, b: string, t: number): string {
+  const x = hex(a);
+  const y = hex(b);
+  return toHex(x.map((v, i) => v + (y[i] - v) * t));
+}

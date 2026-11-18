@@ -1,6 +1,7 @@
 import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { boxMarks, markScaleOf, MARK_KEYS, MARK_OUT, MARK_KINDS, markName, markSize, marksHeight, marksInset, type BoxMarks, type MarkKind } from './marks';
 import { parseBoxText, splitLines } from '../format/text';
+import { boxDateText, dateColor, dateMinWidth, dateRows, DATE_SCALE, datesShown, linesHeight, type DateSub } from './boxdates';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
 import { placeArrows, type PlacedArrow, type Rect } from './arrow';
@@ -97,6 +98,8 @@ export interface TextBlock {
   /** Fet skrift per linje (overstyrer bold). */
   boldLines?: boolean[];
   rotate?: 0 | 90 | -90;
+  /** Datoraden: linjene fra og med `from` tegnes mindre og i dempet farge (valgfritt). */
+  sub?: DateSub;
 }
 
 export interface BoxItem {
@@ -1326,6 +1329,13 @@ function buildPieces(
     const fill = box.fill ?? c.fill ?? '#FFFFFF';
     // Ny stil, eller egen farge: svart eller hvit tekst etter kontrast. Kant i mørkere utgave av fyllet.
     const textColor = box.textColor ?? (ny || box.fill ? autoTextColor(fill) : (c.text ?? '#000000'));
+    // Datoraden under teksten: litt mindre og dempet. En boks uten tekst viser bare datoen.
+    const dt = boxDateText(box, file);
+    const ds = bs * DATE_SCALE;
+    const nameLines = dt && rawLines.every((l) => !l.trim()) ? [] : rawLines;
+    const sub = (from: number, color: string, bg: string): { sub?: DateSub } => (dt ? { sub: { from, size: ds, color: dateColor(color, bg) } } : {});
+    /** Grunnlinjen til første rad: datoraden er mindre når den står alene. */
+    const firstBase = (nameN: number) => PAD_Y + (nameN ? bs : ds) * 0.85;
     const bx0 = axis.xStart(Math.max(s, axis.start));
     const bx1 = Math.max(bx0 + 0.6, axis.xEnd(Math.min(f, addDays(axis.end, -1))));
     const w = bx1 - bx0;
@@ -1365,9 +1375,10 @@ function buildPieces(
       // Rotert tekst brytes i så mange linjer som får plass i bredden, så boksen ikke blir høyere enn nødvendig
       // Høyde valgt i appen gir plass til lengre linjer: dra boksen høyere for færre linjer, til slutt én
       const tw = w - inset();
-      lines = rotatedLines(rawLines, tw - 2 * PAD_X, bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
-      item.h = Math.max(widest(lines, bs, measure) + 2 * PAD_Y + 1, marksH());
-      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation };
+      // Datoraden står ved siden av teksten, så teksten får litt mindre plass i bredden
+      lines = rotatedLines(nameLines, tw - 2 * PAD_X - (dt ? ds * LINE_HEIGHT : 0), bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
+      item.h = Math.max(Math.max(widest(lines, bs, measure), dt ? measure(dt, ds) : 0) + 2 * PAD_Y + 1, marksH());
+      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, fill) };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }
@@ -1376,17 +1387,18 @@ function buildPieces(
     if (!useCallout) {
       // Callout bare når teksten faktisk ikke får plass, ikke ut fra en fast bredde,
       // så like bokser med samme tekst behandles likt
-      const longestWord = Math.max(...rawLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)));
-      const words = new Set(rawLines.join(' ').split(/\s+/));
+      const longestWord = Math.max(...nameLines.flatMap((l) => l.split(/\s+/)).map((wd) => measure(wd, bs)), dt ? dateMinWidth(dt, ds, measure) : 0);
+      const words = new Set(nameLines.join(' ').split(/\s+/));
       /** Teksten brutt for bredden som er igjen ved siden av ikonene, eller null når den ikke får plass. */
       const fit = (m: BoxMarks | null) => {
         const inner = Math.max(w - 2 * PAD_X - (m ? marksInset(m) : 0), 0.5);
         if (inner < longestWord) return null;
-        const ls = wrapLines(rawLines, inner, bs, measure, bold);
-        const textH = ls.length * blh + 2 * PAD_Y;
+        const ls = wrapLines(nameLines, inner, bs, measure, bold);
+        const dr = dt ? dateRows(dt, inner, ds, measure) : [];
+        const textH = linesHeight(ls.length + dr.length, bs, dr.length, ds) + 2 * PAD_Y;
         // Et ord som må deles for å få plass, gir callout
         const broke = ls.some((l) => l.split(/\s+/).some((wd) => wd && !words.has(wd)));
-        return { ls, textH, h: Math.max(textH, m ? marksHeight(m, oneLine) : 0), broke, m };
+        return { ls, dr, textH, h: Math.max(textH, m ? marksHeight(m, oneLine) : 0), broke, m };
       };
       let best = fit(mk);
       // To ikoner på rad når boksen da blir lavere og teksten fortsatt får plass
@@ -1394,16 +1406,19 @@ function buildPieces(
       if (asRow && !asRow.broke && asRow.h < best!.h - 1e-6) best = asRow;
       if (!best && !neverCallout) useCallout = true;
       else {
-        if (!best) best = { ls: wrapLines(rawLines, Math.max(w - 2 * PAD_X - inset(), 0.5), bs, measure, bold), textH: 0, h: 0, broke: true, m: mk };
-        lines = best.ls;
-        const h = lines.length * blh + 2 * PAD_Y;
+        if (!best) {
+          const inner = Math.max(w - 2 * PAD_X - inset(), 0.5);
+          best = { ls: wrapLines(nameLines, inner, bs, measure, bold), dr: dt ? dateRows(dt, inner, ds, measure) : [], textH: 0, h: 0, broke: true, m: mk };
+        }
+        lines = [...best.ls, ...best.dr];
+        const h = linesHeight(lines.length, bs, best.dr.length, ds) + 2 * PAD_Y;
         // Callout når boksen er smal i forhold til teksten, eller et ord må deles for å få plass
         if ((w / h < 0.25 || best.broke) && !neverCallout) useCallout = true;
         else {
           if (best.m) item.marks = best.m;
           item.h = Math.max(h, marksH());
           const tw = w - inset();
-          item.text = { x: bx0 + tw / 2, y: PAD_Y + bs * 0.85, lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}) };
+          item.text = { x: bx0 + tw / 2, y: firstBase(best.ls.length), lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}), ...sub(best.ls.length, textColor, fill) };
         }
       }
     }
@@ -1414,16 +1429,17 @@ function buildPieces(
       else if (mk) item.marks = mk;
       item.h = Math.max(blh + 2 * PAD_Y, marksH());
       const make = (side: 'right' | 'left', maxW: number): Variant => {
-        const cl = wrapLines(rawLines, maxW, bs, measure);
-        const cw = widest(cl, bs, measure) + 2 * PAD_X;
-        const ch = cl.length * blh + 2 * PAD_Y;
+        const cl = wrapLines(nameLines, maxW, bs, measure);
+        const cd = dt ? dateRows(dt, maxW, ds, measure) : [];
+        const cw = Math.max(widest(cl, bs, measure), widest(cd, ds, measure)) + 2 * PAD_X;
+        const ch = linesHeight(cl.length + cd.length, bs, cd.length, ds) + 2 * PAD_Y;
         // Ikonene stikker ut på høyre side, så callouten der står litt lenger ut
         const out = item.marks ? item.marks.size * MARK_OUT : 0;
         const cx = side === 'right' ? bx1 + 2 + out : bx0 - 2 - cw;
         const it: BoxItem & { trade: string } = { ...item, callout: null };
         it.callout = {
           box: { x: cx, y: 0, w: cw, h: ch },
-          text: { x: cx + PAD_X, y: PAD_Y + bs * 0.85, lines: cl, size: bs, color: '#000000', anchor: 'start' },
+          text: { x: cx + PAD_X, y: firstBase(cl.length), lines: [...cl, ...cd], size: bs, color: '#000000', anchor: 'start', ...sub(cl.length, '#000000', '#FFFFFF') },
           leader: ny
             ? side === 'right'
               ? [bx1 + out, item.h / 2, cx, item.h / 2]
@@ -1471,7 +1487,7 @@ function buildPieces(
     if (box.header) {
       (p.item as BoxItem).header = true;
       // Uten tekst stenger bare kanten øverst
-      p.band = box.text.trim() ? p.item.h : PAD_Y * 2;
+      p.band = box.text.trim() || datesShown(box, file) ? p.item.h : PAD_Y * 2;
     }
     const target = (box.height ?? 0) * lh;
     for (const v of p.alts ?? [p]) {

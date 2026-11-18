@@ -138,6 +138,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.showLegend !== undefined) needBool(lay, 'showLegend', 'plan.layout');
       if (lay.showChanges !== undefined) needBool(lay, 'showChanges', 'plan.layout');
       if (lay.todayLine !== undefined) needBool(lay, 'todayLine', 'plan.layout');
+      if (lay.showDates !== undefined) needBool(lay, 'showDates', 'plan.layout');
+      if (lay.dateFormat !== undefined) needEnum(lay, 'dateFormat', 'plan.layout', ['dm', 'dmy', 'dmon', 'week']);
       if (lay.showProgress !== undefined) needBool(lay, 'showProgress', 'plan.layout');
       if (lay.showBaseline !== undefined) needBool(lay, 'showBaseline', 'plan.layout');
       if (lay.revision !== undefined) {
@@ -325,7 +327,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.calloutWidthCm !== undefined && !(typeof b.calloutWidthCm === 'number' && b.calloutWidthCm >= 1 && b.calloutWidthCm <= 15)) err(`${bp}.calloutWidthCm`, 'må være et tall fra 1 til 15');
         if (b.critical !== undefined && typeof b.critical !== 'boolean' && !(Array.isArray(b.critical) && b.critical.length && b.critical.every((n, i, a) => (n === 1 || n === 2 || n === 3) && a.indexOf(n) === i)))
           err(`${bp}.critical`, 'må være true, false eller en liste med linjenumre fra 1 til 3');
-        for (const k of ['hidden', 'manual', 'header', 'loud', 'night', 'custom', 'textMiddle', 'bold'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        for (const k of ['hidden', 'manual', 'header', 'loud', 'night', 'custom', 'textMiddle', 'bold', 'showDates'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
