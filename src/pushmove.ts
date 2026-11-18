@@ -53,6 +53,21 @@ export function pinOffset(it: Item): number {
   return Math.max(0, Math.min(it.y - it.size / 2, it.labelBox.y) - bounds(it).y0);
 }
 
+/** Høyden en milepæl (symbol og tekst) eller boks (med callout) tar i lanen. */
+export function pieceHeight(it: Item): number {
+  const b = bounds(it);
+  if (it.kind === 'box') return b.y1 - b.y0;
+  const top = b.y0 + pinOffset(it);
+  return Math.max(it.y + it.size / 2, it.labelBox.y + it.labelBox.h) - top;
+}
+
+/** Plassen boksen eller milepælen tar i lanen, som rektangel. */
+export function pieceRect(it: Item): PushRect {
+  const b = bounds(it);
+  const y0 = b.y0 + pinOffset(it);
+  return { id: it.id, x0: b.x0, x1: b.x1, y0, y1: y0 + pieceHeight(it) };
+}
+
 /** Callouten (eller milepælsteksten) står til venstre eller høyre. */
 export type Side = 'left' | 'right' | '';
 
