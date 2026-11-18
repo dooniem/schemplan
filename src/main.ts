@@ -29,6 +29,7 @@ import { boxTrade } from './trades';
 import { FRONT_DEFAULT, resolveStatus, STATUS_COLORS, STATUS_DEFAULT, statusHelp } from './layout/status';
 import { hasBaseline } from './layout/progress';
 import { withCalendarRange } from './layout/range';
+import { MAX_MIN_HOLIDAY_DAYS, minHolidayDays } from './layout/holidays';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
 
@@ -794,6 +795,9 @@ function syncControls() {
   $<HTMLInputElement>('#show-bottom-cal').checked = opts.showBottomCalendar ?? plan?.plan.calendar.bottomCalendar ?? false;
   $<HTMLInputElement>('#show-legend').disabled = !plan;
   $<HTMLInputElement>('#show-bottom-cal').disabled = !plan;
+  const mh = $<HTMLInputElement>('#min-holiday');
+  if (document.activeElement !== mh) mh.value = String(minHolidayDays(plan?.plan.layout.minHolidayDays));
+  mh.disabled = !plan;
   $<HTMLInputElement>('#min-text').value = String(opts.minTextPt ?? DEFAULT_MIN_TEXT_PT);
   $<HTMLLabelElement>('#min-text-field').hidden = !opts.fitToSheet;
   $<HTMLElement>('#settings').title = `${sheetName(opts.paper ?? 'A3', opts.orientation)}. Ark, visning, tekst og logo.`;
@@ -959,6 +963,13 @@ $<HTMLInputElement>('#show-legend').addEventListener('change', (e) => {
 $<HTMLInputElement>('#show-bottom-cal').addEventListener('change', (e) => {
   opts.showBottomCalendar = (e.target as HTMLInputElement).checked;
   draw();
+});
+$<HTMLInputElement>('#min-holiday').addEventListener('input', (e) => {
+  const v = Number((e.target as HTMLInputElement).value);
+  if (plan && Number.isInteger(v) && v >= 1 && v <= MAX_MIN_HOLIDAY_DAYS) {
+    plan.plan.layout.minHolidayDays = v;
+    draw();
+  }
 });
 $<HTMLInputElement>('#min-text').addEventListener('input', (e) => {
   const v = Number((e.target as HTMLInputElement).value.replace(',', '.'));

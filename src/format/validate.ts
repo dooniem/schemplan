@@ -152,6 +152,10 @@ export function validatePlan(input: string | unknown): ValidationResult {
           err('plan.layout.changes', 'må ha kind (new/moved) og eventuelt start og finish (YYYY-MM-DD) for hver boks');
       }
       if (lay.showBottomCalendar !== undefined) needBool(lay, 'showBottomCalendar', 'plan.layout');
+      if (lay.minHolidayDays !== undefined) {
+        needNum(lay, 'minHolidayDays', 'plan.layout');
+        if (typeof lay.minHolidayDays === 'number' && !(lay.minHolidayDays >= 1)) err('plan.layout.minHolidayDays', 'må være minst 1');
+      }
       if (lay.calendarMode !== undefined) needEnum(lay, 'calendarMode', 'plan.layout', ['month', 'week']);
       if (lay.calendarRange !== undefined && !readCalendarRange(lay.calendarRange)) err('plan.layout.calendarRange', 'kan bare ha start og end (YYYY-MM-DD)');
       if (lay.logo !== undefined) {
