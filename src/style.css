@@ -436,6 +436,12 @@ details summary { cursor: pointer; font-size: 13px; }
 .prop-inline { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
 #panel textarea, #panel input[type='text'] { display: block; width: 100%; font: inherit; font-size: 13px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
 #panel textarea:focus-visible, #panel input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+/* Tekstfelt med merker for tvungne linjeskift: speilet bak har samme skrift, luft og bredde som feltet */
+#panel .ta-marks { position: relative; border-radius: 6px; background: var(--surface); }
+#panel .ta-marks > textarea { position: relative; background: transparent; scrollbar-gutter: stable; }
+#panel .ta-mirror { position: absolute; inset: 0; overflow: hidden; scrollbar-gutter: stable; font: inherit; font-size: 13px; line-height: 1.4; padding: 6px 8px; border: 1px solid transparent; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; pointer-events: none; user-select: none; }
+#panel .ta-mirror .br-enter { display: inline-block; width: 0; overflow: visible; padding-left: 2px; color: var(--muted); }
+#panel .ta-mirror .br-pipe { border-radius: 2px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 #panel select { width: 100%; min-width: 0; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 #panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .hint { font-size: 11.5px; line-height: 1.4; color: var(--muted); margin: 0; }

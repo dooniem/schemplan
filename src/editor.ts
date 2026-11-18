@@ -1,6 +1,7 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import { effectiveRange } from './layout/range';
+import { withBreakMarks } from './breakmarks';
 import { autoTextColor } from './layout/color';
 import { baseMilestoneRotation, milestoneRotation } from './layout/milestone';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
@@ -814,8 +815,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       out.push(lockedRow(`${sel.length > 1 ? 'Noen har egen' : 'Egen'} bredde, planen har ${fmt(planCm)}`, 'Som planen', 'Samme callout-bredde som resten av planen', () => set(undefined)));
     return out;
   };
-  /** Tekstfelt der | gir linjeskift. Ett angre-steg per skriveøkt. */
-  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void) => {
+  /**
+   * Tekstfelt. Ett angre-steg per skriveøkt.
+   * breaks: Enter og | gir linjeskift, og de tvungne linjeskiftene vises med merker i feltet.
+   */
+  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks = false): HTMLElement => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
     ta.value = value;
     ta.addEventListener('focus', () => (typingSession = false));
@@ -824,7 +828,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       typingSession = false;
       syncTools();
     });
-    return ta;
+    return breaks ? withBreakMarks(ta) : ta;
   };
   const textColorKey = (c?: string) => (c === '#000000' ? 'black' : c === '#FFFFFF' ? 'white' : 'auto');
   const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
@@ -919,10 +923,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         changeHeader((l) => {
           if (v.trim()) l.headerRight = v;
           else delete l.headerRight;
-        }, true),
+        }, true), true,
       ),
     );
-    s2.append(el('p', { class: 'hint' }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Skriv | for linjeskift.'));
+    s2.append(el('p', { class: 'hint' }, 'Høyrejustert øverst til høyre, for eksempel prosjektnummer eller revisjon. Enter eller | gir linjeskift.'));
     if (layoutNow && lay.headerRight?.trim()) {
       s2.append(
         ...sizeStepper(lay.headerRightScale, layoutNow.headerRightBasePt, (s) =>
@@ -955,9 +959,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         changeLane((x) => {
           keepLaneOriginal(x);
           x.name = v;
-        }, { typing: true, rebuild: false }),
+        }, { typing: true, rebuild: false }), true,
       ),
-      el('p', { class: 'hint' }, 'Skriv | for linjeskift.'),
+      el('p', { class: 'hint' }, 'Enter eller | gir linjeskift.'),
       segmented('Tekstfarge', l.whiteText ? 'white' : 'black', [['black', 'Svart'], ['white', 'Hvit']], (v) =>
         changeLane((x) => {
           if (v === 'white') x.whiteText = true;
@@ -1465,9 +1469,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         change((x) => {
           keepOriginal(x);
           x.text = v;
-        }, { typing: true, rebuild: false }),
+        }, { typing: true, rebuild: false }), true,
       ),
-      el('p', { class: 'hint' }, 'Skriv | for linjeskift og /| for en loddrett strek.'),
+      el('p', { class: 'hint' }, 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.'),
     );
     if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (ms) {

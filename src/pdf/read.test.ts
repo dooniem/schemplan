@@ -6,7 +6,7 @@ describe('arbeidsfil', () => {
   it('henter planen ut av vedlegget, tegn for tegn', async () => {
     const doc = await PDFDocument.create();
     doc.addPage([100, 100]);
-    const json = JSON.stringify({ format: 'schemplan', tekst: 'Æøå – «sitat» L2|ny linje' });
+    const json = JSON.stringify({ format: 'schemplan', tekst: 'Æøå – «sitat» L2|ny linje\nEnter-linje' });
     await doc.attach(new TextEncoder().encode(json), ATTACHMENT_NAME, { mimeType: 'application/json' });
     const r = await readPlanFromPdf(await doc.save());
     expect(r).toEqual({ json });

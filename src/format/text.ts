@@ -1,17 +1,20 @@
 // Tolker bokstekst: linjeskift, loddrett strek og tvunget callout.
+// Linjeskift kan skrives både som "|" og som et vanlig linjeskift (Enter i tekstfeltet).
 export interface BoxText {
   lines: string[];
   forcedCallout: boolean;
 }
 
 const PIPE = '\u0000';
+/** "|" eller et vanlig linjeskift, også \r\n fra innliming. */
+const BREAK = /\r\n|[\r\n|]/;
 
 /** Teksten på én linje, som i lister og meldinger: uten linjeskift, streker og tvunget callout. */
 export const plainText = (s: string) => s.replace(/\/?\|/g, ' ').replace(/^\*/, '').replace(/\s+/g, ' ').trim();
 
-/** Lane-navn: "|" er linjeskift og "/|" en loddrett strek, som i boksteksten. */
+/** Lane-navn og tekst til høyre i toppteksten: "|" og Enter er linjeskift og "/|" en loddrett strek, som i boksteksten. */
 export function splitLines(raw: string): string[] {
-  return raw.replaceAll('/|', PIPE).split('|').map((l) => l.replaceAll(PIPE, '|').trim());
+  return raw.replaceAll('/|', PIPE).split(BREAK).map((l) => l.replaceAll(PIPE, '|').trim());
 }
 
 export function parseBoxText(raw: string): BoxText {
@@ -22,6 +25,6 @@ export function parseBoxText(raw: string): BoxText {
     s = s.slice(1);
   }
   s = s.replaceAll('/|', PIPE);
-  const lines = s.split('|').map((l) => l.replaceAll(PIPE, '|'));
+  const lines = s.split(BREAK).map((l) => l.replaceAll(PIPE, '|'));
   return { lines, forcedCallout };
 }
