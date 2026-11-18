@@ -4,10 +4,13 @@
 // linjen, så den hopper minst mulig opp og ned.
 import type { Item } from './layout';
 import { LINE_HEIGHT } from './text';
+import { CRITICAL_DEFAULTS, type CriticalDash, type CriticalStyle } from '../criticallines';
 
-export type CriticalDash = 'solid' | 'dashed' | 'dotted';
+export type { CriticalDash };
 
 export interface CriticalLine {
+  /** Linjenummeret, 1 til 3. */
+  n: number;
   /** Punkter x0,y0,x1,y1,… i mm. */
   points: number[];
   width: number;
@@ -15,7 +18,10 @@ export interface CriticalLine {
   dash: CriticalDash;
 }
 
-export const CRITICAL_DEFAULT: { width: number; color: string; dash?: CriticalDash } = { width: 0.6, color: '#E00000' };
+export const CRITICAL_DEFAULT: CriticalStyle = CRITICAL_DEFAULTS[1];
+
+/** Straff for å legge seg i samme høyde som en annen kritisk linje gjennom samme boks. */
+const SHARED_COST = 2;
 
 /** Strek og mellomrom for stiplingen, som ganger av linjebredden. */
 export function dashArray(dash: CriticalDash | undefined, width: number): number[] | null {
@@ -72,12 +78,21 @@ function stopOf(it: Item, width: number, others: Rect[]): Stop {
   return { id: it.id, x0: it.x0, x1: it.x1, tracks };
 }
 
-export function criticalLine(items: Item[], ids: Set<string>, style: { width: number; color: string; dash?: CriticalDash }): CriticalLine | null {
+/**
+ * Linjen gjennom boksene i `ids`. `taken` er høydene andre kritiske linjer allerede går i gjennom
+ * hver boks: linjen prøver å legge seg ved siden av dem, og legger til sine egne. n er linjenummeret.
+ */
+export function criticalLine(items: Item[], ids: Set<string>, style: CriticalStyle, n = 1, taken?: Map<string, number[]>): CriticalLine | null {
   const marked = items.filter((it) => ids.has(it.id));
   if (!marked.length) return null;
   const obstacles = textAreas(items);
   const blocks = boxAreas(items);
   const stops = marked.map((it) => stopOf(it, style.width, blocks)).sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
+  if (taken)
+    for (const s of stops) {
+      const used = taken.get(s.id);
+      if (used) s.tracks = s.tracks.map((t) => (used.some((y) => Math.abs(y - t.y) < style.width * 1.5) ? { ...t, cost: t.cost + SHARED_COST } : t));
+    }
 
   // Velger én høyde per boks samlet for hele linjen: hopp opp og ned, kanter og tekst
   // som streken må krysse på vei til neste boks teller alle med
@@ -128,7 +143,8 @@ export function criticalLine(items: Item[], ids: Set<string>, style: { width: nu
   }
   const last = stops[stops.length - 1];
   pts.push(Math.max(x, last.x1), ys[ys.length - 1]);
-  return { points: pts, width: style.width, color: style.color, dash: style.dash ?? 'solid' };
+  if (taken) stops.forEach((s, i) => taken.set(s.id, [...(taken.get(s.id) ?? []), ys[i]]));
+  return { n, points: pts, width: style.width, color: style.color, dash: style.dash ?? 'solid' };
 }
 
 /** own: boksen selv (linjen skal gjennom den), ikke en tekst ved siden av. */

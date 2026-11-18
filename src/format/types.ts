@@ -72,8 +72,12 @@ export interface PlanSettings {
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
     /** Fag laget i appen, i rekkefølgen de står i forklaringen etter fagene fra Project. Fargen står i `tradeColors`. */
     appTrades?: string[];
-    /** Utseendet til den kritiske linjen: tykkelse i mm og farge. */
+    /** Utseendet til den kritiske linjen (linje 1): tykkelse i mm og farge. */
     criticalLine?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
+    /** Utseendet til kritisk linje 2. */
+    criticalLine2?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
+    /** Utseendet til kritisk linje 3. */
+    criticalLine3?: { width: number; color: HexColor; dash?: 'solid' | 'dashed' | 'dotted' };
     /** Utkikk: planen tegnes bare for noen uker. Lagres som regel, så perioden ruller videre. */
     lookahead?: Lookahead;
     /** Statuslinjen: loddrett strek på statusdatoen. */
@@ -189,6 +193,8 @@ export interface NoteArrow {
    * følger linjen når den endres. Uten kritisk linje brukes x og y.
    */
   line?: number;
+  /** Hvilken kritisk linje spissen står på (2 eller 3). Uten den linje 1. */
+  lineNo?: number;
   /** Strekbredde i pt; uten den følger den skriftstørrelsen. */
   width?: number;
   /** Farge på streken og pilspissen; uten den samme som teksten. */
@@ -379,8 +385,11 @@ export interface Box {
     /** Bare rotert tekst og ruter: ruteren står under teksten i stedet for over. */
     diamondBelow?: boolean;
   };
-  /** Med i den kritiske linjen (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge. */
-  critical?: boolean;
+  /**
+   * Med i en kritisk linje (valgfritt). Linjen trekkes gjennom de merkede boksene i datorekkefølge.
+   * true er linje 1; ellers linjenumrene (1–3) boksen er med i.
+   */
+  critical?: boolean | number[];
   /** Merket med høylytt arbeid (valgfritt). Vises som et ikon på høyre kant av boksen. */
   loud?: boolean;
   /** Merket med nattarbeid (valgfritt). Vises som et ikon på høyre kant av boksen. */

@@ -10,7 +10,8 @@ import { buildTimeAxis, type TimeAxis } from './calendar';
 import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
-import { criticalLine, CRITICAL_DEFAULT, type CriticalLine } from './critical';
+import { criticalLine, type CriticalLine } from './critical';
+import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
 import { statusLabel, type StatusMoment } from './status';
 import { deltaText, frontPath, frontPoints } from './progress';
@@ -296,8 +297,8 @@ export interface Layout {
   xOfDate(iso: string): number | null;
   /** Logo øverst til venstre, i mm. */
   logo: { x: number; y: number; w: number; h: number; href: string } | null;
-  /** Kritisk linje gjennom de merkede boksene, eller null. */
-  critical: CriticalLine | null;
+  /** De kritiske linjene gjennom de merkede boksene, i nummerrekkefølge. Linjer uten bokser er ikke med. */
+  criticals: CriticalLine[];
   /** Én tekstlinje i mm. Høyder og plasser valgt i appen lagres i tekstlinjer, så de følger tekststørrelsen. */
   unit: number;
   /** Utkikk: hele planen i miniatyr under planen. */
@@ -1180,7 +1181,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     if (!(t >= axis.start && t < axis.end)) return null;
     return (axis.xStart(t) + axis.xEnd(t)) / 2;
   };
-  const critical = criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.critical).map((b) => b.id))), file.plan.layout.criticalLine ?? CRITICAL_DEFAULT);
+  // Linje 1 velger høydene først; de neste legger seg ved siden av der de deler bokser
+  const taken = new Map<string, number[]>();
+  const criticals = CRITICAL_NUMBERS.map((n) => criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => inLine(b, n)).map((b) => b.id))), styleOf(file.plan.layout, n), n, taken)).filter((c): c is CriticalLine => !!c);
+  const linePts = (n: number) => criticals.find((c) => c.n === n)?.points ?? null;
   const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
   return {
     width: W,
@@ -1219,9 +1223,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     arrows: placeArrows(file.plan.layout.images ?? [], images, W, H, (id) => {
       const it = items.find((i) => i.id === id);
       return it ? itemRect(it) : null;
-    }, critical?.points),
+    }, linePts),
     xOfDate,
-    critical,
+    criticals,
     unit: lh,
     overview,
     upcoming: overview ? null : upcoming,

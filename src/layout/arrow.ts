@@ -43,8 +43,13 @@ export const arrowWidth = (sizePt: number) => Math.min(1.4, Math.max(0.2, sizePt
 /** Lengden på pilspissen. */
 export const headLength = (width: number) => Math.max(1.8, width * 6.5);
 
-/** Hvor pilspissen står: i boksen den er festet til, eller der den ble sluppet. */
-export function arrowTip(a: NoteArrow, W: number, H: number, rectOf: (id: string) => Rect | null, line?: number[] | null): Pt {
+/** De kritiske linjene etter nummer. En liste alene er linje 1. */
+export type LinePoints = number[] | null | ((n: number) => number[] | null);
+
+/** Hvor pilspissen står: på den kritiske linjen den er festet til, i boksen den er festet til, eller der den ble sluppet. */
+export function arrowTip(a: NoteArrow, W: number, H: number, rectOf: (id: string) => Rect | null, lines?: LinePoints): Pt {
+  const n = a.lineNo ?? 1;
+  const line = typeof lines === 'function' ? lines(n) : n === 1 ? lines : null;
   const onLine = a.line !== undefined && line ? polyAt(line, a.line) : null;
   if (onLine) return onLine;
   const r = a.to ? rectOf(a.to.id) : null;
@@ -222,7 +227,7 @@ export const arrowStyleOf = (im: PlanImage): ArrowStyle => {
 };
 
 /** Pilene til friteksten som vises. placed er bildene slik de står på arket. */
-export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: number, H: number, rectOf: (id: string) => Rect | null, line?: number[] | null): PlacedArrow[] {
+export function placeArrows(images: PlanImage[], placed: PlacedImage[], W: number, H: number, rectOf: (id: string) => Rect | null, line?: LinePoints): PlacedArrow[] {
   const byId = new Map(placed.map((p) => [p.id, p]));
   const out: PlacedArrow[] = [];
   for (const im of images) {
@@ -239,13 +244,15 @@ const r4 = (v: number) => Math.round(v * 10000) / 10000;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Lagrer pilspissen: som andel av arket, og som plass i boksen den står på, hvis noen. */
-export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null, keep?: NoteArrow, line?: number): NoteArrow {
+export function storeTip(tip: Pt, W: number, H: number, target: { id: string; rect: Rect } | null, keep?: NoteArrow, line?: number, lineNo = 1): NoteArrow {
   // Utseendet beholdes; bare plassen og festet byttes
   const a: NoteArrow = { ...keep, x: r4(tip.x / W), y: r4(tip.y / H) };
   delete a.to;
   delete a.line;
+  delete a.lineNo;
   if (line !== undefined) {
     a.line = r4(clamp01(line));
+    if (lineNo > 1) a.lineNo = lineNo;
     return a;
   }
   if (target) {

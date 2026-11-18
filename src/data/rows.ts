@@ -3,6 +3,7 @@ import type { Box, BoxChange, PlanFile, Task } from '../format/types';
 import { plainText } from '../format/text';
 import { boxTrade, tradeColors } from '../trades';
 import { markText } from '../layout/marks';
+import { linesOf, usedLines } from '../criticallines';
 
 export interface DataRow {
   id: string;
@@ -20,7 +21,8 @@ export interface DataRow {
   changes: string[];
   hidden: boolean;
   /** Med i den kritiske linjen. */
-  critical: boolean;
+  /** Ja/Nei, eller linjenumrene boksen er med i når planen har flere kritiske linjer. */
+  critical: string;
   /** Høylytt arbeid og nattarbeid, med vanlige ord. Tom uten merking. */
   marks: string;
   movedFrom: string;
@@ -98,6 +100,12 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
   const laneName = new Map(plan.lanes.map((l) => [l.id, plainText(l.name)]));
   const tradeFill = new Map(tradeColors(plan).map((c) => [c.name, c.fill ?? '']));
   const rows: DataRow[] = [];
+  // Med bare én kritisk linje holder Ja og Nei; med flere vises linjenumrene
+  const manyLines = usedLines(plan).some((n) => n > 1);
+  const critText = (b: Box) => {
+    const ns = linesOf(b);
+    return !ns.length ? 'Nei' : manyLines ? ns.join(', ') : 'Ja';
+  };
   plan.lanes.forEach((l, li) => {
     if (!l.shown) return;
     for (const b of l.boxes) {
@@ -119,7 +127,7 @@ export function planRows(plan: PlanFile, win: DataWindow | null = null): DataRow
         edited: changes.length > 0 || !!l.hidden,
         changes: l.hidden ? [...changes, 'lanen er skjult'] : changes,
         hidden: !!b.hidden || !!l.hidden,
-        critical: !!b.critical,
+        critical: critText(b),
         marks: markText(b, plan.plan.layout.customMark?.name),
         movedFrom: b.fromLane ? (laneName.get(b.fromLane) ?? b.fromLane) : '',
         fromProject: changeText(plan.plan.layout.changes?.[b.id], ms),
