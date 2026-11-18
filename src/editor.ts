@@ -19,6 +19,7 @@ import { createPushHint, pieceHeight, pieceRect, pinAt, pinOffset, pushDown, set
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
 import { mergedInto, mergeLanes, mergeTargets, splitLane } from './lanemerge';
 import { contentWords, createLanePick, laneName } from './lanepick';
+import { canTakeHeight, createHeightCopy, resultWords, sameHeight } from './heightcopy';
 import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
@@ -201,6 +202,20 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     },
   });
 
+  /** «Gi andre bokser samme høyde»: neste klikk på en boks gir den høyden. */
+  const heightBar = document.querySelector<HTMLElement>('#heightcopy-bar');
+  const heightCopy = heightBar && createHeightCopy({
+    bar: heightBar,
+    accent: ACCENT,
+    getPlan: () => host.getPlan(),
+    layout: () => layoutNow,
+    commit: (fn, key) => commit(fn, key),
+    onChange: () => {
+      overlay();
+      syncTools();
+    },
+  });
+
   const syncTools = () => {
     toggle.setAttribute('aria-pressed', String(active));
     const label = toggle.querySelector('#edit-label');
@@ -214,7 +229,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(critical.mode));
     sheet.classList.toggle('critical-mode', active && critical.mode);
-    sheet.classList.toggle('follow-mode', active && (!!followPick || !!lanePick?.from));
+    sheet.classList.toggle('follow-mode', active && (!!followPick || !!lanePick?.from || !!heightCopy?.from));
   };
 
   /** Tar vare på planen før en endring, så den kan angres. */
@@ -543,6 +558,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const step = from.pop();
     if (!plan || !step) return;
     endArrange();
+    heightCopy?.end();
     to.push({ plan: snapshotOf(plan), settings: host.getSettings() });
     const prev = step.plan;
     host.setPlan(prev);
@@ -1127,6 +1143,37 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     selected = id;
     commit((pl) => setFollow(pl, id, target, edge));
   };
+  // ---- Samme høyde som en annen boks ----
+  /** Høyreklikk-valgene for å gi andre bokser samme høyde som `id`. Med flere valgt også «de valgte». */
+  const sameHeightItems = (id: string): CtxItem[] => {
+    const plan = host.getPlan();
+    if (!plan || !heightCopy || !canTakeHeight(findBox(plan, id))) return [];
+    const others = group.includes(id) ? group.filter((x) => x !== id && canTakeHeight(findBox(plan, x))) : [];
+    return [
+      ...(others.length
+        ? [{ label: 'Gi de valgte samme høyde', icon: 'sameHeight' as const, hint: `${others.length === 1 ? 'Den andre valgte boksen' : `De ${others.length} andre valgte boksene`} blir like høye som denne. Får ikke teksten plass, havner den i callout.`, onSelect: () => sameHeightAsSelected(id, others) }]
+        : []),
+      { label: 'Gi andre bokser samme høyde …', icon: 'sameHeight', hint: 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', onSelect: () => startHeightCopy(id) },
+    ];
+  };
+  const startHeightCopy = (id: string) => {
+    endFollowPick();
+    lanePick?.end();
+    if (critical.mode) setCriticalMode(false);
+    selected = id;
+    group = [];
+    buildPanel();
+    heightCopy?.start(id);
+  };
+  /** Alle valgte bokser får samme høyde som `id`, i ett angresteg. */
+  const sameHeightAsSelected = (id: string, ids: string[]) => {
+    const L = layoutNow;
+    if (!L) return;
+    let r = { callout: 0, taller: 0 };
+    commit((pl) => (r = sameHeight(pl, L, id, ids)));
+    const words = resultWords(r);
+    if (words) showArrangeBar(words, true);
+  };
   /** Bytter mellom start og slutt på samme boks. */
   const setFollowEdge = (id: string, edge: Edge) => {
     const b = findBox(host.getPlan()!, id);
@@ -1357,6 +1404,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           'Klikk en boks for å velge den. Dobbeltklikk for å skrive.',
           'Dra en boks opp eller ned for å gi den fast plass i lanen, eller til en annen lane for å flytte den dit. Hold Ctrl mens du drar for å skyve boksene under ned, så de beholder formen.',
           'Dra i den blå streken under valgt boks for å endre høyden. Bunnen snapper til kanten av andre bokser, så de kan stilles på linje (hold Alt for å dra fritt).',
+          'Høyreklikk en boks og velg «Gi andre bokser samme høyde …», og klikk boksene som skal bli like høye. Med flere bokser valgt: «Gi de valgte samme høyde». Får ikke teksten plass, havner den i callout.',
           'Shift-klikk for å velge flere bokser, eller hold Shift og dra et rektangel.',
           'Omplasser i verktøylinjen pakker lanene på nytt, f.eks. etter at du har endret høyder. Angre om du ikke liker forslaget.',
         ]],
@@ -1749,6 +1797,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       line(sel.x0, sel.x1, sel.y + sel.h, { class: 'edit-handle box-handle', stroke: 'transparent', 'stroke-width': 7, 'pointer-events': 'stroke' });
     }
     lanePick?.draw(g, L);
+    heightCopy?.draw(g, L);
     if (!critical.mode) areaEdit.draw(g);
     imageOverlay(g);
     svgNow.append(g);
@@ -2464,6 +2513,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const g = itemOf(e);
     if (followPick) return pickFollowTarget(boxAt(e));
     if (lanePick?.from) return lanePick.click(laneAt(toMm(e.clientX, e.clientY).y)?.id ?? null);
+    if (heightCopy?.from) return heightCopy.click(boxAt(e));
     if (critical.mode) {
       const id = boxAt(e);
       const b = id ? findBox(host.getPlan()!, id) : null;
@@ -2522,7 +2572,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ta?.select();
   });
   sheet.addEventListener('pointerdown', (e) => {
-    if (!active || e.button !== 0 || !layoutNow || critical.mode || followPick || lanePick?.from) return;
+    if (!active || e.button !== 0 || !layoutNow || critical.mode || followPick || lanePick?.from || heightCopy?.from) return;
     const t = e.target as Element;
     let d: Drag | null = null;
     const imgHandle = t.closest('.img-size, .img-rot, .img-crop, .img-pt, .img-mid');
@@ -2695,6 +2745,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const q = toMm(e.clientX, e.clientY);
     images.lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
     if (lanePick?.from && lanePick.hover(laneAt(q.y)?.id ?? null)) overlay();
+    if (heightCopy?.from && heightCopy.hover(boxAt(e))) overlay();
   });
   sheet.addEventListener('pointerleave', () => (images.lastPointer = null));
   // Nettleserens egen dra-og-slipp av bilder i tegningen skal ikke starte: den ville lagt inn en kopi
@@ -2879,6 +2930,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           items: [
             { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
             { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+C', hint: 'Lim inn i en annen lane med Ctrl+V eller høyreklikk der.', onSelect: () => { if (!group.includes(id)) { group = []; selected = id; } copyToClipboard(); } },
+          ],
+        },
+        {
+          items: [
+            ...sameHeightItems(id),
             ...(ms ? [] : [{ label: 'Standard høyde', icon: 'height' as const, hint: box.height ? 'Så høy som teksten krever.' : 'Boksen har allerede standard høyde.', disabled: !box.height, onSelect: () => commit((pl) => delete findBox(pl, id)!.height) }]),
             { label: 'Løsne', icon: 'pin', hint: !pinned(box) ? 'Boksen er ikke festet. Den festes når du drar den opp eller ned.' : 'Appen velger plassen i lanen igjen.', disabled: !pinned(box), onSelect: () => commit((pl) => unpinBox(findBox(pl, id)!)) },
           ],
@@ -2964,6 +3020,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       endArrange();
       endFollowPick();
       lanePick?.end();
+      heightCopy?.end();
       critical.stop();
       selected = null;
       selectedLane = null;
@@ -3033,6 +3090,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (inField) t.blur();
       else if (followPick) endFollowPick();
       else if (lanePick?.from) lanePick.end();
+      else if (heightCopy?.from) heightCopy.end();
       else if (critical.mode) setCriticalMode(false);
       else if (images.selected && images.mode !== 'none') setImageMode(images.mode);
       else select(null);
@@ -3147,6 +3205,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       endArrange();
       endFollowPick();
       lanePick?.end();
+      heightCopy?.end();
       past = [];
       future = [];
       dirty = false;
@@ -3191,6 +3250,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     replacePlan(p) {
       endFollowPick();
       lanePick?.end();
+      heightCopy?.end();
       snapshot();
       host.setPlan(p);
       selected = null;
