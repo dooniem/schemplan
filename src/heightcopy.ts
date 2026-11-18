@@ -70,6 +70,8 @@ export interface HeightCopy {
   end(): void;
   /** Klikk på en boks: gir den høyden, eller setter den tilbake hvis den alt har fått den. */
   click(id: string | null): void;
+  /** Boksen musen er over. Gir true når merkingen må tegnes på nytt. */
+  hover(id: string | null): boolean;
   /** Merker boksen høyden hentes fra (heltrukket) og boksene som har fått den (stiplet). */
   draw(g: SVGGElement, L: Layout): void;
 }
@@ -91,6 +93,8 @@ export function createHeightCopy(o: {
   let runs = 0;
   /** Boksene som har fått høyden, slik de var før, så et nytt klikk setter dem tilbake. */
   let done = new Map<string, Before>();
+  /** Boksen musen er over, som får en stiplet ramme med høyden den vil få. */
+  let over: string | null = null;
 
   const name = (b: Box | null | undefined) => `«${(b && plainText(b.text.replace(/\|/g, ' '))) || 'Boks'}»`;
   const say = (s: string) => (text.textContent = s);
@@ -114,6 +118,7 @@ export function createHeightCopy(o: {
   const end = () => {
     if (from === null) return;
     from = null;
+    over = null;
     done = new Map();
     o.bar.hidden = true;
     o.onChange();
@@ -139,6 +144,7 @@ export function createHeightCopy(o: {
       }, key);
       return say(`${name(b)} er satt tilbake. Klikk flere bokser, eller Ferdig.`);
     }
+    over = null;
     const need = heightsOf(L, id)?.need ?? 0;
     done.set(id, { height: b.height, callout: b.callout });
     let r = 'skip' as HeightResult;
@@ -160,13 +166,24 @@ export function createHeightCopy(o: {
     for (const [k, v] of Object.entries(a)) r.setAttribute(k, String(v));
     g.append(r);
   };
+  const hover = (id: string | null) => {
+    const plan = o.getPlan();
+    const next = from !== null && id && id !== from && !done.has(id) && plan && canTakeHeight(findBox(plan, id)) ? id : null;
+    if (next === over) return false;
+    over = next;
+    return true;
+  };
   const draw = (g: SVGGElement, L: Layout) => {
     if (from === null) return;
     const pad = 0.9;
     for (const it of L.items) {
-      if (it.kind !== 'box' || (it.id !== from && !done.has(it.id))) continue;
+      if (it.kind !== 'box') continue;
       const box = { x: it.x0 - pad, y: it.y - pad, width: it.x1 - it.x0 + 2 * pad, height: it.h + 2 * pad, rx: 0.8, fill: o.accent };
-      rect(g, it.id === from ? { ...box, 'fill-opacity': 0.08, stroke: o.accent, 'stroke-width': 0.8 } : { ...box, 'fill-opacity': 0.05, stroke: o.accent, 'stroke-width': 0.5, 'stroke-dasharray': '1.4 0.9' });
+      // Boksen høyden hentes fra er valgt og har alt en ramme, så den får bare en svak farge
+      if (it.id === from) rect(g, { ...box, 'fill-opacity': 0.1, stroke: 'none' });
+      else if (done.has(it.id)) rect(g, { ...box, 'fill-opacity': 0.05, stroke: o.accent, 'stroke-width': 0.5, 'stroke-dasharray': '1.4 0.9' });
+      // Under musen: høyden boksen vil få
+      else if (it.id === over) rect(g, { x: it.x0, y: it.y, width: it.x1 - it.x0, height: src * L.unit, rx: 0.4, fill: o.accent, 'fill-opacity': 0.12, stroke: o.accent, 'stroke-width': 0.5, 'stroke-dasharray': '1.4 0.9' });
     }
   };
 
@@ -179,6 +196,7 @@ export function createHeightCopy(o: {
     start,
     end,
     click,
+    hover,
     draw,
   };
 }

@@ -1151,9 +1151,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const others = group.includes(id) ? group.filter((x) => x !== id && canTakeHeight(findBox(plan, x))) : [];
     return [
       ...(others.length
-        ? [{ label: 'Gi de valgte samme høyde', icon: 'height' as const, hint: `${others.length === 1 ? 'Den andre valgte boksen' : `De ${others.length} andre valgte boksene`} blir like høye som denne. Får ikke teksten plass, havner den i callout.`, onSelect: () => sameHeightAsSelected(id, others) }]
+        ? [{ label: 'Gi de valgte samme høyde', icon: 'sameHeight' as const, hint: `${others.length === 1 ? 'Den andre valgte boksen' : `De ${others.length} andre valgte boksene`} blir like høye som denne. Får ikke teksten plass, havner den i callout.`, onSelect: () => sameHeightAsSelected(id, others) }]
         : []),
-      { label: 'Gi andre bokser samme høyde …', icon: 'height', hint: 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', onSelect: () => startHeightCopy(id) },
+      { label: 'Gi andre bokser samme høyde …', icon: 'sameHeight', hint: 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', onSelect: () => startHeightCopy(id) },
     ];
   };
   const startHeightCopy = (id: string) => {
@@ -2745,6 +2745,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const q = toMm(e.clientX, e.clientY);
     images.lastPointer = q.x >= 0 && q.y >= 0 && q.x <= layoutNow.width && q.y <= layoutNow.height ? q : null;
     if (lanePick?.from && lanePick.hover(laneAt(q.y)?.id ?? null)) overlay();
+    if (heightCopy?.from && heightCopy.hover(boxAt(e))) overlay();
   });
   sheet.addEventListener('pointerleave', () => (images.lastPointer = null));
   // Nettleserens egen dra-og-slipp av bilder i tegningen skal ikke starte: den ville lagt inn en kopi
@@ -2929,6 +2930,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           items: [
             { label: 'Dupliser', icon: 'copy', kbd: 'Ctrl+D', hint: 'Lager en kopi rett under. Kopien følger ikke Project.', onSelect: () => { selected = id; copySelected(); } },
             { label: 'Kopier', icon: 'copy', kbd: 'Ctrl+C', hint: 'Lim inn i en annen lane med Ctrl+V eller høyreklikk der.', onSelect: () => { if (!group.includes(id)) { group = []; selected = id; } copyToClipboard(); } },
+          ],
+        },
+        {
+          items: [
             ...sameHeightItems(id),
             ...(ms ? [] : [{ label: 'Standard høyde', icon: 'height' as const, hint: box.height ? 'Så høy som teksten krever.' : 'Boksen har allerede standard høyde.', disabled: !box.height, onSelect: () => commit((pl) => delete findBox(pl, id)!.height) }]),
             { label: 'Løsne', icon: 'pin', hint: !pinned(box) ? 'Boksen er ikke festet. Den festes når du drar den opp eller ned.' : 'Appen velger plassen i lanen igjen.', disabled: !pinned(box), onSelect: () => commit((pl) => unpinBox(findBox(pl, id)!)) },
