@@ -33,6 +33,7 @@ import { withCalendarRange } from './layout/range';
 import { MAX_MIN_HOLIDAY_DAYS, minHolidayDays } from './layout/holidays';
 import { applyLookahead, isoWeekMonday, LOOKAHEAD_DEFAULT, resolveWindow, LOOKAHEAD_MAX_WEEKS, todayIso, weekOf, weeksInIsoYear, type LookaheadWindow } from './layout/lookahead';
 import type { Lookahead } from './format/types';
+import { setupHelp } from './help/help';
 
 const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) => {
@@ -51,13 +52,7 @@ $('#help-version').textContent = `Versjon ${__APP_VERSION__}`;
   a.href = home;
   a.textContent = home.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
-{
-  const help = $('#help') as HTMLDialogElement;
-  $('#help-open').addEventListener('click', () => help.showModal());
-  $('#help-close').addEventListener('click', () => help.close());
-  // Klikk utenfor vinduet lukker det
-  help.addEventListener('click', (e) => e.target === help && help.close());
-}
+setupHelp($('#help') as HTMLDialogElement, $('#help-open'));
 placePopovers();
 setupSubmenus($<HTMLElement>('#menu-sheet'));
 checkOutboundBlocked().then((blocked) => {
