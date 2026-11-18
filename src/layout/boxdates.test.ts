@@ -19,6 +19,10 @@ describe('datoer på boksene', () => {
     expect(dateText('2026-11-03', '2026-12-14', 'dmon')).toBe('3. nov–14. des');
     expect(dateText('2026-11-03', '2026-11-14', 'week')).toBe('uke 45–46');
     expect(dateText('2026-11-03', '2026-11-05', 'week')).toBe('uke 45');
+    expect(dateText('2026-11-03', '2026-11-14', 'dmShort')).toBe('3.11–14.11');
+    expect(dateText('2026-11-03', '2026-11-14', 'dmyyyy')).toBe('03.11.2026–14.11.2026');
+    expect(dateText('2026-11-03', '2026-11-14', 'dmonyyyy')).toBe('3. nov 2026–14. nov 2026');
+    expect(dateText('2026-11-03', '2026-11-14', 'wdm')).toBe('ti 03.11–lø 14.11');
   });
 
   it('deler raden etter tankestreken når den ikke får plass', () => {

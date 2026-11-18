@@ -139,7 +139,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.showChanges !== undefined) needBool(lay, 'showChanges', 'plan.layout');
       if (lay.todayLine !== undefined) needBool(lay, 'todayLine', 'plan.layout');
       if (lay.showDates !== undefined) needBool(lay, 'showDates', 'plan.layout');
-      if (lay.dateFormat !== undefined) needEnum(lay, 'dateFormat', 'plan.layout', ['dm', 'dmy', 'dmon', 'week']);
+      if (lay.dateFormat !== undefined) needEnum(lay, 'dateFormat', 'plan.layout', ['dm', 'dmShort', 'dmy', 'dmyyyy', 'dmon', 'dmonyyyy', 'wdm', 'week']);
       if (lay.showProgress !== undefined) needBool(lay, 'showProgress', 'plan.layout');
       if (lay.showBaseline !== undefined) needBool(lay, 'showBaseline', 'plan.layout');
       if (lay.revision !== undefined) {

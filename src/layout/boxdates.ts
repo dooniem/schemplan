@@ -1,9 +1,9 @@
 // Start- og sluttdato som egen rad i boksene, under teksten (også i callouts).
 // Valget gjelder hele planen, og hver boks kan ha sitt eget valg som går foran.
 // Raden er litt mindre og i en dempet utgave av tekstfargen, så den ikke tar fokus fra teksten.
-import type { Box, PlanFile } from '../format/types';
+import type { Box, BoxDateFormat, PlanFile } from '../format/types';
 import { mixColor } from './color';
-import { isoWeek, MONTHS_NB, parseIso } from './dates';
+import { isoWeek, MONTHS_NB, parseIso, weekday } from './dates';
 import { LINE_HEIGHT, type Measure } from './text';
 
 const EPS = 1e-6;
@@ -14,15 +14,22 @@ export const DATE_SCALE = 0.8;
 /** Hvor langt tekstfargen blandes mot bakgrunnen, så datoen blir dempet men fortsatt lesbar. */
 const DATE_MUTE = 0.35;
 
-export type DateFormat = 'dm' | 'dmy' | 'dmon' | 'week';
-export const DATE_FORMATS: readonly DateFormat[] = ['dm', 'dmy', 'dmon', 'week'];
+export type DateFormat = BoxDateFormat;
+/** Rekkefølgen i valget: kortest først, så med år, måned i tekst, ukedag og uke. */
+export const DATE_FORMATS: readonly DateFormat[] = ['dm', 'dmShort', 'dmy', 'dmyyyy', 'dmon', 'dmonyyyy', 'wdm', 'week'];
 export const DEFAULT_DATE_FORMAT: DateFormat = 'dm';
 
+const WEEKDAYS_NB = ['ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø'];
 const dm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+const dmon = (iso: string) => `${Number(iso.slice(8, 10))}. ${MONTHS_NB[Number(iso.slice(5, 7)) - 1].toLowerCase()}`;
 const one: Record<Exclude<DateFormat, 'week'>, (iso: string) => string> = {
   dm,
+  dmShort: (iso) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`,
   dmy: (iso) => `${dm(iso)}.${iso.slice(2, 4)}`,
-  dmon: (iso) => `${Number(iso.slice(8, 10))}. ${MONTHS_NB[Number(iso.slice(5, 7)) - 1].toLowerCase()}`,
+  dmyyyy: (iso) => `${dm(iso)}.${iso.slice(0, 4)}`,
+  dmon,
+  dmonyyyy: (iso) => `${dmon(iso)} ${iso.slice(0, 4)}`,
+  wdm: (iso) => `${WEEKDAYS_NB[weekday(parseIso(iso))]} ${dm(iso)}`,
 };
 
 /** Datoene som tekst i valgt format. Starter og slutter boksen samme dag (eller uke), står den bare én gang. */
@@ -39,8 +46,12 @@ export function dateText(start: string, finish: string, format: DateFormat = DEF
 /** Eksempel til valget av format. */
 export const DATE_FORMAT_LABELS: Record<DateFormat, string> = {
   dm: '03.11–14.11',
+  dmShort: '3.11–14.11',
   dmy: '03.11.26–14.11.26',
+  dmyyyy: '03.11.2026–14.11.2026',
   dmon: '3. nov–14. nov',
+  dmonyyyy: '3. nov 2026–14. nov 2026',
+  wdm: 'ti 03.11–lø 14.11',
   week: 'uke 45–46',
 };
 
