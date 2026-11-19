@@ -232,6 +232,10 @@ body { margin: 0; background: var(--bg); display: flex; flex-direction: column; 
 .set-switches.set-switches-top { margin-top: 0; padding-top: 0; border-top: 0; }
 .arrange-menu .set-switch { padding: 6px 10px; }
 .arrange-menu .ctx-sub { line-height: 1.4; }
+/* Notis om at Omplasser kan gjelde én lane eller valgte bokser, når hele planen er med */
+.arrange-tip { display: flex; gap: 8px; margin: 4px 6px 6px; padding: 8px 10px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.arrange-tip[hidden] { display: none; }
+.arrange-tip svg { flex: none; width: 16px; height: 16px; margin-top: 1px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
 /* Utkikk: samme byggeklosser som Innstillinger, i menyens uttrykk. Valgene for perioden er
    alltid synlige; endrer man dem, slås utkikken på. */
 .pop.lookahead-menu { width: min(368px, calc(100vw - 16px)); }

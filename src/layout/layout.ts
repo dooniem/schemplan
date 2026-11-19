@@ -365,6 +365,8 @@ export function packVariants(
   pieces: { alts: { fx0: number; fx1: number; h: number }[]; lock?: number; band?: number; bx?: [number, number] }[],
   gap = GAP,
   limit?: (fx0: number, fx1: number) => [number, number],
+  /** Trapp: en løs brikke legges aldri over en løs brikke foran i rekken som den overlapper i tid. */
+  stair = false,
 ): { y: number; k: number; bad?: boolean; h?: number }[] {
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
   // Overskriftsbokser: for bokser med fast plass er det bare tekstfeltet øverst som er opptatt
@@ -382,15 +384,19 @@ export function packVariants(
   // Overskriftsbokser først ved lik plass, så boksene inne i dem legges oppå
   const locked = order.filter((i) => pieces[i].lock !== undefined).sort((a, b) => lockAt[a]! - lockAt[b]! || (pieces[b].band !== undefined ? 1 : 0) - (pieces[a].band !== undefined ? 1 : 0));
   const free = order.filter((i) => pieces[i].lock === undefined);
+  // Trapp: tidsrommet (selve boksen, uten callout) og bunnen til løse brikker som er lagt
+  const laid: { x0: number; x1: number; y1: number }[] = [];
   for (const i of [...locked, ...free]) {
     // Overskriftsboksene blir høyere når boksene inni dem er skjøvet ned, før resten pakkes rundt dem
     if (i === free[0]) growHeaders();
     const p = pieces[i];
+    const span = p.bx ?? [p.alts[0].fx0, p.alts[0].fx1];
+    const below = stair && p.lock === undefined ? laid.filter((q) => span[0] < q.x1 - 1e-6 && q.x0 < span[1] - 1e-6).reduce((m, q) => Math.max(m, q.y1 + gap), 0) : 0;
     let best = { y: 0, k: 0, score: Infinity, w: Infinity, bad: false };
     p.alts.forEach((v, k) => {
       // Egendefinert planområde: brikken må ligge mellom kantene der den står
       const [lo, hi] = limit ? limit(v.fx0, v.fx1) : [0, Infinity];
-      const y = lowest(v, Math.max(lockAt[i] ?? 0, lo), p.lock !== undefined);
+      const y = lowest(v, Math.max(lockAt[i] ?? 0, lo, below), p.lock !== undefined);
       const bad = y + v.h > hi + 1e-6;
       // En variant som går utenfor kanten velges bare når ingen andre får plass
       const score = y + v.h + (bad ? 1e6 : 0);
@@ -401,6 +407,7 @@ export function packVariants(
     rectOf.set(i, placed.length);
     placed.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + v.h });
     inner.push({ x0: v.fx0, x1: v.fx1, y0: best.y, y1: best.y + (p.band ?? v.h) });
+    if (stair && p.lock === undefined) laid.push({ x0: span[0], x1: span[1], y1: best.y + v.h });
     out[i] = best.bad ? { y: best.y, k: best.k, bad: true } : { y: best.y, k: best.k };
   }
   if (!free.length) growHeaders();
@@ -721,7 +728,25 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       const found = arrange.mode === 'tight' ? tightestOrder(work) : null;
       if (found) work = found;
       arrange.out.set(lane.id, found && found.map((p) => p.item.id));
-      if (work.some((p) => arrange.groups.has(p.item.id))) {
+      if (arrange.mode !== 'tight') {
+        // Trapp: i datorekkefølge, eller samlet per fag (i rekkefølgen i forklaringen) og så etter dato.
+        // Plassene lagres som fast plass, så trappen blir stående.
+        const tradeRank = new Map(tradeColors(file).map((c, k) => [c.name, k]));
+        const byId = new Map(lane.boxes.map((b) => [b.id, b]));
+        const rankOf = (p: Piece) => {
+          const b = byId.get(p.item.id);
+          const t = b ? boxTrade(b) : undefined;
+          return t === undefined ? Infinity : (tradeRank.get(t) ?? Infinity - 1);
+        };
+        work.sort((a, b) => (arrange.mode === 'trade' ? rankOf(a) - rankOf(b) : 0) || a.sortX - b.sortX || b.sortW - a.sortW);
+        const placed = packVariants(work.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band, bx: boxX(p) })), GAP, undefined, true);
+        work.forEach((p, j) => {
+          if (p.lock !== undefined) return;
+          const top = Math.round((placed[j].y / lh) * 100) / 100;
+          arrange.pins.set(p.item.id, top);
+          for (const k of arrange.groups.get(p.item.id) ?? []) arrange.pins.set(k.id, Math.round((top + k.dy) * 100) / 100);
+        });
+      } else if (work.some((p) => arrange.groups.has(p.item.id))) {
         // Overskriftsbokser har alltid fast plass: der den havnet, og boksene inni like langt ned som før
         const placed = packVariants(work.map((p) => ({ alts: p.alts ?? [p], lock: p.lock, band: p.band })));
         work.forEach((p, j) => {
@@ -1528,8 +1553,11 @@ export function applyOrder<T extends { item: { id: string }; sortX: number }>(pi
   return out;
 }
 
+/** tight: lavest mulig lane. stair: trapp i datorekkefølge. trade: trapp samlet per fag. */
+export type ArrangeMode = 'tight' | 'stair' | 'trade';
+
 export interface ArrangeOptions {
-  mode: 'tight' | 'chrono';
+  mode: ArrangeMode;
   /** Overskriftsbokser som skal flyttes, med boksene inni og hvor langt ned i den de står (tekstlinjer). */
   groups?: Map<string, { id: string; dy: number }[]>;
 }
@@ -1537,13 +1565,13 @@ export interface ArrangeOptions {
 export interface ArrangeResult {
   /** Ny rekkefølge per lane, eller null når den vanlige (tidligst først) er like tett. */
   orders: Map<string, string[] | null>;
-  /** Ny fast plass (tekstlinjer) for overskriftsboksene som ble flyttet og boksene inni dem. */
+  /** Ny fast plass (tekstlinjer): overskriftsboksene som ble flyttet og boksene inni dem, og i trapp alle boksene som ble lagt. */
   pins: Map<string, number>;
 }
 
 interface ArrangeRequest {
   lanes: Set<string>;
-  mode: 'tight' | 'chrono';
+  mode: ArrangeMode;
   groups: Map<string, { id: string; dy: number }[]>;
   out: Map<string, string[] | null>;
   pins: Map<string, number>;

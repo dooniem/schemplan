@@ -39,12 +39,56 @@ async function lagre(navn, png) {
   console.log(`${navn}.webp  ${(buf.length / 1024).toFixed(0)} kB`);
 }
 
-/** Ny side med testplanen åpnet. */
+/** En liten oppdiktet plan til Ctrl-skyv og Omplasser: en trapp av festede bokser og en rotete lane. */
+function smaplan() {
+  const fag = [['Grunnarbeid', '#F58231'], ['Betong', '#4363D8'], ['Elektro', '#FFE119'], ['VA', '#808000']];
+  let uid = 1;
+  const tasks = [];
+  const box = (lane, n, text, start, finish, trade, extra = {}) => {
+    const id = uid++;
+    tasks.push({ uid: id, name: text, start, finish, deadline: null, milestone: false, summary: false, flag20: false, percentComplete: 0, trade });
+    return { id: `${lane}_${n}`, text, taskIds: [id], rotation: 0, milestone: null, shown: true, resolved: { start, finish, isMilestone: false, trade }, ...extra };
+  };
+  const lanes = [
+    { id: '1', name: 'Lorem ipsum', fill: '#FFFFFF', shown: true, boxes: [
+      box(1, 1, 'Dolor sit amet', '2027-01-06', '2027-02-05', 'Betong', { top: 0 }),
+      box(1, 2, 'Consectetur', '2027-02-01', '2027-03-05', 'Betong', { top: 1.25 }),
+      box(1, 3, 'Adipiscing elit', '2027-03-01', '2027-03-31', 'Betong', { top: 2.5 }),
+      box(1, 4, 'Ny aktivitet', '2027-01-18', '2027-02-19', 'Grunnarbeid', { top: 4 }),
+    ] },
+    { id: '2', name: 'Sed do eiusmod', fill: '#FFFFFF', shown: true, boxes: [
+      box(2, 1, 'Tempor', '2027-01-04', '2027-02-12', 'VA', { top: 3 }),
+      box(2, 2, 'Incididunt ut|labore|et dolore', '2027-02-01', '2027-03-19', 'Elektro', { top: 0 }),
+      box(2, 3, 'Labore', '2027-03-01', '2027-04-09', 'VA', { top: 4.5 }),
+      box(2, 4, 'Et dolore|magna', '2027-03-22', '2027-04-23', 'Elektro', { top: 1.5 }),
+      box(2, 5, 'Aliqua', '2027-01-18', '2027-02-26', 'Grunnarbeid', { top: 4.5 }),
+      box(2, 6, 'Ut enim', '2027-04-05', '2027-04-30', 'VA', { top: 3 }),
+      box(2, 7, 'Minim veniam', '2027-03-08', '2027-04-16', 'Grunnarbeid', { top: 6 }),
+    ] },
+    ...['Quis nostrud', 'Exercitation', 'Ullamco laboris', 'Nisi ut aliquip', 'Commodo', 'Duis aute'].map((name, i) => ({
+      id: String(i + 3), name, fill: '#FFFFFF', shown: true,
+      boxes: [box(i + 3, 1, name, `2027-0${1 + (i % 3)}-11`, `2027-0${3 + (i % 2)}-12`, fag[i % 4][0])],
+    })),
+  ];
+  return {
+    format: 'schemplan', version: 1, exportedAt: '2026-11-06T12:00:00', anonymized: true,
+    plan: {
+      title: 'Eksempelplan', schemNumber: 1,
+      calendar: { mode: 'month', start: '2027-01-01', end: '2027-05-31', workingDaysPerWeek: 5, bottomCalendar: false },
+      layout: { orientation: 'landscape', heightMode: 'fill', textSize: 10, calloutMaxWidthCm: 5, excelWidthMultiplier: 1 },
+      options: { legend: true, flag20Only: false, filterOutput: false, colorBy: 'trade' },
+    },
+    colors: [{ name: '(none)', fill: '#FFFAC8', border: '#000000', text: '#000000' }, ...fag.map(([name, fill]) => ({ name, fill, border: '#000000', text: '#000000' }))],
+    holidays: [], lanes, tasks,
+  };
+}
+
+/** Ny side med testplanen åpnet, eller planen som er gitt. */
 async function side(form = 'middels') {
   const p = await ctx.newPage();
   p.on('pageerror', (e) => console.error('Feil i siden:', e.message));
   await p.goto(APP);
-  const json = await p.evaluate(async (f) => {
+  const json = typeof form === 'object' ? JSON.stringify(form) : await p.evaluate(async (f) => {
     const m = await import(`${location.pathname}src/test/testplaner.ts`);
     return JSON.stringify(m.testform(f));
   }, form);
@@ -69,6 +113,27 @@ const laneNavn = async (p, i) => {
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   }, i);
   return r;
+};
+/** Zoomer inn og ruller arket helt til venstre og øverst, så lanene øverst blir store. */
+const naerbilde = async (p) => {
+  await p.click('#zoom-in');
+  await p.waitForTimeout(200);
+  await p.evaluate(() => { const h = document.querySelector('#sheet'); h.scrollLeft = 0; h.scrollTop = 0; });
+  await p.waitForTimeout(150);
+};
+/** Utsnitt av lane nr. i: lane-navnet og boksene i lanen, med litt luft rundt. */
+const laneUtsnitt = async (p, i) => {
+  const r = await p.evaluate((i) => {
+    const t = document.querySelectorAll('#sheet g.lanes > rect')[i].getBoundingClientRect();
+    const boxes = [...document.querySelectorAll(`#sheet [data-id^="${i + 1}_"]`)].map((e) => e.getBoundingClientRect());
+    const panel = document.querySelector('#panel');
+    const p1 = panel && !panel.hidden ? panel.getBoundingClientRect().left - 40 : Infinity;
+    return { x0: t.x, y0: t.y, yb: t.bottom, x1: Math.min(p1, Math.max(...boxes.map((b) => b.right))), y1: Math.max(...boxes.map((b) => b.bottom)) };
+  }, i);
+  const x = Math.max(0, r.x0 - 6);
+  const y = Math.max(0, r.y0 - 6);
+  // Plass til at boksene kan havne lenger ned etter flytting
+  return { x, y, width: Math.min(1440 - x, r.x1 + 40 - x), height: Math.min(900 - y, r.yb + 2 - y, r.y1 + 70 - y) };
 };
 const rediger = async (p) => { await p.click('#edit'); await p.waitForTimeout(250); };
 const ta = async (p, navn, clip) => {
@@ -203,6 +268,63 @@ const bilder = {
     await p.click('[data-sub="sub-kal"]');
     await p.waitForTimeout(250);
     await ta(p, 'innstillinger', { x: 0, y: 0, width: 900, height: 620 });
+  },
+  async skyv() {
+    // Ny aktivitet dras til toppen av trappen: uten og med Ctrl
+    for (const [navn, ctrl] of [['skyv-1', null], ['skyv-2', false], ['skyv-3', true]]) {
+      const p = await side(smaplan());
+      await naerbilde(p);
+      await rediger(p);
+      const clip = await laneUtsnitt(p, 0);
+      if (ctrl !== null) {
+        const fra = await midt(p, boks('1_4'));
+        const til = await midt(p, boks('1_2'));
+        await p.mouse.move(fra.x, fra.y);
+        await p.mouse.down();
+        if (ctrl) await p.keyboard.down('Control');
+        const steg = 12;
+        for (let i = 1; i <= steg; i++) await p.mouse.move(fra.x, fra.y + ((til.b.y + 2 - fra.b.y) * i) / steg);
+        await p.waitForTimeout(150);
+        await p.mouse.up();
+        if (ctrl) await p.keyboard.up('Control');
+        await p.waitForTimeout(250);
+        await p.keyboard.press('Escape');
+      }
+      await ta(p, navn, clip);
+      await p.close();
+    }
+  },
+  async omplasser() {
+    // Samme rotete lane før og etter hver av de tre måtene
+    const valg = [['omplasser-1', null], ['omplasser-2', '#arrange-tight'], ['omplasser-3', '#arrange-stair'], ['omplasser-4', '#arrange-trade']];
+    for (const [navn, knapp] of valg) {
+      const p = await side(smaplan());
+      await naerbilde(p);
+      await rediger(p);
+      if (knapp) {
+        const l = await laneNavn(p, 1);
+        await p.mouse.click(l.x, l.y);
+        await p.click('#arrange-menu');
+        await p.waitForTimeout(150);
+        await p.check('#arrange-unpin');
+        await p.click(knapp);
+        await p.waitForTimeout(400);
+        await p.click('#arrange-keep');
+        await p.keyboard.press('Escape');
+        await p.waitForTimeout(200);
+      }
+      await ta(p, navn, await laneUtsnitt(p, 1));
+      await p.close();
+    }
+  },
+  async omplassermeny() {
+    const p = await side(smaplan());
+    await rediger(p);
+    const l = await laneNavn(p, 1);
+    await p.mouse.click(l.x, l.y);
+    await p.click('#arrange-menu');
+    await p.waitForTimeout(250);
+    await ta(p, 'omplasser-meny', await rundt(p, '#menu-arrange', 24, { w: 520 }));
   },
   async lagre() {
     const p = await side();

@@ -1,7 +1,7 @@
 // «Omplasser» og «Størst mulig tekst» i redigeringen: menyen, forslaget, og linjen under verktøyene
 // der endringen kan beholdes eller angres. Boksene som ble flyttet, merkes til det er avgjort.
 import type { PlanFile } from './format/types';
-import type { ArrangeOptions, ArrangeResult, Item, Layout } from './layout/layout';
+import type { ArrangeMode, ArrangeOptions, ArrangeResult, Item, Layout } from './layout/layout';
 import { plainText } from './format/text';
 import { resetTextSizes, type FitTextResult, type FitTextScope } from './layout/fittext';
 import { bounds, findBox, findLane, inHeaderBox, laneOf, lines, samePlanApartFromImages, snapshotOf, unpinBox } from './editmodel';
@@ -30,8 +30,8 @@ export interface ArrangeUi {
   readonly moved: ReadonlySet<string>;
   /** Merker boksene som ble flyttet. */
   mark(ids: Iterable<string>): void;
-  /** Viser linjen med teksten, med «Behold» og «Angre», eller bare «Lukk». */
-  show(text: string, canUndo: boolean): void;
+  /** Viser linjen med teksten, med «Behold» og «Angre», eller bare «Lukk». offerFit: også «Størst mulig tekst». */
+  show(text: string, canUndo: boolean, offerFit?: boolean): void;
   /** Godtar endringen: linjen og merkingen blir borte. */
   end(): void;
 }
@@ -65,9 +65,11 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
     h.overlay();
   };
 
-  const show = (text: string, canUndo: boolean) => {
+  const show = (text: string, canUndo: boolean, offerFit = false) => {
     if (!bar) return;
     bar.querySelector('.arrange-text')!.textContent = text;
+    const fit = bar.querySelector<HTMLButtonElement>('#arrange-fit');
+    if (fit) fit.hidden = !offerFit;
     bar.querySelector<HTMLButtonElement>('#arrange-keep')!.textContent = canUndo ? 'Behold' : 'Lukk';
     bar.querySelector<HTMLButtonElement>('#arrange-undo')!.hidden = !canUndo;
     bar.hidden = false;
@@ -90,7 +92,7 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
     !!a && a.lane === b.lane && a.side === b.side && Math.abs(a.y - b.y) < 0.5;
   const contentLines = (L: Layout, ids: Set<string>) => L.lanes.filter((l) => ids.has(l.id)).reduce((s, l) => s + l.minH / L.unit, 0);
 
-  const arrange = (mode: 'tight' | 'chrono') => {
+  const arrange = (mode: ArrangeMode) => {
     const plan = h.getPlan();
     const before = h.layout();
     if (!plan || !before) return;
@@ -126,36 +128,51 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
       delete l.order;
       if (unpin) for (const b of l.boxes) if (inGroup.has(b.id) || (!b.header && (!boxIds || boxIds.has(b.id)))) unpinBox(b);
     }
-    if (mode === 'tight' || groups.size) {
-      const res = h.arrange(next, laneIds, { mode, groups });
+    /** again: andre søk i Tettest, der ingen ny rekkefølge betyr at den som er funnet, beholdes. */
+    const apply = (res: ArrangeResult, again = false) => {
       for (const [id, order] of res.orders) {
         const l = findLane(next, id);
-        if (l && order) l.order = order;
+        if (!l) continue;
+        if (order) l.order = order;
+        else if (!again) delete l.order;
       }
       for (const [id, top] of res.pins) {
         const b = findBox(next, id);
-        if (b) b.top = top;
+        if (!b) continue;
+        b.top = top;
+        delete b.compactTop;
       }
-    }
+    };
+    apply(h.arrange(next, laneIds, { mode, groups }));
     if (samePlanApartFromImages(next, plan)) {
-      show(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede tidligst først.', false);
+      show(mode === 'tight' ? 'Fant ingen tettere plassering. Alt står som før.' : 'Boksene ligger allerede slik. Alt står som før.', false);
       return;
     }
     h.beginStep();
     h.setPlan(next);
     h.redraw();
+    // Tettest finner rekkefølgen ved tekststørrelsen planen hadde. Fikk teksten plass til å vokse,
+    // søkes det én gang til ved den nye størrelsen, så forslaget passer teksten som faktisk tegnes.
+    if (mode === 'tight' && h.layout()!.textSizePt !== before.textSizePt) {
+      apply(h.arrange(next, laneIds, { mode, groups: new Map() }), true);
+      h.setPlan(next);
+      h.redraw();
+    }
     const after = h.layout()!;
     const p0 = placeOf(before);
     const p1 = placeOf(after);
     const ids = new Set(laneIds);
     const laneOfItem = new Map(next.lanes.flatMap((l) => l.boxes.map((b) => [b.id, l.id] as const)));
     moved = new Set([...p1].filter(([id, pos]) => ids.has(laneOfItem.get(id) ?? '') && !samePlace(p0.get(id), pos)).map(([id]) => id));
-    const saved = contentLines(before, ids) - contentLines(after, ids);
+    const h0 = contentLines(before, ids);
+    const saved = h0 - contentLines(after, ids);
     const n = moved.size;
     const count = n ? `${n} ${n === 1 ? 'boks' : 'bokser'} flyttet` : 'Ingen bokser flyttet';
-    const lower = saved > 0.05 ? `, ${saved.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} ${saved < 1.05 && saved > 0.95 ? 'linje' : 'linjer'} lavere` : '';
-    const grew = after.textSizePt > before.textSizePt + 1e-6 ? `. Teksten ble ${after.textSizePt.toLocaleString('nb-NO')} pt` : '';
-    show(`${count}${lower}${grew}.`, true);
+    const pct = (v: number) => `${Math.round((Math.abs(v) / h0) * 100)} %`;
+    const what = laneIds.length === 1 ? 'lanen' : 'lanene';
+    const lower = saved > 0.05 ? `, ${what} ble ${pct(saved)} lavere` : saved < -0.05 ? `, ${what} ble ${pct(saved)} høyere` : '';
+    const grew = after.textSizePt > before.textSizePt + 1e-6 ? `. Planens tekst ble ${after.textSizePt.toLocaleString('nb-NO')} pt` : '';
+    show(`${count}${lower}${grew}.`, true, mode === 'tight' && saved > 0.05);
     h.overlay();
     h.refresh();
   };
@@ -192,10 +209,18 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
     if ((e as ToggleEvent).newState !== 'open') return;
     const plan = h.getPlan();
     const scope = document.querySelector('#arrange-scope');
-    if (plan && scope) scope.textContent = arrangeScope(plan).text;
+    if (!plan || !scope) return;
+    const s = arrangeScope(plan);
+    // For hele planen står tipset om å velge lane eller bokser i en egen notis
+    scope.textContent = s.whole ? 'Gjelder hele planen.' : s.text;
+    const tip = document.querySelector<HTMLElement>('#arrange-tip');
+    if (tip) tip.hidden = !s.whole;
   });
   document.querySelector('#arrange-tight')?.addEventListener('click', () => arrange('tight'));
-  document.querySelector('#arrange-chrono')?.addEventListener('click', () => arrange('chrono'));
+  document.querySelector('#arrange-stair')?.addEventListener('click', () => arrange('stair'));
+  document.querySelector('#arrange-trade')?.addEventListener('click', () => arrange('trade'));
+  // Etter Tettest: bruk plassen som ble ledig til større tekst. Forslaget beholdes først.
+  bar?.querySelector('#arrange-fit')?.addEventListener('click', () => fitText(false));
   bar?.querySelector('#arrange-keep')?.addEventListener('click', () => end());
   bar?.querySelector('#arrange-undo')?.addEventListener('click', () => h.undo());
 

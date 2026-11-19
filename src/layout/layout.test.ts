@@ -743,7 +743,7 @@ describe('omplassering', () => {
     expect(kb.y + kb.h).toBeLessThanOrEqual(hb.y + hb.h + 1e-6);
     delete head.top;
     delete kid.top;
-    const { pins } = arrangeLanes(p, opts, approxMeasure, [p.lanes[1].id], { mode: 'chrono', groups: new Map([[head.id, [{ id: kid.id, dy: 2 }]]]) });
+    const { pins } = arrangeLanes(p, opts, approxMeasure, [p.lanes[1].id], { mode: 'stair', groups: new Map([[head.id, [{ id: kid.id, dy: 2 }]]]) });
     expect(pins.get(head.id)).toBe(0);
     expect(pins.get(kid.id)).toBe(2);
   });

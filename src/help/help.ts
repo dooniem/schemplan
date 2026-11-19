@@ -15,9 +15,11 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
   return e;
 };
 
+const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
 const motionOk = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Et bilde, eller før/etter med to knapper. Før/etter bytter av seg selv til brukeren velger. */
+/** Et bilde, eller en rekke bilder (før, etter …) med knapper. Rekken bytter av seg selv til brukeren velger. */
 function picture(img: HelpImage, alt: string, eager = false): HTMLElement {
   const fig = el('figure', 'hp-fig');
   const mk = (name: string, label: string) => {
@@ -32,40 +34,41 @@ function picture(img: HelpImage, alt: string, eager = false): HTMLElement {
     fig.append(mk(img, alt));
     return fig;
   }
-  fig.classList.add('hp-ba');
+  fig.classList.add('hp-seq');
   const frames = el('div', 'hp-frames');
-  const before = mk(img.before, `Før: ${alt}`);
-  const after = mk(img.after, `Etter: ${alt}`);
-  frames.append(before, after);
-  const seg = el('div', 'hp-ba-seg');
+  const imgs = img.frames.map((f) => mk(f.img, `${f.label}: ${alt}`));
+  frames.append(...imgs);
+  const seg = el('div', 'hp-seq-seg');
   seg.setAttribute('role', 'group');
-  seg.setAttribute('aria-label', 'Vis før eller etter');
-  const bBtn = el('button', undefined, 'Før');
-  const aBtn = el('button', undefined, 'Etter');
-  for (const b of [bBtn, aBtn]) b.type = 'button';
-  seg.append(bBtn, aBtn);
-  let showAfter = false;
+  seg.setAttribute('aria-label', 'Velg bilde');
+  const btns = img.frames.map((f) => {
+    const b = el('button', undefined, escapeHtml(f.label));
+    b.type = 'button';
+    return b;
+  });
+  seg.append(...btns);
+  const cap = el('figcaption', 'hp-seq-note');
+  let cur = 0;
   let timer = 0;
-  const show = (a: boolean) => {
-    showAfter = a;
-    fig.classList.toggle('is-after', a);
-    bBtn.setAttribute('aria-pressed', String(!a));
-    aBtn.setAttribute('aria-pressed', String(a));
+  const show = (i: number) => {
+    cur = i;
+    imgs.forEach((x, j) => x.classList.toggle('is-on', j === i));
+    btns.forEach((b, j) => b.setAttribute('aria-pressed', String(j === i)));
+    cap.innerHTML = img.frames[i].note ?? '';
+    cap.hidden = !img.frames[i].note;
   };
   const stop = () => { clearInterval(timer); timer = 0; };
-  bBtn.addEventListener('click', () => { stop(); show(false); });
-  aBtn.addEventListener('click', () => { stop(); show(true); });
+  btns.forEach((b, i) => b.addEventListener('click', () => { stop(); fig.dataset.chosen = '1'; show(i); }));
   // Bytter bare når bildet vises og brukeren ikke har bedt om mindre bevegelse.
-  // Uten bevegelse vises resultatet, og knappene viser før.
-  show(!motionOk());
+  // Uten bevegelse vises resultatet (siste bilde), og knappene viser de andre.
+  show(motionOk() ? 0 : imgs.length - 1);
   if (motionOk()) {
     new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !timer && !fig.dataset.chosen) timer = window.setInterval(() => show(!showAfter), 2400);
+      if (e.isIntersecting && !timer && !fig.dataset.chosen) timer = window.setInterval(() => show((cur + 1) % imgs.length), 3200);
       else if (!e.isIntersecting) stop();
     }).observe(fig);
-    seg.addEventListener('click', () => (fig.dataset.chosen = '1'));
   }
-  fig.append(frames, seg);
+  fig.append(frames, seg, cap);
   return fig;
 }
 
@@ -78,7 +81,7 @@ export function searchTopics(q: string, topics: HelpTopic[] = TOPICS): HelpTopic
   if (!words.length) return topics;
   const scored = topics.map((t) => {
     const title = norm(t.title);
-    const all = `${title} ${norm(t.group)} ${norm(t.text)} ${norm(t.words ?? '')}`;
+    const all = `${title} ${norm(t.group)} ${norm(t.text)} ${norm(t.when ?? '')} ${norm((t.steps ?? []).join(' '))} ${norm(t.words ?? '')}`;
     if (!words.every((w) => all.includes(w))) return null;
     const score = words.reduce((s, w) => s + (title.includes(w) ? 2 : 0) + (` ${title}`.includes(` ${w}`) ? 1 : 0), 0);
     return { t, score };
@@ -86,7 +89,6 @@ export function searchTopics(q: string, topics: HelpTopic[] = TOPICS): HelpTopic
   return scored.sort((a, b) => b.score - a.score).map((x) => x.t);
 }
 
-const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 /** Tittelen med søkeordene markert. */
 function marked(title: string, q: string): string {
   const words = norm(q).split(' ').filter(Boolean);
@@ -202,6 +204,18 @@ export function setupHelp(dialog: HTMLDialogElement, opener: HTMLElement) {
     view.append(el('h3', undefined, escapeHtml(t.title)));
     view.append(el('p', 'topic-text', t.text));
     if (t.img) view.append(picture(t.img, t.alt ?? t.title, true));
+    if (t.when) {
+      const sec = el('section', 'topic-when');
+      sec.append(el('h4', undefined, 'Når du bruker det'), el('p', 'topic-text', t.when));
+      view.append(sec);
+    }
+    if (t.steps?.length) {
+      const sec = el('section', 'topic-steps');
+      const ol = el('ol');
+      for (const st of t.steps) ol.append(el('li', undefined, st));
+      sec.append(el('h4', undefined, 'Eksempel'), ol);
+      view.append(sec);
+    }
     const see = (t.see ?? []).map((s) => TOPICS.find((x) => x.id === s)).filter((x): x is HelpTopic => !!x);
     if (see.length) {
       const box = el('div', 'topic-see');

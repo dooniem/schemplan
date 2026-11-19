@@ -318,14 +318,19 @@
         <span class="ctx-title" id="arrange-title">Omplasser</span>
         <span class="ctx-sub" id="arrange-scope">Gjelder hele planen.</span>
       </div>
+      <p class="arrange-tip" id="arrange-tip"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6 M12 7.5v.01"/></svg><span>Vil du bare rydde én lane, klikker du lane-navnet før du åpner menyen. Velger du bokser, flyttes bare de. Du ser forslaget på arket og kan angre.</span></p>
       <div class="pm-group">
         <button type="button" id="arrange-tight" class="pm-item">
           <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16 M12 3v6 M9 6l3 3 3-3 M12 21v-6 M9 18l3-3 3 3"/></svg>
-          <span class="pm-text"><strong>Tettest</strong><span class="pm-desc">Så lave lanes som mulig. Boksene kan komme i en annen rekkefølge enn tidligst først.</span></span>
+          <span class="pm-text"><strong>Tettest</strong><span class="pm-desc">Gjør lanene så lave som mulig. Bokser kan bytte plass, så rekkefølgen ikke lenger følger datoene. Plassen som blir ledig, gir større tekst.</span></span>
         </button>
-        <button type="button" id="arrange-chrono" class="pm-item">
-          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7 M7 12h8 M10 18h10"/></svg>
-          <span class="pm-text"><strong>Tidligst først</strong><span class="pm-desc">Som når planen lages: boksen som starter først, ligger øverst.</span></span>
+        <button type="button" id="arrange-stair" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h8 M7 10h8 M11 15h8 M15 20h6"/></svg>
+          <span class="pm-text"><strong>Trapp</strong><span class="pm-desc">Boksene i datorekkefølge ovenfra og ned, som i Project: en boks som starter senere, legges aldri over en tidligere den overlapper. Lettest å lese, men lanen blir høyere.</span></span>
+        </button>
+        <button type="button" id="arrange-trade" class="pm-item">
+          <svg class="ctx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v6 M3 15v6 M6 4h8 M10 8h10 M6 16h8 M10 20h10"/></svg>
+          <span class="pm-text"><strong>Samle fag</strong><span class="pm-desc">Som Trapp, men boksene i samme fag legges samlet, i rekkefølgen fagene har i forklaringen. Nyttig når en lane har flere fag.</span></span>
         </button>
       </div>
       <div class="pm-group" role="group" aria-label="Tekst">
@@ -514,6 +519,7 @@
         </div>
         <div id="arrange-bar" class="focus-bar arrange-bar no-print" role="status" hidden>
           <span class="arrange-text"></span>
+          <button type="button" class="tb" id="arrange-fit" hidden title="Gir boksene større tekst der det nå er ledig plass. Forslaget beholdes.">Størst mulig tekst</button>
           <button type="button" class="tb" id="arrange-keep">Behold</button>
           <button type="button" class="tb" id="arrange-undo" title="Tilbake til slik det var (Ctrl+Z)">Angre</button>
         </div>
