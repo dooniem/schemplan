@@ -55,7 +55,7 @@
       </div>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="save-menu" class="tb primary menu" popovertarget="menu-save" disabled>Lagre</button>
-      <button type="button" id="help-open" class="tb help-btn" title="Arbeidsgangen, tips og om appen" aria-label="Hjelp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg><span class="tb-label">Hjelp</span></button>
+      <button type="button" id="help-open" class="tb help-btn" title="Kom i gang, søkbare emner og om appen" aria-label="Hjelp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></svg><span class="tb-label">Hjelp</span></button>
     </header>
 
     <div id="menu-sheet" class="pop settings set-menu no-print" popover aria-label="Innstillinger">
@@ -441,62 +441,20 @@
     <dialog id="help" class="help no-print" aria-labelledby="help-title">
       <header class="help-head">
         <h2 id="help-title">Hjelp</h2>
+        <div class="help-tabs" role="tablist" aria-label="Hjelp">
+          <button type="button" role="tab" id="help-tab-tour" data-tab="tour" aria-controls="help-tour" aria-selected="true">Kom i gang</button>
+          <button type="button" role="tab" id="help-tab-topics" data-tab="topics" aria-controls="help-topics" aria-selected="false" tabindex="-1">Emner</button>
+          <button type="button" role="tab" id="help-tab-about" data-tab="about" aria-controls="help-about" aria-selected="false" tabindex="-1">Om appen</button>
+        </div>
+        <label class="help-search">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 3a7 7 0 0 1 5.6 11.2l4.6 4.6-1.4 1.4-4.6-4.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+          <input type="search" id="help-search" aria-label="Søk i hjelpen" placeholder="Søk i hjelpen" autocomplete="off" />
+        </label>
         <button type="button" class="help-close" id="help-close" aria-label="Lukk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </header>
-      <div class="help-body">
-        <section class="help-flow" aria-labelledby="help-flow-title">
-          <h3 id="help-flow-title">Slik jobber du med planen</h3>
-          <ol class="help-steps">
-            <li>
-              <h4>Lag planen fra Project</h4>
-              <p>Trykk <span class="ui-name">Generate New file</span>. Planen åpnes her i nettleseren.</p>
-            </li>
-            <li>
-              <h4>Gjør endringene dine</h4>
-              <p>Trykk <span class="ui-name">Rediger</span> for å flytte og skjule bokser, endre tekst og farge, lage overskriftsbokser og tegne kritisk linje.</p>
-            </li>
-            <li>
-              <h4>Lagre som arbeidsfil</h4>
-              <p>Velg <span class="ui-name">Lagre</span> → <span class="ui-name">Lagre arbeidsfil</span>. Alt appen trenger, også endringene dine, lagres inne i PDF-en. Ta vare på denne filen.</p>
-              <dl class="help-compare">
-                <div><dt>Lagre arbeidsfil</dt><dd>Kan åpnes og redigeres igjen. Til deg selv.</dd></div>
-                <div><dt>Lagre PDF for deling</dt><dd>Vanlig PDF til å sende ut og skrive ut. Kan ikke redigeres igjen.</dd></div>
-              </dl>
-            </li>
-            <li>
-              <h4>Oppdater når Project endrer seg</h4>
-              <p>Trykk <span class="ui-name">Update Existing file</span> og velg arbeidsfilen din. Ny framdrift hentes fra Project, og alt du har endret beholdes.</p>
-            </li>
-          </ol>
-        </section>
-        <section class="help-tips" aria-labelledby="help-tips-title">
-          <h3 id="help-tips-title">Tips</h3>
-          <h4>Se planen</h4>
-          <ul>
-            <li>Zoom med Ctrl + hjul eller + og −. Dra for å flytte.</li>
-            <li>Hold musen over en boks for datoer.</li>
-            <li>Klikk en periode i kalenderen eller et fag i forklaringen for å fremheve det. Ctrl- eller Shift-klikk velger flere fag. Høylytt arbeid og nattarbeid i forklaringen fremheves på samme måte; med begge valgt kan du vise bare boksene som har begge. Lagre PDF i linjen øverst lagrer planen slik den vises.</li>
-            <li>Start og slutt på tidsaksen velges under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Kalender og stil</span>. Bokser som stikker utenfor, får pil. Bokser helt utenfor vises ikke, men ligger urørt og kommer tilbake når kalenderen utvides.</li>
-            <li>Start- og sluttdato på boksene slås på under <span class="ui-name">Innstillinger</span> › <span class="ui-name">Vis på arket</span>, der du også velger format. Datoen står under teksten, også i callouts. Høyreklikk en boks for å skru datoene av eller på for den.</li>
-            <li><span class="ui-name">Utkikk</span> viser bare noen uker av planen, f.eks. de neste tre. Bokser som stikker utenfor, kuttes ved kanten. Lagrer du PDF, får den perioden i navnet.</li>
-          </ul>
-          <h4>Rediger</h4>
-          <ul>
-            <li>Klikk for å velge, dobbeltklikk for å skrive.</li>
-            <li>Shift-klikk eller Shift + dra på tomt sted velger flere bokser. Dra en av dem, så flyttes alle like langt.</li>
-            <li>Høyreklikk en boks eller et lane-navn for flere valg. Der, eller under <span class="ui-name">Merking</span> i panelet, merker du bokser med høylytt arbeid, nattarbeid eller et eget merke med bilde du laster opp.</li>
-            <li>Bilder settes inn fra høyreklikkmenyen, med <kbd>Ctrl</kbd>+<kbd>V</kbd> eller ved å dra en fil inn. En milepæl kan få et bilde som symbol.</li>
-            <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> angrer, <kbd>Ctrl</kbd>+<kbd>Y</kbd> gjør om, <kbd>Esc</kbd> fjerner valget.</li>
-          </ul>
-          <h4>Data</h4>
-          <ul>
-            <li>Alle bokser som tabell. Filtrer, sorter, klikk en rad for å finne boksen, og eksporter til Excel.</li>
-          </ul>
-          <h4>Personvern</h4>
-          <ul>
-            <li>Filene leses bare i nettleseren din og sendes ingen steder. Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></li>
-          </ul>
-        </section>
+      <section id="help-tour" class="help-pane help-tour" role="tabpanel" aria-labelledby="help-tab-tour" tabindex="-1"></section>
+      <section id="help-topics" class="help-pane help-topics" role="tabpanel" aria-labelledby="help-tab-topics" hidden></section>
+      <section id="help-about" class="help-pane help-about" role="tabpanel" aria-labelledby="help-tab-about" hidden>
         <section class="help-return" aria-labelledby="help-return-title">
           <h3 id="help-return-title">Slik kommer du tilbake til appen</h3>
           <p class="help-lede">Appen husker ingen planer selv, de ligger i arbeidsfilene dine. Du åpner appen på en av tre måter.</p>
@@ -520,7 +478,11 @@
             </div>
           </dl>
         </section>
-      </div>
+        <section class="help-privacy" aria-labelledby="help-privacy-title">
+          <h3 id="help-privacy-title">Personvern</h3>
+          <p>Filene leses bare i nettleseren din og sendes ingen steder. Sperre mot utgående trafikk: <strong id="csp-status">sjekker …</strong></p>
+        </section>
+      </section>
       <footer class="help-foot">
         <span>Laget av Magnus Petersen</span>
         <span id="help-version"></span>
