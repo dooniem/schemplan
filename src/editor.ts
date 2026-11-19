@@ -2638,7 +2638,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Samme treff som et klikk, så en milepæl foran en Multi Lane-boks dras, ikke boksen bak
       const hid = boxAt(e);
       const it = hid ? layoutNow.items.find((i) => i.id === hid) : undefined;
-      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      if (it && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        // Ctrl holdt nede før knappen trykkes: dra skyver boksene under ned, som når Ctrl trykkes
+        // underveis. Blir det bare et klikk, legges boksen til eller tas ut av valget som før.
+        d = startMove(it, group.includes(it.id) ? group : [it.id]);
+      } else if (e.shiftKey || e.ctrlKey || e.metaKey) {
         // Shift-klikk velger flere; Shift + dra på tom plass velger med rektangel.
         // Nettleseren skal ikke merke tekst i tegningen.
         e.preventDefault();
