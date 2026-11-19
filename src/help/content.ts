@@ -292,7 +292,7 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'omplasser', group: 'Arket', title: 'Omplasser: rydd lanene',
     text: `${ui('Omplasser')} legger boksene i lanene på plass på nytt. Du velger mellom to måter, ser forslaget på arket med de flyttede boksene merket, og trykker ${ui('Behold')} eller ${ui('Angre')}.`,
-    when: `<strong>Tettest</strong> gjør lanene så lave som mulig. Boksene kan da bytte plass, så den som starter først, ikke alltid ligger øverst. Velg den når arket er trangt og du vil ha plass til større tekst. <strong>Tidligst først</strong> legger boksene i datorekkefølge som da planen ble laget. Velg den for å rydde opp etter mye flytting. Bokser du har dratt på plass, blir stående, med mindre du slår på ${ui('Løsne festede bokser også')}.`,
+    when: `<strong>Tettest</strong> gjør lanene så lave som mulig. Boksene kan da bytte plass, så den som starter først, ikke alltid ligger øverst. Velg den når arket er trangt og du vil ha plass til større tekst. Den gjør mest når boksene er ulikt høye eller har callouts; ellers blir resultatet ofte det samme som Tidligst først. <strong>Tidligst først</strong> legger boksene i datorekkefølge som da planen ble laget. Velg den for å rydde opp etter mye flytting. Bokser du har dratt på plass, blir stående, med mindre du slår på ${ui('Løsne festede bokser også')}.`,
     steps: [
       `Klikk lane-navnet til lanen som er blitt rotete, så gjelder det bare den lanen.`,
       `Velg ${ui('Omplasser')} › ${ui('Tidligst først')}.`,
