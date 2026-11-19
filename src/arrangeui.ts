@@ -192,7 +192,12 @@ export function createArrangeUi(h: ArrangeHost): ArrangeUi {
     if ((e as ToggleEvent).newState !== 'open') return;
     const plan = h.getPlan();
     const scope = document.querySelector('#arrange-scope');
-    if (plan && scope) scope.textContent = arrangeScope(plan).text;
+    if (!plan || !scope) return;
+    const s = arrangeScope(plan);
+    // For hele planen står tipset om å velge lane eller bokser i en egen notis
+    scope.textContent = s.whole ? 'Gjelder hele planen.' : s.text;
+    const tip = document.querySelector<HTMLElement>('#arrange-tip');
+    if (tip) tip.hidden = !s.whole;
   });
   document.querySelector('#arrange-tight')?.addEventListener('click', () => arrange('tight'));
   document.querySelector('#arrange-chrono')?.addEventListener('click', () => arrange('chrono'));
