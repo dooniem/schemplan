@@ -128,12 +128,12 @@ const laneUtsnitt = async (p, i) => {
     const boxes = [...document.querySelectorAll(`#sheet [data-id^="${i + 1}_"]`)].map((e) => e.getBoundingClientRect());
     const panel = document.querySelector('#panel');
     const p1 = panel && !panel.hidden ? panel.getBoundingClientRect().left - 40 : Infinity;
-    return { x0: t.x, y0: t.y, x1: Math.min(p1, Math.max(...boxes.map((b) => b.right))), y1: Math.max(...boxes.map((b) => b.bottom)) };
+    return { x0: t.x, y0: t.y, yb: t.bottom, x1: Math.min(p1, Math.max(...boxes.map((b) => b.right))), y1: Math.max(...boxes.map((b) => b.bottom)) };
   }, i);
   const x = Math.max(0, r.x0 - 6);
   const y = Math.max(0, r.y0 - 6);
   // Plass til at boksene kan havne lenger ned etter flytting
-  return { x, y, width: Math.min(1440 - x, r.x1 + 40 - x), height: Math.min(900 - y, r.y1 + 70 - y) };
+  return { x, y, width: Math.min(1440 - x, r.x1 + 40 - x), height: Math.min(900 - y, r.yb + 2 - y, r.y1 + 70 - y) };
 };
 const rediger = async (p) => { await p.click('#edit'); await p.waitForTimeout(250); };
 const ta = async (p, navn, clip) => {
@@ -295,11 +295,12 @@ const bilder = {
     }
   },
   async omplasser() {
-    for (const [navn, knapp] of [['omplasser-1', null], ['omplasser-2', '#arrange-chrono']]) {
+    // Samme rotete lane før og etter hver av de tre måtene
+    const valg = [['omplasser-1', null], ['omplasser-2', '#arrange-tight'], ['omplasser-3', '#arrange-stair'], ['omplasser-4', '#arrange-trade']];
+    for (const [navn, knapp] of valg) {
       const p = await side(smaplan());
       await naerbilde(p);
       await rediger(p);
-      const clip = await laneUtsnitt(p, 1);
       if (knapp) {
         const l = await laneNavn(p, 1);
         await p.mouse.click(l.x, l.y);
@@ -307,12 +308,12 @@ const bilder = {
         await p.waitForTimeout(150);
         await p.check('#arrange-unpin');
         await p.click(knapp);
-        await p.waitForTimeout(300);
+        await p.waitForTimeout(400);
         await p.click('#arrange-keep');
         await p.keyboard.press('Escape');
         await p.waitForTimeout(200);
       }
-      await ta(p, navn, clip);
+      await ta(p, navn, await laneUtsnitt(p, 1));
       await p.close();
     }
   },

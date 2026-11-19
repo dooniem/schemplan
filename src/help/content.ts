@@ -291,21 +291,23 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'omplasser', group: 'Arket', title: 'Omplasser: rydd lanene',
-    text: `${ui('Omplasser')} legger boksene i lanene på plass på nytt. Du velger mellom to måter, ser forslaget på arket med de flyttede boksene merket, og trykker ${ui('Behold')} eller ${ui('Angre')}.`,
-    when: `<strong>Tettest</strong> gjør lanene så lave som mulig. Boksene kan da bytte plass, så den som starter først, ikke alltid ligger øverst. Velg den når arket er trangt og du vil ha plass til større tekst. Den gjør mest når boksene er ulikt høye eller har callouts; ellers blir resultatet ofte det samme som Tidligst først. <strong>Tidligst først</strong> legger boksene i datorekkefølge som da planen ble laget. Velg den for å rydde opp etter mye flytting. Bokser du har dratt på plass, blir stående, med mindre du slår på ${ui('Løsne festede bokser også')}.`,
+    text: `${ui('Omplasser')} legger boksene i lanene på plass på nytt. Du velger mellom tre måter, ser forslaget på arket med de flyttede boksene merket, og trykker ${ui('Behold')} eller ${ui('Angre')}. Linjen øverst sier hvor mange bokser som ble flyttet, og hvor mye lavere eller høyere lanen ble.`,
+    when: `<strong>Tettest</strong> gjør lanene så lave som mulig, og boksene kan da bytte plass. Velg den når arket er trangt. Plassen som blir ledig, gir planen større tekst, og linjen øverst tilbyr ${ui('Størst mulig tekst')} for å bruke resten. <strong>Trapp</strong> legger boksene i datorekkefølge ovenfra og ned, som i Project: en boks som starter senere, havner aldri over en tidligere den overlapper. Den er lettest å lese, men lanen blir høyere. <strong>Samle fag</strong> er en trapp der boksene i samme fag ligger samlet, i rekkefølgen fagene har i forklaringen. Velg den når en lane har flere fag. Bokser du har dratt på plass, blir stående, med mindre du slår på ${ui('Løsne festede bokser også')}.`,
     steps: [
       `Klikk lane-navnet til lanen som er blitt rotete, så gjelder det bare den lanen.`,
-      `Velg ${ui('Omplasser')} › ${ui('Tidligst først')}.`,
-      `Se forslaget. Linjen øverst sier hvor mange bokser som ble flyttet og hvor mye lavere lanen ble. Trykk ${ui('Behold')} eller ${ui('Angre')}.`,
+      `Velg ${ui('Omplasser')} › ${ui('Trapp')}, og slå på ${ui('Løsne festede bokser også')} hvis boksene er dratt på plass.`,
+      `Se forslaget. Er lanen blitt for høy, trykker du ${ui('Angre')} og prøver ${ui('Tettest')} i stedet. Trykk ${ui('Behold')} når du er fornøyd.`,
     ],
     img: {
       frames: [
         { img: 'omplasser-1', label: 'Før', note: 'Etter mye flytting står boksene spredt, med hull mellom. De blå prikkene viser at de er dratt på plass.' },
-        { img: 'omplasser-2', label: 'Etter', note: 'Etter «Tidligst først» med «Løsne festede bokser også»: hullene er borte, og den som starter først, ligger øverst.' },
+        { img: 'omplasser-2', label: 'Tettest', note: 'Lanen ble 21 % lavere. Boksene står tett, men ikke i datorekkefølge.' },
+        { img: 'omplasser-3', label: 'Trapp', note: 'Boksene går i trapp etter startdato. Lettest å lese, men lanen ble høyere.' },
+        { img: 'omplasser-4', label: 'Samle fag', note: 'Hvert fag samlet, i rekkefølgen fra forklaringen, og i trapp innenfor faget.' },
       ],
     },
-    alt: 'En rotete lane før og etter Omplasser › Tidligst først.',
-    words: 'pakke rydde tettest tidligst først stable orden rekkefølge løsne festede', see: ['omplasser-lane', 'skyv', 'tekst'],
+    alt: 'En rotete lane før, og etter Omplasser › Tettest, Trapp og Samle fag.',
+    words: 'pakke rydde tettest trapp samle fag tidligst først datorekkefølge stable orden rekkefølge løsne festede lavere høyere', see: ['omplasser-lane', 'storsttekst', 'skyv'],
   },
   {
     id: 'omplasser-lane', group: 'Arket', title: 'Omplasser bare én lane eller noen bokser',
@@ -317,7 +319,7 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'storsttekst', group: 'Arket', title: 'Størst mulig tekst',
     text: `${ui('Omplasser')} › ${ui('Størst mulig tekst')} gir hver boks så stor tekst som det er plass til, høyst dobbelt så stor som planens. Boksene blir høyere der det er ledig plass, og lane-navnene får én felles, større størrelse.`,
-    when: `Ta det til slutt, når boksene står der de skal. Da utnytter du den ledige plassen på arket, og planen blir lettere å lese på utskrift. ${ui('Standard tekststørrelse')} tar teksten tilbake.`,
+    when: `Ta det til slutt, når boksene står der de skal. Etter ${ui('Omplasser')} › ${ui('Tettest')} finner du samme knapp i linjen øverst. Da utnytter du den ledige plassen på arket, og planen blir lettere å lese på utskrift. ${ui('Standard tekststørrelse')} tar teksten tilbake.`,
     words: 'tekststørrelse større tekst lesbar fyll plass', see: ['tekst', 'omplasser'],
   },
   {

@@ -29,6 +29,8 @@ describe('hjelpen', () => {
     expect(searchTopics('ordsomikkefinnes')).toHaveLength(0);
     expect(searchTopics('ctrl skyv')[0].id).toBe('skyv');
     expect(searchTopics('tettest').map((t) => t.id)).toContain('omplasser');
+    expect(searchTopics('samle fag').map((t) => t.id)).toContain('omplasser');
+    expect(searchTopics('trapp').map((t) => t.id)).toContain('omplasser');
   });
   it('ser bort fra HTML i teksten', () => {
     expect(searchTopics('span')).toHaveLength(0);
