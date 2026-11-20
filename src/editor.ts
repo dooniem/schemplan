@@ -28,6 +28,8 @@ import { canBeTransparent } from './layout/transparency';
 import { inLine, styleOf } from './criticallines';
 import { datesMenuItem, datesRows } from './boxdatesui';
 import { setBoxDates } from './layout/boxdates';
+import { foldSection, type Fold } from './panelfold';
+import { calloutFold, formFold, placeFold } from './panelsummary';
 import { customMarkSection, markScaleRow, marksMenuItems, marksSection, pickMarkImage, removeCustomMark, setMarks, type CustomActions } from './marksui';
 import { MARK_KEYS, MARK_NAMES, markName, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
@@ -631,8 +633,13 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     h.append(t, close);
     panel.append(h);
   };
-  /** Del av panelet med egen overskrift. */
-  const section = (title: string) => {
+  /** Del av panelet med egen overskrift. Med fold kan delen foldes sammen til én linje med oppsummering. */
+  const section = (title: string, fold?: Fold) => {
+    if (fold) {
+      const { root, body } = foldSection(title, fold);
+      panel.append(root);
+      return body;
+    }
     const s = el('section', { class: 'psec', 'aria-label': title });
     s.append(el('h3', {}, title));
     panel.append(s);
@@ -1252,6 +1259,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }));
     const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
 
+    if (plain.length) section('Tekst').append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
+
     if (plain.length) {
       const sf = section('Fag');
       const ids = plain.map((x) => x.id);
@@ -1286,9 +1295,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         })),
     );
 
-    if (plain.length) section('Tekst').append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
-
-    const so = section('Callout');
+    const so = section('Callout', calloutFold(plain));
     so.append(
       segmented('Vis', same((x) => x.callout ?? 'auto') ?? '', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
         all((x) => {
@@ -1309,7 +1316,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale, customActions(plain.map((x) => x.id)));
 
-    const sp = section('Plassering');
+    const sp = section('Plassering', placeFold(boxes, true));
     sp.append(critical.boxLineRow(plan, boxes));
     if (plain.some((x) => x.textScale)) sp.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
@@ -1535,10 +1542,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           x.text = v;
         }, { typing: true, rebuild: false }), true,
       ),
-      el('p', { class: 'hint' }, 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.'),
+      el('p', { class: 'hint', title: 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.' }, 'Enter gir linjeskift, /| en loddrett strek.'),
     );
-    if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (!ms) st.append(...datesRows(markKit, plan, [b], (v) => commit((pl) => setBoxDates(pl, [b.id], v))));
+    if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
@@ -1610,7 +1617,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Bokser som ligger bak de andre kan gjøres gjennomsiktige, så linjene bak synes
       if (canBeTransparent(b)) sc.lastElementChild!.before(transparencyRow(transparencyKit, b));
 
-      const so = section('Callout');
+      const so = section('Callout', calloutFold([b]));
       so.append(
         segmented('Vis', b.callout ?? 'auto', [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) =>
           change((x) => {
@@ -1633,7 +1640,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       if (b.rotation !== 0) so.append(el('p', { class: 'hint' }, 'Rotert tekst får ikke callout.'));
 
-      const sf = section('Form');
+      const sf = section('Form', formFold(b));
       sf.append(
         segmented('Type', b.spanTo !== undefined ? 'span' : b.header ? 'header' : 'normal', [['normal', 'Vanlig'], ['header', 'Overskrift'], ['span', 'Multi Lane']], (v) => {
           if (v === 'span') return setSpan(b.id, true);
@@ -1688,7 +1695,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale, customActions([b.id]));
 
-    const sp = section('Plassering');
+    // Milepælpanelet er kort nok til at Plassering kan stå åpen
+    const sp = section('Plassering', ms ? undefined : placeFold([b]));
     sp.append(critical.boxLineRow(plan, [b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));

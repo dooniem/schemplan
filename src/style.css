@@ -386,6 +386,12 @@ details summary { cursor: pointer; font-size: 13px; }
 .pgroup[open] > summary .pg-sum { display: none; }
 .pg-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 12px; }
 @media (prefers-reduced-motion: reduce) { .pg-chev { transition: none; } }
+/* Del av boks-panelet som foldes: overskrift til venstre og oppsummering til høyre på samme linje */
+.pfold > summary { align-items: center; padding: 11px 14px; }
+.pfold .pg-head { flex: 1; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pfold h3 { flex: none; }
+.pfold .pg-sum { font-size: 12px; text-align: right; min-width: 0; }
+.pfold .pg-sum.changed { color: var(--text); font-weight: 600; }
 .prop { display: flex; flex-direction: column; gap: 4px; }
 .prop-label { font-size: 12px; color: var(--muted); }
 .prop-inline { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }

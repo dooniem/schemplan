@@ -230,7 +230,7 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'datoer', group: 'Bokser', title: 'Datoer på boksene',
-    text: `Start- og sluttdato slås på for alle under ${ui('Innstillinger')} › ${ui('Vis på arket')}, der du også velger format. Høyreklikk en boks og velg ${ui('Datoer')} for å slå dem av eller på bare for den.`,
+    text: `Start- og sluttdato slås på for alle under ${ui('Innstillinger')} › ${ui('Vis på arket')}, der du også velger format. Høyreklikk en boks og velg ${ui('Vis datoer')}, eller bruk bryteren i panelet, for å slå dem av eller på bare for den.`,
     when: `Datoer på alle bokser gjør arket fullt. Ofte er det nok å vise dem på milepæler og de viktigste boksene, og slå dem på per boks.`,
     words: 'dato start slutt format vis', see: ['boksmeny', 'innstillinger'],
   },

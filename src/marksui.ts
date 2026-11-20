@@ -4,6 +4,7 @@ import type { Box, PlanFile } from './format/types';
 import { findBox } from './editmodel';
 import { MARK_KINDS, MARK_NAMES, MARK_SCALES, markName, markScaleOf, markShapes, type MarkKind } from './layout/marks';
 import type { CtxItem, IconName } from './ctxmenu';
+import { joinSummary, type Fold } from './panelfold';
 
 const HINTS: Record<MarkKind, string> = {
   loud: 'Høyttaler på gul bunn på høyre kant av boksen',
@@ -82,7 +83,7 @@ export function setMarks(plan: PlanFile, ids: readonly string[], kind: MarkKind,
 export const allMarked = (boxes: readonly Box[], kind: MarkKind) => boxes.length > 0 && boxes.every((b) => !!b[kind]);
 
 interface Kit {
-  section(title: string): HTMLElement;
+  section(title: string, fold?: Fold): HTMLElement;
   switchRow(label: string, on: boolean, onChange: (v: boolean) => void, title?: string): HTMLElement;
   el(tag: string, attrs?: Record<string, string>, text?: string): HTMLElement;
 }
@@ -143,8 +144,11 @@ export function markScaleRow(kit: Kit, plan: PlanFile, set: (v: number | undefin
 
 /** «Merking» i panelet for én eller flere bokser. */
 export function marksSection(kit: Kit, plan: PlanFile, boxes: readonly Box[], set: (kind: MarkKind, on: boolean) => void, setScale: (v: number | undefined) => void, custom: CustomActions): void {
-  const s = kit.section('Merking');
   const cm = plan.plan.layout.customMark;
+  // Lukket viser delen merkene alle boksene har, eller at bare noen er merket
+  const on = kindsIn(plan).filter((k) => allMarked(boxes, k)).map((k) => markName(k, cm?.name));
+  const some = boxes.some((b) => b.loud || b.night || (cm && b.custom));
+  const s = kit.section('Merking', { summary: on.length ? joinSummary(on) : some ? 'Noen er merket' : 'Ingen', changed: some });
   for (const k of kindsIn(plan)) {
     const row = kit.switchRow(markName(k, cm?.name), allMarked(boxes, k), (v) => set(k, v), HINTS[k]);
     row.querySelector('span')?.prepend(markIcon(k, plan));
