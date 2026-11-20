@@ -3,7 +3,10 @@
 // Valgt bredde lagres i forhold til navnenes tekststørrelse, se layout/lanewidth.ts.
 import type { PlanFile } from './format/types';
 import type { Layout } from './layout/layout';
-import { widthToEm } from './layout/lanewidth';
+import { BAR_MAX_SHARE, BAR_MIN_EM, MAX_WIDTH_EM, widthToEm } from './layout/lanewidth';
+
+/** Barens bredde i ganger tekststørrelsen, rundet til hundredeler. */
+const barToEm = (mm: number, size: number) => Math.round(Math.min(MAX_WIDTH_EM, Math.max(BAR_MIN_EM, mm / size)) * 100) / 100;
 import { wrapHyphenated, type Measure } from './layout/text';
 import { splitLines } from './format/text';
 import { canvasMeasure } from './render/measure';
@@ -39,6 +42,8 @@ export interface LaneWidthEdit {
   /** Håndtaket på høyre kant av navnefeltet, i markeringslaget. */
   draw(g: SVGGElement): void;
   startDrag(): LaneWidthDrag | null;
+  /** Dra i høyre kant av en gruppebar. */
+  startBarDrag(groupId: string): LaneWidthDrag | null;
   /** Valgene i høyreklikkmenyen på et lane-navn. */
   menu(): CtxGroup;
   /** Setter bredden i mm (null: automatisk) som ett angresteg. */
@@ -63,7 +68,8 @@ export function lineBreakWidths(L: Layout, plan: PlanFile, measure: Measure): nu
   const out = new Set<number>();
   for (const ln of L.lanes) {
     const lane = plan.lanes.find((l) => l.id === ln.id);
-    if (!lane) continue;
+    // Loddrette navn brytes etter lanens høyde, ikke kolonnens bredde
+    if (!lane || plan.plan.layout.laneGroups?.some((g) => g.rotateNames && g.lanes.includes(lane.id))) continue;
     const raw = splitLines(lane.name);
     const bar = ln.titleX0 - L.laneTitleX;
     const count = (w: number) => wrapHyphenated(raw, w - bar - pad, size, measure, true).length;
@@ -107,6 +113,8 @@ export function createLaneWidthEdit(h: LaneWidthHost): LaneWidthEdit {
   const measure = canvasMeasure();
   /** Bredden som vises ved håndtaket mens du drar. */
   let label: string | null = null;
+  /** Hvor merkelappen står: ved kanten som dras. Uten: kanten av navnefeltet. */
+  let labelAt: { x: number; y: number } | null = null;
 
   /** Lagrer bredden og flytter knekkpunktene i planområdet med tidsaksen. */
   const store = (pl: PlanFile, mm: number | null, L: Layout) => {
@@ -139,14 +147,25 @@ export function createLaneWidthEdit(h: LaneWidthHost): LaneWidthEdit {
     const t = document.createElementNS(NS, 'title');
     t.textContent = 'Dra for å endre bredden på navnefeltet. Høyreklikk et lane-navn for automatisk bredde.';
     hit.append(t);
+    // Høyre kant av hver gruppebar
+    for (const gb of L.laneGroups) {
+      const e = document.createElementNS(NS, 'line');
+      for (const [a, v] of Object.entries({ x1: gb.x1, x2: gb.x1, y1: gb.y0, y2: gb.y1, 'vector-effect': 'non-scaling-stroke', stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke', class: 'edit-handle bar-edge', 'data-group': gb.id })) e.setAttribute(a, String(v));
+      const bt = document.createElementNS(NS, 'title');
+      bt.textContent = 'Dra for å endre bredden på baren. Høyreklikk baren for automatisk bredde.';
+      e.append(bt);
+      g.append(e);
+    }
     if (label) {
       // Merkelapp over kanten, i fast størrelse på skjermen
       const k = h.mmPerPx();
+      const lx = labelAt?.x ?? x;
+      const ly = labelAt?.y ?? y0;
       const txt = document.createElementNS(NS, 'text');
-      for (const [a, v] of Object.entries({ x: x + 6 * k, y: y0 + 16 * k, 'font-size': 12 * k, 'font-family': 'system-ui, sans-serif', fill: '#FFFFFF', 'pointer-events': 'none' })) txt.setAttribute(a, String(v));
+      for (const [a, v] of Object.entries({ x: lx + 6 * k, y: ly + 16 * k, 'font-size': 12 * k, 'font-family': 'system-ui, sans-serif', fill: '#FFFFFF', 'pointer-events': 'none' })) txt.setAttribute(a, String(v));
       txt.textContent = label;
       const bg = document.createElementNS(NS, 'rect');
-      for (const [a, v] of Object.entries({ x: x + 2 * k, y: y0 + 3 * k, width: (label.length * 7.4 + 10) * k, height: 18 * k, rx: 4 * k, fill: h.accent, 'pointer-events': 'none' })) bg.setAttribute(a, String(v));
+      for (const [a, v] of Object.entries({ x: lx + 2 * k, y: ly + 3 * k, width: (label.length * 7.4 + 10) * k, height: 18 * k, rx: 4 * k, fill: h.accent, 'pointer-events': 'none' })) bg.setAttribute(a, String(v));
       g.append(bg, txt);
     }
   };
@@ -220,6 +239,64 @@ export function createLaneWidthEdit(h: LaneWidthHost): LaneWidthEdit {
     };
   };
 
+  const startBarDrag = (groupId: string): LaneWidthDrag | null => {
+    const L = h.layout();
+    const plan = h.getPlan();
+    const gb = L?.laneGroups.find((x) => x.id === groupId);
+    const grp = plan?.plan.layout.laneGroups?.find((x) => x.id === groupId);
+    if (!L || !plan || !gb || !grp) return null;
+    const { size } = L.laneCol;
+    const colW = L.plot.x0 - L.laneTitleX;
+    const lo = BAR_MIN_EM * size;
+    const hi = colW * BAR_MAX_SHARE;
+    const start = gb.x1 - gb.x0;
+    const saved = grp.barWidth;
+    let w = start;
+    let frame = 0;
+    let from: number | null = null;
+    const restore = () => {
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+      if (saved === undefined) delete grp.barWidth;
+      else grp.barWidth = saved;
+    };
+    const snap = (v: number) => (!h.snapOff() && Math.abs(v - gb.autoW) < 6 * h.mmPerPx() ? gb.autoW : v);
+    return {
+      startY: 0,
+      startClient: 0,
+      moved: false,
+      move() {},
+      moveXY(x) {
+        from ??= x;
+        w = Math.min(hi, Math.max(lo, snap(start + x - from)));
+        label = `${fmt(w)} mm${Math.abs(w - gb.autoW) < 0.05 ? ' · automatisk' : ''}`;
+        labelAt = { x: gb.x0 + w, y: gb.y0 };
+        if (frame) return;
+        frame = window.requestAnimationFrame(() => {
+          frame = 0;
+          grp.barWidth = barToEm(w, size);
+          h.redraw();
+        });
+      },
+      end() {
+        label = null;
+        labelAt = null;
+        restore();
+        if (from === null || Math.abs(w - start) < 0.05) {
+          h.redraw();
+          return;
+        }
+        const auto = Math.abs(w - gb.autoW) < 0.05;
+        h.commit((pl) => {
+          const x = pl.plan.layout.laneGroups?.find((q) => q.id === groupId);
+          if (!x) return;
+          if (auto) delete x.barWidth;
+          else x.barWidth = barToEm(w, size);
+        });
+      },
+    };
+  };
+
   const menu = (): CtxGroup => {
     const L = h.layout();
     const chosen = !!L?.laneCol.chosen;
@@ -243,5 +320,5 @@ export function createLaneWidthEdit(h: LaneWidthHost): LaneWidthEdit {
     ];
   };
 
-  return { draw, startDrag, menu, set, panelRows };
+  return { draw, startDrag, startBarDrag, menu, set, panelRows };
 }

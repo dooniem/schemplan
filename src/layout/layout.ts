@@ -8,7 +8,7 @@ import { placeArrows, type PlacedArrow, type Rect } from './arrow';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
-import { autoLaneWidth, laneColumnWidth, maxLaneWidth, minLaneWidth, type LaneColumn } from './lanewidth';
+import { autoLaneWidth, groupBarWidth, laneColumnWidth, maxLaneWidth, minLaneWidth, type LaneColumn } from './lanewidth';
 import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapHyphenated, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
@@ -185,6 +185,9 @@ export interface LaneLayout {
 /** Baren til en gruppe av lanes: smal, med rotert tekst, til venstre for lane-navnene. */
 export interface LaneGroupLayout {
   id: string;
+  /** Bredden baren ville hatt automatisk (mm), og om bredden er valgt i appen. */
+  autoW: number;
+  chosen: boolean;
   x0: number;
   x1: number;
   y0: number;
@@ -535,26 +538,26 @@ export function pack(pieces: { fx0: number; fx1: number; h: number }[], gap = GA
  * det er plass til. Teksten brytes så kort som mulig innenfor det, så boksen blir lavest mulig.
  * Er det ikke plass til flere linjer enn teksten har fra før, står hver tekstlinje hel, som før.
  */
-export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure, room = 0): string[] {
+export function rotatedLines(raw: string[], innerW: number, size: number, measure: Measure, room = 0, bold = false): string[] {
   const maxLines = Math.floor((innerW + 1e-6) / (size * LINE_HEIGHT));
   if (maxLines <= raw.length) return raw;
   // Linjene kan være så lange som høyden boksen har fått
   if (room > 0) {
-    const fit = wrapLines(raw, room, size, measure);
+    const fit = wrapLines(raw, room, size, measure, bold);
     const words = new Set(raw.join(' ').split(/\s+/));
     if (fit.length <= maxLines && fit.every((l) => l.split(/\s+/).every((wd) => !wd || words.has(wd)))) return fit;
   }
   const words = raw.flatMap((l) => l.split(/\s+/)).filter(Boolean);
-  let lo = Math.max(0, ...words.map((wd) => measure(wd, size)));
-  let hi = widest(raw, size, measure);
+  let lo = Math.max(0, ...words.map((wd) => measure(wd, size, bold)));
+  let hi = widest(raw, size, measure, bold);
   if (hi <= lo) return raw;
   // Korteste linjelengde der teksten får plass i maxLines linjer
   for (let k = 0; k < 20; k++) {
     const mid = (lo + hi) / 2;
-    if (wrapLines(raw, mid, size, measure).length <= maxLines) hi = mid;
+    if (wrapLines(raw, mid, size, measure, bold).length <= maxLines) hi = mid;
     else lo = mid;
   }
-  return wrapLines(raw, hi, size, measure);
+  return wrapLines(raw, hi, size, measure, bold);
 }
 
 export const DEFAULT_MIN_TEXT_PT = 6;
@@ -681,15 +684,22 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const LANE_TITLE_W = laneColumnWidth(colIn);
   const laneCol: LaneColumn = { size: laneSize, pad: titlePad, auto: autoLaneWidth(colIn), min: minLaneWidth(colIn), max: maxLaneWidth(colIn), chosen: !!colIn.chosen };
   // Grupper av lanes: baren tar plass fra navnene i gruppen, så kolonnen blir ikke bredere.
-  // Like bred som linjene i teksten, men aldri mer enn en tredjedel av kolonnen.
+  // Like bred som linjene i teksten, eller valgt bredde (se groupBarWidth).
   const runs = groupRuns(file.plan.layout.laneGroups, lanes.map((l) => l.id)).map((r) => {
     const lines = splitLines(r.group.name);
-    const w = Math.min(LANE_TITLE_W / 3, Math.max(1, lines.length) * laneLh + 1.2);
+    const autoW = groupBarWidth(undefined, Math.max(1, lines.length) * laneLh + 1.2, laneSize, LANE_TITLE_W);
+    const w = groupBarWidth(r.group.barWidth, Math.max(1, lines.length) * laneLh + 1.2, laneSize, LANE_TITLE_W);
     const len = Math.max(0, ...lines.map((t) => measure(t, laneSize, true)));
-    return { ...r, lines, w, len };
+    return { ...r, lines, w, autoW, len };
   });
   const barW = lanes.map(() => 0);
-  for (const r of runs) for (let i = r.start; i <= r.end; i++) barW[i] = r.w;
+  // Lanes i en gruppe med loddrette navn
+  const rotated = lanes.map(() => false);
+  for (const r of runs)
+    for (let i = r.start; i <= r.end; i++) {
+      barW[i] = r.w;
+      rotated[i] = !!r.group.rotateNames;
+    }
   // Luft i lanene følger tekststørrelsen
   const LANE_PAD = Math.max(0.5, base * 0.3);
 
@@ -721,7 +731,14 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   // ---- Lane-titler og innholdshøyde ----
   // Med valgt bredde kan ord deles ved bindestrek (og få bindestrek). Automatisk brytes som før.
   const wrapTitle = laneCol.chosen ? wrapHyphenated : wrapLines;
-  const titleLines = laneRaw.map((raw, i) => wrapTitle(raw, LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, true));
+  const titleLines = laneRaw.map((raw, i) => (rotated[i] ? raw : wrapTitle(raw, LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, true)));
+  // Høyden navnet trenger: linjene under hverandre, eller den lengste linjen når navnet står loddrett
+  const titleNeed = titleLines.map((tl) => tl.length * laneLh);
+  /** Loddrett navn: linjene side om side i feltet, så korte som lanen tillater. Lanen blir høy nok. */
+  const rotateTitle = (i: number, room: number) => {
+    titleLines[i] = rotatedLines(laneRaw[i], LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, room, true);
+    titleNeed[i] = widest(titleLines[i], laneSize, measure, true) + 1.5;
+  };
   // Plasseringen uten egendefinert planområde, så lanene som ikke berøres av kantene slipper ny pakking
   const basePlace: { k: number[]; ys: number[] }[] = [];
   const contentH = lanes.map((lane, i) => {
@@ -785,7 +802,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     pieces.forEach((p, j) => setY(p.item, ys[j]));
     basePlace[i] = { k: placed.map((q) => q.k), ys };
     const inner = pieces.reduce((m, p, j) => Math.max(m, ys[j] + p.h), 0);
-    return Math.max(inner + 2 * LANE_PAD, titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5);
+    if (rotated[i]) rotateTitle(i, Math.max(inner, lh * 1.5 - 2 * LANE_PAD, lanes[i].height && !compact ? lanes[i].height! * lh - 2 * LANE_PAD : 0) - 1.5);
+    return Math.max(inner + 2 * LANE_PAD, titleNeed[i] + 2 * LANE_PAD, lh * 1.5);
   });
   // Teksten i en gruppebar må få plass i høyden: det som mangler, legges på den nederste lanen i gruppen
   const floor = lanes.map(() => 0);
@@ -988,9 +1006,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
         const inner = pieces.reduce((m, p, j) => Math.max(m, pl.ys[j] + (p.alts ?? [p])[pl.k[j]].h), 0);
         // Lane-tittelen står i det synlige av lanen i tittelkolonnen
         const tTop = Math.max(0, edgeRange(E.top, E.left, titleX1, 'max') - y0);
-        const need = Math.max(inner + 2 * LANE_PAD, tTop + titleLines[i].length * laneLh + 2 * LANE_PAD, lh * 1.5, floor[i]);
+        const need = Math.max(inner + 2 * LANE_PAD, tTop + titleNeed[i] + 2 * LANE_PAD, lh * 1.5, floor[i]);
         const h = Math.max(need, lanes[i].height ? lanes[i].height! * lh : 0) + add[i];
-        if (y0 + tTop + titleLines[i].length * laneLh + 2 * LANE_PAD > edgeRange(E.bottom, E.left, titleX1, 'min') + 1e-6) ok = false;
+        if (y0 + tTop + titleNeed[i] + 2 * LANE_PAD > edgeRange(E.bottom, E.left, titleX1, 'min') + 1e-6) ok = false;
         contentHAt[i] = need;
         heightAt[i] = h;
         y += h;
@@ -1086,12 +1104,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       titleX0: laneTitleX + barW[i],
       title: {
         x: laneTitleX + barW[i] + (LANE_TITLE_W - barW[i]) / 2,
-        y: (tTop + tBot) / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
+        y: rotated[i] ? (tTop + tBot) / 2 : (tTop + tBot) / 2 - ((tl.length - 1) * laneLh) / 2 + laneSize * 0.35,
         lines: tl,
         size: laneSize,
         color: lane.whiteText ? '#FFFFFF' : '#000000',
         anchor: 'middle',
         bold: true,
+        ...(rotated[i] ? { rotate: -90 as const } : {}),
       },
     });
     y += h;
@@ -1104,6 +1123,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const tBot = edges ? Math.max(tTop, Math.min(gy1, edgeRange(edges.bottom, edges.left, laneTitleX + r.w, 'min'))) : gy1;
     return {
       id: r.group.id,
+      autoW: r.autoW,
+      chosen: !!r.group.barWidth,
       x0: laneTitleX,
       x1: laneTitleX + r.w,
       y0: gy0,

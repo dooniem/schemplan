@@ -70,3 +70,18 @@ export function widthToEm(mm: number, size: number): number {
 }
 
 export const laneWidthOk = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= MIN_WIDTH_EM && v <= MAX_WIDTH_EM;
+
+/** Grenser for valgt bredde på en gruppebar (ganger tekststørrelsen), og største andel av kolonnen. */
+export const BAR_MIN_EM = 1;
+export const BAR_MAX_SHARE = 0.6;
+
+/**
+ * Bredden på en gruppebar i mm. Automatisk like bred som teksten, men høyst en tredjedel av
+ * kolonnen. Valgt bredde følger tekststørrelsen, som kolonnen, og tar høyst BAR_MAX_SHARE av den.
+ */
+export function groupBarWidth(chosen: number | undefined, auto: number, size: number, colW: number): number {
+  if (!chosen) return Math.min(colW / 3, auto);
+  return Math.max(BAR_MIN_EM * size, Math.min(chosen * size, colW * BAR_MAX_SHARE));
+}
+
+export const barWidthOk = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= BAR_MIN_EM && v <= MAX_WIDTH_EM;
