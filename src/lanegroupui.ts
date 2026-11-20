@@ -114,6 +114,10 @@ export function laneGroupItems(k: GroupKit, plan: PlanFile, laneId: string): Ctx
     { label: 'Endre gruppen', icon: 'pencil', hint: 'Tekst, farge og lanene i gruppen, i panelet til høyre.', onSelect: () => k.selectGroup(g.id) },
     { label: 'Utvid gruppen til …', icon: 'laneGroup', hint: 'Klikk en lane utenfor gruppen. Den og lanene imellom blir med.', disabled: !can, onSelect: () => k.pick(laneId) },
     { label: 'Ta ut av gruppen', icon: 'laneUngroup', hint: 'Lanen går ut av gruppen. Står den midt i, deles gruppen i to.', onSelect: () => k.ungroupLane(laneId) },
+    { label: 'Loddrette navn i gruppen', checked: !!g.rotateNames, hint: 'Navnene på alle lanene i gruppen står loddrett, som teksten i baren. Lanene blir høye nok til navnene.', onSelect: () => k.change(g.id, (x) => {
+      if (x.rotateNames) delete x.rotateNames;
+      else x.rotateNames = true;
+    }) },
   ];
 }
 
