@@ -29,7 +29,10 @@ import { inLine, styleOf } from './criticallines';
 import { datesMenuItem, datesRows } from './boxdatesui';
 import { setBoxDates } from './layout/boxdates';
 import { foldSection, type Fold } from './panelfold';
-import { calloutFold, formFold, placeFold } from './panelsummary';
+import { calloutFold, formFold, lineFold, placeFold } from './panelsummary';
+
+/** Hvordan høyde og plass endres med musen. */
+const PLACE_HINT = 'Dra boksen opp eller ned for å gi den fast plass, og dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt. Hold Ctrl mens du drar for å skyve boksene under ned.';
 import { customMarkSection, markScaleRow, marksMenuItems, marksSection, pickMarkImage, removeCustomMark, setMarks, type CustomActions } from './marksui';
 import { MARK_KEYS, MARK_NAMES, markName, markOfKey, type MarkKind } from './layout/marks';
 import { dissolveLaneGroup, findGroup, groupLanes, groupOfLane, groupTargets, growLaneGroup, removeFromLaneGroup, settleLaneGroups } from './lanegroup';
@@ -1259,7 +1262,11 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }));
     const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
 
-    if (plain.length) section('Tekst').append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
+    if (plain.length) {
+      const st = section('Tekst');
+      st.append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
+      if (plain.some((x) => x.textScale)) st.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
+    }
 
     if (plain.length) {
       const sf = section('Fag');
@@ -1316,11 +1323,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     if (plain.length) marksSection(markKit, plan, plain, (k, v) => commit((pl) => setMarks(pl, plain.map((x) => x.id), k, v)), setMarkScale, customActions(plain.map((x) => x.id)));
 
-    const sp = section('Plassering', placeFold(boxes, true));
-    sp.append(critical.boxLineRow(plan, boxes));
-    if (plain.some((x) => x.textScale)) sp.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
+    section('Kritisk linje', lineFold(boxes)).append(critical.boxLineRow(plan, boxes));
+
+    const sp = section('Høyde og plass', placeFold(boxes));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
     if (boxes.some(pinned)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all(unpinBox, false)));
+    sp.append(el('p', { class: 'hint' }, PLACE_HINT));
 
     const foot = el('div', { class: 'panel-foot' });
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => group.forEach((id) => resetBoxInPlan(pl, id))), 'Fjerner det du har endret på de valgte', 'button push');
@@ -1702,12 +1710,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
 
     if (!ms) marksSection(markKit, plan, [b], (k, v) => commit((pl) => setMarks(pl, [b.id], k, v)), setMarkScale, customActions([b.id]));
 
-    // Milepælpanelet er kort nok til at Plassering kan stå åpen
-    const sp = section('Plassering', ms ? undefined : placeFold([b]));
-    sp.append(critical.boxLineRow(plan, [b]));
+    // Milepælpanelet er kort nok til at delene kan stå åpne
+    section('Kritisk linje', ms ? undefined : lineFold([b])).append(critical.boxLineRow(plan, [b]));
+    const sp = section(ms ? 'Plass' : 'Høyde og plass', ms ? undefined : placeFold([b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));
-    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : 'Dra boksen opp eller ned for å gi den fast plass. Dra i den blå streken nederst for å endre høyden. Kantene snapper til andre bokser; hold Alt for å dra fritt. Hold Ctrl mens du drar for å skyve boksene under ned i stedet for at lanen pakkes på nytt.'));
+    // Samme som i høyreklikkmenyen: klikk boksene som skal bli like høye som denne
+    if (!ms && heightCopy && canTakeHeight(b))
+      sp.append(btn('Gi andre bokser samme høyde …', null, () => startHeightCopy(b.id), 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', 'linkish'));
+    sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : PLACE_HINT));
 
     const foot = el('div', { class: 'panel-foot' });
     const reset = btn('Tilbakestill', 'undo', () => commit((pl) => resetBoxInPlan(pl, b.id)), 'Fjerner det du har endret, så appens forslag gjelder igjen', 'button push');
