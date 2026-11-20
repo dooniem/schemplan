@@ -1715,6 +1715,9 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sp = section(ms ? 'Plass' : 'Høyde og plass', ms ? undefined : placeFold([b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));
+    // Samme som i høyreklikkmenyen: klikk boksene som skal bli like høye som denne
+    if (!ms && heightCopy && canTakeHeight(b))
+      sp.append(btn('Gi andre bokser samme høyde …', null, () => startHeightCopy(b.id), 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', 'linkish'));
     sp.append(el('p', { class: 'hint' }, ms ? 'Dra milepælen opp eller ned for å gi den fast plass.' : PLACE_HINT));
 
     const foot = el('div', { class: 'panel-foot' });
