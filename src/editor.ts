@@ -1571,15 +1571,22 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           if (k) setMs('color', k);
         }),
       );
+      // Med bilde som symbol gjelder ikke valget av flagg, ruter og farge
+      const img = images.symbolImageOf(plan, b.id);
+      if (img) su.append(...images.milestoneSymbolRows(plan, b.id));
+      else
+        su.append(
+          segmented('Symbol', stl.symbol, [['diamond', 'Ruter', 'diamond'], ['flag', 'Flagg', 'flag']], (v) => setMs('symbol', v)),
+          cw,
+          ...images.milestoneSymbolRows(plan, b.id),
+        );
       su.append(
-        segmented('Symbol', stl.symbol, [['diamond', 'Ruter', 'diamond'], ['flag', 'Flagg', 'flag']], (v) => setMs('symbol', v)),
-        cw,
         switchRow('Vis dato', stl.showDate, (v) => setMs('showDate', v)),
         switchRow('Loddrett linje', stl.verticalLine, (v) => setMs('verticalLine', v), 'Strek fra milepælen ned gjennom planen'),
         segmented<Rotation>('Rotasjon', milestoneRotation(b), [[0, 'Ingen'], [90, '90°'], [-90, '−90°']], (v) => setMs('rotation', v)),
       );
       // Symbolet kan bare snus når teksten er rotert
-      if (milestoneRotation(b) !== 0)
+      if (!img && milestoneRotation(b) !== 0)
         su.append(
           stl.symbol === 'flag'
             ? switchRow('Roter flagget', !!b.milestoneStyle?.flagTurned, (v) => setMs('flagTurned', v), 'Stangen øverst og flagget hengende ned, teksten under')
@@ -2747,6 +2754,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     redrawSoon: (ms) => (redrawTimer = window.setTimeout(() => host.redraw(), ms)),
     cancelRedraw: () => window.clearTimeout(redrawTimer),
     kit: imageKit,
+    selectBox: (id) => select(id),
   });
   const { findImage, placedOf, tipDrag, imageId, changePlaced, clearImage, selectImage, setImageMode, pickImage, visibleCenter, insertImages, removeImage, duplicateImage, mmPerPx, startImageMove, startImageHandle, deletePoint, imageOverlay, buildImagePanel, imageMenu, insertNoteItem, insertItem, milestoneImageGroup } = images;
 
