@@ -4,7 +4,7 @@ import { readLookahead } from '../layout/lookahead';
 import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
 import { transparencyOk } from '../layout/transparency';
-import { laneWidthOk, MAX_WIDTH_EM, MIN_WIDTH_EM } from '../layout/lanewidth';
+import { barWidthOk, laneWidthOk, MAX_WIDTH_EM, MIN_WIDTH_EM } from '../layout/lanewidth';
 
 export interface ValidationResult {
   /** Satt når filen kan brukes. Advarsler kan likevel finnes. */
@@ -111,8 +111,9 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.laneGroups !== undefined) {
         const gs = lay.laneGroups;
         const ok = (g: unknown) =>
-          isObj(g) && typeof g.id === 'string' && typeof g.name === 'string' && typeof g.fill === 'string' && HEX.test(g.fill) && Array.isArray(g.lanes) && g.lanes.every((x) => typeof x === 'string');
-        if (!Array.isArray(gs) || !gs.every(ok)) err('plan.layout.laneGroups', 'må være en liste med id, name, fill (#RRGGBB) og lanes (lane-id-er)');
+          isObj(g) && typeof g.id === 'string' && typeof g.name === 'string' && typeof g.fill === 'string' && HEX.test(g.fill) && Array.isArray(g.lanes) && g.lanes.every((x) => typeof x === 'string') &&
+          (g.rotateNames === undefined || typeof g.rotateNames === 'boolean') && (g.barWidth === undefined || barWidthOk(g.barWidth));
+        if (!Array.isArray(gs) || !gs.every(ok)) err('plan.layout.laneGroups', 'må være en liste med id, name, fill (#RRGGBB) og lanes (lane-id-er), og eventuelt rotateNames (true/false) og barWidth (tall)');
       }
       needNum(lay, 'textSize', 'plan.layout');
       if (typeof lay.textSize === 'number' && lay.textSize <= 0) err('plan.layout.textSize', 'må være større enn 0');

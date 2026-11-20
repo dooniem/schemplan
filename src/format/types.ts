@@ -298,6 +298,10 @@ export interface LaneGroup {
   fill: HexColor;
   /** Lane-id-ene i gruppen. Rekkefølgen på arket følger lanene. */
   lanes: string[];
+  /** Lane-navnene i gruppen står loddrett, lest nedenfra og opp. */
+  rotateNames?: boolean;
+  /** Valgt bredde på baren, i ganger lane-navnenes tekststørrelse. Uten: like bred som teksten. */
+  barWidth?: number;
 }
 
 export interface Lane {

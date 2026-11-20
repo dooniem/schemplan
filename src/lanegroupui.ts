@@ -15,6 +15,10 @@ export interface GroupKit {
   section: (title: string) => HTMLElement;
   textField: (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks?: boolean) => HTMLElement;
   btn: (text: string, ico: IconName | null, onClick: () => void, title?: string, cls?: string) => HTMLButtonElement;
+  switchRow: (label: string, on: boolean, onChange: (v: boolean) => void, title?: string) => HTMLElement;
+  lockedRow: (text: string, button: string, title: string, onClick: () => void) => HTMLElement;
+  /** Barens bredde slik den er tegnet nå (mm), og bredden den ville hatt automatisk. Null uten tegning. */
+  barWidth: (id: string) => { w: number; auto: number } | null;
   swatches: (current: string | null, list: Swatch[], t: Trial) => HTMLElement;
   colorRow: (value: string, t: Trial) => DocumentFragment;
   trial: (key: string, now: string, set: (fill: string) => void) => Trial;
@@ -44,6 +48,23 @@ export function buildLaneGroupPanel(k: GroupKit, plan: PlanFile, g: LaneGroup): 
     k.textField('group-name', 'Tekst', g.name, '2', (v) => k.change(g.id, (x) => (x.name = v), { typing: true, rebuild: false }), true),
     el('p', { class: 'hint' }, 'Står loddrett i baren, lest nedenfra. Enter eller | gir linjeskift.'),
   );
+
+  const sv = k.section('Visning');
+  sv.append(
+    k.switchRow('Loddrette lane-navn', !!g.rotateNames, (v) => k.change(g.id, (x) => {
+      if (v) x.rotateNames = true;
+      else delete x.rotateNames;
+    }), 'Navnene på lanene i gruppen står loddrett, som teksten i baren. Lanene blir høye nok til navnene.'),
+  );
+  const bw = k.barWidth(g.id);
+  if (bw) {
+    const mm = (v: number) => `${v.toLocaleString('nb-NO', { maximumFractionDigits: 0 })} mm`;
+    sv.append(
+      g.barWidth
+        ? k.lockedRow(`Valgt bredde på baren, ${mm(bw.w)}`, 'Automatisk', `Like bred som teksten (${mm(bw.auto)} nå)`, () => k.change(g.id, (x) => delete x.barWidth))
+        : el('p', { class: 'hint' }, `Baren er ${mm(bw.w)}, like bred som teksten. Dra i høyre kant av baren for å endre bredden.`),
+    );
+  }
 
   const sc = k.section('Farge');
   const now = g.fill.toUpperCase();
@@ -102,6 +123,15 @@ export function laneGroupMenu(k: GroupKit, plan: PlanFile, g: LaneGroup): CtxGro
   const below = laneBeside(plan, g.id, 1);
   return [
     { items: [{ label: 'Endre tekst og farge', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner gruppen i panelet til høyre.', onSelect: () => k.selectGroup(g.id) }] },
+    {
+      items: [
+        { label: 'Loddrette lane-navn', checked: !!g.rotateNames, hint: 'Navnene på lanene i gruppen står loddrett, som teksten i baren. Lanene blir høye nok til navnene.', onSelect: () => k.change(g.id, (x) => {
+          if (x.rotateNames) delete x.rotateNames;
+          else x.rotateNames = true;
+        }) },
+        { label: 'Automatisk bredde på baren', icon: 'undo', disabled: !g.barWidth, hint: g.barWidth ? 'Baren blir like bred som teksten.' : 'Baren er like bred som teksten. Dra i høyre kant av baren for å endre bredden.', onSelect: () => k.change(g.id, (x) => delete x.barWidth) },
+      ],
+    },
     {
       items: [
         { label: 'Ta med lanen over', icon: 'up', hint: above ? `Tar med ${laneNameOf(plan, above)}.` : 'Ingen lane over gruppen.', disabled: !above, onSelect: () => k.grow(g.id, -1) },

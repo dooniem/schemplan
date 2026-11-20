@@ -257,9 +257,9 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'lanemeny', group: 'Lanes', title: 'Nye lanes, grupper og sammenslåing',
     text: `Høyreklikk et lane-navn for ny lane over eller under, og for å skjule lanen. ${ui('Grupper med …')} samler lanes under en smal bar med tekst. ${ui('Slå sammen med …')} legger boksene fra to lanes i én.`,
-    when: `Grupper når flere lanes hører til samme område eller entreprise. Slå sammen når to lanes fra Project har få bokser hver og like gjerne kan stå sammen. Sammenslåingen kan løses opp igjen med ${ui('Skill ut … igjen')}.`,
+    when: `I gruppepanelet kan lane-navnene i gruppen stå loddrett, som teksten i baren, og lanene blir da høye nok til navnene. Dra i høyre kant av baren for å endre bredden på den. Grupper når flere lanes hører til samme område eller entreprise. Slå sammen når to lanes fra Project har få bokser hver og like gjerne kan stå sammen. Sammenslåingen kan løses opp igjen med ${ui('Skill ut … igjen')}.`,
     img: 'lanemeny', alt: 'Høyreklikkmenyen for et lane-navn.',
-    words: 'ny lane gruppe gruppere slå sammen skjul vis skjulte skill ut', see: ['lanes'],
+    words: 'ny lane gruppe gruppere slå sammen skjul vis skjulte skill ut loddrett rotert roter navn bredde bar', see: ['lanes'],
   },
   {
     id: 'lanebredde', group: 'Lanes', title: 'Bredden på navnefeltet',

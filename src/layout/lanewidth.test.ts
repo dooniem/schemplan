@@ -89,3 +89,41 @@ describe('planområdet følger tidsaksen', () => {
     expect(top[1][1]).toBe(0.3);
   });
 });
+
+describe('grupper: loddrette lane-navn og bredde på baren', () => {
+  const grouped = () => {
+    const p = testplan();
+    const ids = p.lanes.filter((l) => l.shown).slice(0, 2).map((l) => l.id);
+    p.lanes.find((l) => l.id === ids[0])!.name = 'Kabelkanaler og trekkerør';
+    p.plan.layout.laneGroups = [{ id: 'g', name: 'Nord', fill: '#CEE5ED', lanes: ids }];
+    return { p, ids };
+  };
+
+  it('tegner navnene loddrett, og lanen blir høy nok til navnet', () => {
+    const { p, ids } = grouped();
+    p.plan.layout.laneGroups![0].rotateNames = true;
+    const L = computeLayout(p, { ...OPTS, heightMode: 'compact' }, approxMeasure);
+    const ln = L.lanes.find((l) => l.id === ids[0])!;
+    expect(ln.title.rotate).toBe(-90);
+    const longest = Math.max(...ln.title.lines.map((t) => approxMeasure(t, ln.title.size, true)));
+    expect(ln.y1 - ln.y0).toBeGreaterThanOrEqual(longest);
+    // Lanes utenfor gruppen står som før
+    const other = L.lanes.find((l) => !ids.includes(l.id))!;
+    expect(other.title.rotate).toBeUndefined();
+  });
+
+  it('gir baren valgt bredde, som følger tekststørrelsen', () => {
+    const { p } = grouped();
+    const auto = computeLayout(p, OPTS, approxMeasure).laneGroups[0];
+    expect(auto.chosen).toBe(false);
+    p.plan.layout.laneGroups![0].barWidth = 3;
+    const a = computeLayout(p, OPTS, approxMeasure);
+    expect(a.laneGroups[0].chosen).toBe(true);
+    expect(a.laneGroups[0].x1 - a.laneGroups[0].x0).toBeCloseTo(3 * a.laneCol.size, 5);
+    expect(a.laneGroups[0].autoW).toBeCloseTo(auto.x1 - auto.x0, 5);
+    // Aldri mer enn 60 % av kolonnen
+    p.plan.layout.laneGroups![0].barWidth = 200;
+    const b = computeLayout(p, OPTS, approxMeasure);
+    expect(b.laneGroups[0].x1 - b.laneGroups[0].x0).toBeCloseTo((b.plot.x0 - b.laneTitleX) * 0.6, 5);
+  });
+});

@@ -465,6 +465,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     section,
     textField,
     btn,
+    switchRow,
+    lockedRow,
+    barWidth: (id) => {
+      const gb = layoutNow?.laneGroups.find((x) => x.id === id);
+      return gb ? { w: gb.x1 - gb.x0, auto: gb.autoW } : null;
+    },
     swatches,
     colorRow: (v, t) => colorRow(v, t),
     trial,
@@ -2662,6 +2668,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       if (it?.kind === 'box') d = startBoxResize(it);
     } else if (t.closest('.lane-col-edge')) {
       d = laneWidth.startDrag();
+    } else if (t.closest('.bar-edge')) {
+      d = laneWidth.startBarDrag(t.closest('.bar-edge')!.getAttribute('data-group')!);
     } else if (t.closest('.lane-edge')) {
       const ln = layoutNow.lanes.find((l) => l.id === t.closest('.lane-edge')!.getAttribute('data-lane'));
       if (ln) d = startLaneResize(ln);
