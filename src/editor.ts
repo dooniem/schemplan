@@ -14,6 +14,7 @@ import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
 import type { PlanImage } from './format/types';
 import { type AreaEdge, createAreaEdit } from './areaedit';
+import { createLaneWidthEdit } from './lanewidthui';
 import { createArrangeUi } from './arrangeui';
 import { createPushHint, pieceHeight, pieceRect, pinAt, pinOffset, pushDown, settle } from './pushmove';
 import { applyFollows, canFollow, followersOf, setFollow, type Edge } from './links';
@@ -232,7 +233,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     undoBtn.disabled = !past.length;
     redoBtn.disabled = !future.length;
     const plan = host.getPlan();
-    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.plan.layout.markScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
+    resetAllBtn.disabled = !plan || (!plan.plan.layout.tradeColors && !plan.plan.layout.laneTitleScale && !plan.plan.layout.laneTitleWidth && !plan.plan.layout.legendItems && !plan.plan.layout.headerRightScale && !plan.plan.layout.legendScale && !plan.plan.layout.logoScale && !plan.plan.layout.markScale && !plan.lanes.some((l) => (isLaneEdited(l) && !l.manual) || l.boxes.some(isEdited)));
     sheet.classList.toggle('editing', active);
     criticalBtn?.setAttribute('aria-pressed', String(critical.mode));
     sheet.classList.toggle('critical-mode', active && critical.mode);
@@ -1026,6 +1027,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           resetTitle: 'Litt større enn teksten i boksene',
         }),
         el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store. Som standard er de litt større enn teksten i boksene.'),
+        ...laneWidth.panelRows({ el, lockedRow }),
       );
     }
 
@@ -1829,6 +1831,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Kompakt ser bort fra fast lanehøyde, så kanten kan ikke dras der
       if (!layoutNow.compact) line(layoutNow.laneTitleX, layoutNow.plot.x0, ln.y1, { class: 'edit-handle lane-edge', 'data-lane': ln.id, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' });
     }
+    if (!critical.mode) laneWidth.draw(g);
     const sel = layoutNow.items.find((i) => i.id === selected);
     // Ikke i kritisk linje-modus: der skal et klikk like under boksen treffe naboen
     if (sel?.kind === 'box' && !critical.mode) {
@@ -2657,6 +2660,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     } else if (t.closest('.box-handle')) {
       const it = layoutNow.items.find((i) => i.id === selected);
       if (it?.kind === 'box') d = startBoxResize(it);
+    } else if (t.closest('.lane-col-edge')) {
+      d = laneWidth.startDrag();
     } else if (t.closest('.lane-edge')) {
       const ln = layoutNow.lanes.find((l) => l.id === t.closest('.lane-edge')!.getAttribute('data-lane'));
       if (ln) d = startLaneResize(ln);
@@ -2740,6 +2745,17 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     mmPerPx: () => mmPerPx(),
     snapOff: () => snapOff,
     openMenu: (x, y, title, groups, subtitle) => ctx.open(x, y, title, groups, subtitle),
+  });
+
+  const laneWidth = createLaneWidthEdit({
+    accent: ACCENT,
+    getPlan: () => host.getPlan(),
+    layout: () => layoutNow,
+    layoutOf: (p) => host.layoutOf(p),
+    commit: (fn) => commit(fn),
+    redraw: () => host.redraw(),
+    mmPerPx: () => mmPerPx(),
+    snapOff: () => snapOff,
   });
 
   // ---- Bilder og fritekst ----
@@ -2928,6 +2944,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             { label: 'Fast', radio: true, checked: !!lane.height, hint: 'Beholder høyden. Dra i nederste kant av lane-navnet for å endre den.', onSelect: () => commit((pl) => (findLane(pl, ln.id)!.height = lines(ln.y1 - ln.y0, L.unit))) },
           ],
         }]),
+        laneWidth.menu(),
         {
           items: [
             { label: 'Endre navn og farge', icon: 'pencil', kbd: 'Dobbeltklikk', hint: 'Åpner lanen i panelet til høyre.', onSelect: () => selectLane(ln.id) },
@@ -3096,6 +3113,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     ids.forEach((id) => resetBoxInPlan(plan, id));
     delete plan.plan.layout.tradeColors;
     delete plan.plan.layout.laneTitleScale;
+    delete plan.plan.layout.laneTitleWidth;
     delete plan.plan.layout.legendItems;
     delete plan.plan.layout.headerRightScale;
     delete plan.plan.layout.legendScale;

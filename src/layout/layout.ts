@@ -8,8 +8,9 @@ import { placeArrows, type PlacedArrow, type Rect } from './arrow';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
 import { buildTimeAxis, type TimeAxis } from './calendar';
+import { autoLaneWidth, laneColumnWidth, maxLaneWidth, minLaneWidth, type LaneColumn } from './lanewidth';
 import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday } from './dates';
-import { LINE_HEIGHT, PT_TO_MM, widest, wrapLines, type Measure } from './text';
+import { LINE_HEIGHT, PT_TO_MM, widest, wrapHyphenated, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { seenFill, transparencyOf } from './transparency';
 import { criticalLine, type CriticalLine } from './critical';
@@ -270,6 +271,8 @@ export interface Layout {
   subtitle: TextBlock;
   plot: { x0: number; x1: number; y0: number; y1: number };
   laneTitleX: number;
+  /** Lane-kolonnen: navnenes tekststørrelse og luft (mm), automatisk bredde og grensene for valgt bredde. */
+  laneCol: LaneColumn;
   /** Kalendervisningen som faktisk er tegnet. */
   calendarMode: 'month' | 'week';
   calendarTop: CalendarRow[];
@@ -664,7 +667,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     : undefined;
   const logo = lg ? { x: MARGIN, y: TOP_MARGIN + (headerH - 1.5 - logoH) / 2, w: Math.min(logoH * lg.aspect, W / 3), h: Math.min(logoH, W / 3 / lg.aspect), href: lg.data } : null;
 
-  // ---- Lane-kolonnen: bred nok til at ingen ord deles, inntil 30 mm for hele titler, aldri over 40 mm ----
+  // ---- Lane-kolonnen: se lanewidth.ts ----
   const lanes = file.lanes.filter((l) => l.shown && !l.hidden);
   const titlePad = 2 * PAD_X + 2;
   // Lane-titlene har én felles størrelse, i forhold til teksten i boksene (litt større som standard)
@@ -674,7 +677,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const laneRaw = lanes.map((l) => splitLines(l.name));
   const longestWord = Math.max(0, ...laneRaw.flat().flatMap((t) => t.split(/\s+/).map((w) => measure(w, laneSize, true))));
   const widestName = Math.max(0, ...laneRaw.flat().map((t) => measure(t, laneSize, true)));
-  const LANE_TITLE_W = Math.min(40, Math.max(18, longestWord + titlePad, Math.min(widestName + titlePad, 30)));
+  const colIn = { longestWord, widestName, pad: titlePad, size: laneSize, sheetW: W, chosen: file.plan.layout.laneTitleWidth };
+  const LANE_TITLE_W = laneColumnWidth(colIn);
+  const laneCol: LaneColumn = { size: laneSize, pad: titlePad, auto: autoLaneWidth(colIn), min: minLaneWidth(colIn), max: maxLaneWidth(colIn), chosen: !!colIn.chosen };
   // Grupper av lanes: baren tar plass fra navnene i gruppen, så kolonnen blir ikke bredere.
   // Like bred som linjene i teksten, men aldri mer enn en tredjedel av kolonnen.
   const runs = groupRuns(file.plan.layout.laneGroups, lanes.map((l) => l.id)).map((r) => {
@@ -714,7 +719,9 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const lanePieces = lanes.map((lane) => buildPieces(lane, file, axis, base, lh, measure, colors, noneColor, ny, compact));
 
   // ---- Lane-titler og innholdshøyde ----
-  const titleLines = laneRaw.map((raw, i) => wrapLines(raw, LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, true));
+  // Med valgt bredde kan ord deles ved bindestrek (og få bindestrek). Automatisk brytes som før.
+  const wrapTitle = laneCol.chosen ? wrapHyphenated : wrapLines;
+  const titleLines = laneRaw.map((raw, i) => wrapTitle(raw, LANE_TITLE_W - barW[i] - titlePad, laneSize, measure, true));
   // Plasseringen uten egendefinert planområde, så lanene som ikke berøres av kantene slipper ny pakking
   const basePlace: { k: number[]; ys: number[] }[] = [];
   const contentH = lanes.map((lane, i) => {
@@ -1240,6 +1247,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     plot: { x0, x1, y0: plotTop, y1: plotBottom },
     area: edges ? { ...edges, polygon: areaPolygon(edges) } : null,
     laneTitleX,
+    laneCol,
     calendarMode: axis.mode,
     calendarTop,
     calendarBottom,

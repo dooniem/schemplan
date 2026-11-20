@@ -262,6 +262,12 @@ export const TOPICS: HelpTopic[] = [
     words: 'ny lane gruppe gruppere slå sammen skjul vis skjulte skill ut', see: ['lanes'],
   },
   {
+    id: 'lanebredde', group: 'Lanes', title: 'Bredden på navnefeltet',
+    text: `Dra i høyre kant av navnefeltet for å gjøre det bredere eller smalere. Kanten stopper der et navn får plass på færre linjer, og bredden står ved kanten mens du drar. Hold Alt for å dra fritt. Høyreklikk et lane-navn og velg ${ui('Automatisk')} for å gå tilbake.`,
+    when: `Bruk det når et navn skal stå på én linje uten større tekst, eller når boksene trenger mer plass. Bredden følger tekststørrelsen på navnene, så linjeskiftene blir de samme på A4 og A3, i ${ui('Kompakt')} og når du endrer tekststørrelsen. Er feltet smalere enn et ord, deles ordet med bindestrek. En bindestrek du har skrevet i navnet, brukes først.`,
+    words: 'bredde bredere smalere kolonne navnefelt lane-navn linjeskift bindestrek dele ord automatisk', see: ['lanes', 'tekst'],
+  },
+  {
     id: 'planomrade', group: 'Lanes', title: 'Gi plass til kart og bilder',
     text: `${ui('Innstillinger')} › ${ui('Ark')} har tre valg for lanene. ${ui('Fyll arket')} strekker lanene over hele arket, ${ui('Kompakt')} gjør dem så lave som boksene tillater, og ${ui('Egendefinert')} gir en stiplet topp- og bunnkant du drar selv.`,
     when: `Med ${ui('Egendefinert')} kan du lage et tomt felt til et kart eller en tegning. Dra et hvitt punkt på kanten for å lage et knekkpunkt, så flyttes lanes og bokser til det er plass.`,

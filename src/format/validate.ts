@@ -4,6 +4,7 @@ import { readLookahead } from '../layout/lookahead';
 import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
 import { transparencyOk } from '../layout/transparency';
+import { laneWidthOk, MAX_WIDTH_EM, MIN_WIDTH_EM } from '../layout/lanewidth';
 
 export interface ValidationResult {
   /** Satt når filen kan brukes. Advarsler kan likevel finnes. */
@@ -130,6 +131,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.editedAt !== undefined && !isIsoDate(lay.editedAt)) err('plan.layout.editedAt', 'må være en dato som YYYY-MM-DD');
       for (const k of ['laneTitleScale', 'headerRightScale', 'legendScale', 'logoScale', 'markScale'] as const)
         if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
+      if (lay.laneTitleWidth !== undefined && !laneWidthOk(lay.laneTitleWidth)) err('plan.layout.laneTitleWidth', `må være et tall fra ${MIN_WIDTH_EM} til ${MAX_WIDTH_EM}`);
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
       if (lay.customMark !== undefined) {
         const cm = lay.customMark;
