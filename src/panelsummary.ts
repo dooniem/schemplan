@@ -34,15 +34,15 @@ export function formFold(b: Box): Fold {
   return { summary: joinSummary([type, rot && `rotert ${rot}`]), changed: type !== 'Vanlig' || !!rot };
 }
 
-/** Plassering: kritisk linje, fast høyde, egen tekststørrelse og fast plass, ellers automatisk. */
-export function placeFold(boxes: readonly Box[], withTextSize = false): Fold {
+/** Kritisk linje: linjene boksene er med i, ellers Ingen. */
+export function lineFold(boxes: readonly Box[]): Fold {
   const lines = [...new Set(boxes.flatMap((b) => linesOf(b)))].sort();
-  const parts = [
-    lines.length > 0 && (lines.length === 1 && lines[0] === 1 ? 'Kritisk linje' : `Kritisk linje ${lines.join(', ')}`),
-    withTextSize && boxes.some((b) => b.textScale) && 'Egen tekststørrelse',
-    boxes.some((b) => !b.resolved?.isMilestone && b.height) && 'Fast høyde',
-    boxes.some(pinned) && 'Fast plass',
-  ];
-  const s = joinSummary(parts);
+  if (!lines.length) return { summary: 'Ingen' };
+  return { summary: `Linje ${lines.join(', ')}`, changed: true };
+}
+
+/** Høyde og plass: fast høyde og fast plass i lanen, ellers automatisk. */
+export function placeFold(boxes: readonly Box[]): Fold {
+  const s = joinSummary([boxes.some((b) => !b.resolved?.isMilestone && b.height) && 'Fast høyde', boxes.some(pinned) && 'Fast plass']);
   return { summary: s || 'Automatisk', changed: !!s };
 }

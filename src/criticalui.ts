@@ -86,7 +86,7 @@ export function createCriticalUi(ed: CriticalUiHost) {
    */
   const boxLineRow = (plan: PlanFile, boxes: Box[]) => {
     const all = (n: number) => boxes.every((x) => inLine(x, n));
-    const row = lineButtons(plan, 'Med i kritisk linje', all, (n) => setCritical(boxes.map((x) => x.id), !all(n), n), (n) => `Ta med i eller ut av kritisk linje ${n}`);
+    const row = lineButtons(plan, 'Med i linje', all, (n) => setCritical(boxes.map((x) => x.id), !all(n), n), (n) => `Ta med i eller ut av kritisk linje ${n}`);
     row.classList.replace('prop-inline', 'prop');
     return row;
   };
