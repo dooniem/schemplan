@@ -67,6 +67,8 @@ export interface ImageEditHost {
   redrawSoon(ms: number): void;
   cancelRedraw(): void;
   kit: ImageEditKit;
+  /** Velger en boks eller milepæl, så panelet for den vises. */
+  selectBox(id: string): void;
 }
 
 export function createImageEdit(ed: ImageEditHost) {
@@ -815,6 +817,12 @@ export function createImageEdit(ed: ImageEditHost) {
 
     const sp = block('plass', 'Plassering', where);
     if (im.milestone) {
+      const acts = el('div', { class: 'row mark-custom-acts' });
+      acts.append(
+        btn('Vis milepælen', null, () => ed.selectBox(ms!.id), 'Panelet for milepælen: tekst, dato, linje og rotasjon', 'linkish'),
+        btn('Bytt bilde …', null, () => pickImage(null, [ms!.id]), 'Velg et annet bilde som symbol', 'linkish'),
+      );
+      sp.append(acts);
       sp.append(lockedRow('Følger milepælen', 'Løsne', 'Bildet blir stående der det er, og milepælen får sitt eget symbol igjen', () => pinImage(im.id, false)));
       const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
       sp.append(el('p', { class: 'hint' }, `Dra bildet for å flytte milepælen opp eller ned. Hold Alt mens du drar, eller bruk piltastene, for å flytte bare bildet. Kopierer du milepælen, får kopien samme bilde.${others.length ? ' Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke bildet der også.' : ''}`));
@@ -862,7 +870,9 @@ export function createImageEdit(ed: ImageEditHost) {
         })();
     foot.append(
       btn('Dupliser', 'copy', () => duplicateImage(im.id), 'Lag en kopi (Ctrl+D)'),
-      btn('Slett', 'trash', () => removeImage(im.id), 'Slett bildet (Delete)'),
+      ms
+        ? btn('Fjern', 'trash', () => removeImage(im.id), 'Fjern bildet, så milepælen får flagget eller ruteren igjen (Delete)')
+        : btn('Slett', 'trash', () => removeImage(im.id), 'Slett bildet (Delete)'),
       reset,
     );
     panel.append(foot);
@@ -905,7 +915,12 @@ export function createImageEdit(ed: ImageEditHost) {
       },
       {
         items: ms
-          ? [{ label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) }]
+          ? [
+              { label: 'Vis milepælen', icon: 'pin', hint: 'Panelet for milepælen: tekst, dato, linje og rotasjon.', onSelect: () => ed.selectBox(ms.id) },
+              { label: 'Bytt bilde …', icon: 'image', hint: 'Velg et annet bilde som symbol. Milepælen beholder plassen.', onSelect: () => pickImage(null, [ms.id]) },
+              { label: 'Fjern bildet', icon: 'trash', hint: 'Milepælen får flagget eller ruteren igjen. Angre med Ctrl+Z.', onSelect: () => removeImage(id) },
+              { label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) },
+            ]
           : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${formatLong(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
       },
       {
@@ -939,6 +954,29 @@ export function createImageEdit(ed: ImageEditHost) {
     hint: 'Velg en bildefil. Ctrl+V setter inn et bilde fra utklippstavlen, og du kan også dra en fil inn på arket.',
     onSelect: () => pickImage(at),
   });
+
+  /** Bildet som er symbol for milepælen, om den har et. */
+  const symbolImageOf = (plan: PlanFile, msId: string) => imagesOf(plan).find((x) => x.milestone?.id === msId) ?? null;
+
+  /** Bildesymbolet i milepælpanelet: bruk et bilde i stedet for flagget eller ruteren, eller rediger, bytt og fjern det. */
+  const milestoneSymbolRows = (plan: PlanFile, msId: string): HTMLElement[] => {
+    const im = symbolImageOf(plan, msId);
+    const pick = () => pickImage(null, [msId]);
+    if (!im) return [btn('Bruk bilde som symbol …', null, pick, 'Bildet erstatter flagget eller ruteren og følger milepælen når den flyttes', 'linkish')];
+    const head = el('div', { class: 'mark-custom-head' });
+    const img = document.createElement('img');
+    img.src = im.data;
+    img.alt = '';
+    img.className = 'mark-preview';
+    head.append(img, el('span', {}, 'Bilde i stedet for flagg eller ruter'));
+    const acts = el('div', { class: 'row mark-custom-acts' });
+    acts.append(
+      btn('Rediger', null, () => selectImage(im.id), 'Størrelse, rotasjon og beskjæring av bildet', 'button small'),
+      btn('Bytt …', null, pick, 'Velg et annet bilde. Milepælen beholder plassen.', 'button small'),
+      btn('Fjern', null, () => removeImage(im.id), 'Milepælen får flagget eller ruteren igjen', 'button small'),
+    );
+    return [head, acts];
+  };
 
   /** Valg for milepæler: bilde som symbol, eller samme bilde som en annen milepæl har. */
   const milestoneImageGroup = (plan: PlanFile, ids: string[]) => {
@@ -1002,6 +1040,8 @@ export function createImageEdit(ed: ImageEditHost) {
     insertNoteItem,
     insertItem,
     milestoneImageGroup,
+    milestoneSymbolRows,
+    symbolImageOf,
   };
 }
 

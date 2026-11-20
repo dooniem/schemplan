@@ -230,7 +230,7 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'datoer', group: 'Bokser', title: 'Datoer på boksene',
-    text: `Start- og sluttdato slås på for alle under ${ui('Innstillinger')} › ${ui('Vis på arket')}, der du også velger format. Høyreklikk en boks og velg ${ui('Datoer')} for å slå dem av eller på bare for den.`,
+    text: `Start- og sluttdato slås på for alle under ${ui('Innstillinger')} › ${ui('Vis på arket')}, der du også velger format. Høyreklikk en boks og velg ${ui('Vis datoer')}, eller bruk bryteren i panelet, for å slå dem av eller på bare for den.`,
     when: `Datoer på alle bokser gjør arket fullt. Ofte er det nok å vise dem på milepæler og de viktigste boksene, og slå dem på per boks.`,
     words: 'dato start slutt format vis', see: ['boksmeny', 'innstillinger'],
   },
@@ -332,7 +332,7 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'bilder', group: 'Arket', title: 'Bilder og fritekst',
     text: `Høyreklikk arket og velg ${ui('Sett inn bilde')} eller ${ui('Sett inn tekst')}, eller lim inn et bilde med ${k('Ctrl', 'V')}. Dobbeltklikk et bilde for å beskjære det. En fritekst kan få en pil som festes til en boks.`,
-    when: `Et kart over området gjør planen lettere å forstå for folk utenfra. Fritekst med pil passer til korte merknader, som «Avhengig av tillatelse». Et bilde kan også brukes som symbol på en milepæl.`,
+    when: `Et kart over området gjør planen lettere å forstå for folk utenfra. Fritekst med pil passer til korte merknader, som «Avhengig av tillatelse». Et bilde kan også brukes som symbol på en milepæl: velg milepælen og ${ui('Bruk bilde som symbol')} under Utseende i panelet. Der kan du også redigere, bytte eller fjerne bildet.`,
     words: 'bilde kart logo beskjær rotere tekst pil notat milepæl symbol', see: ['planomrade'],
   },
   // ---- Lagre og dele ----

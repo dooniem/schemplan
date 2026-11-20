@@ -18,7 +18,7 @@ interface Kit {
 export function datesRows(kit: Kit, plan: PlanFile, boxes: readonly Box[], set: (on: boolean) => void): HTMLElement[] {
   const plain = boxes.filter((b) => !b.resolved?.isMilestone);
   if (!plain.length) return [];
-  const rows = [kit.switchRow('Datoer', allDated(plan, plain), set, HINT)];
+  const rows = [kit.switchRow('Vis datoer', allDated(plan, plain), set, HINT)];
   const planOn = !!plan.plan.layout.showDates;
   const own = plain.filter((b) => b.showDates !== undefined && b.showDates !== planOn).length;
   if (own) {
@@ -36,5 +36,5 @@ export function datesRows(kit: Kit, plan: PlanFile, boxes: readonly Box[], set: 
 /** Av/på i høyreklikkmenyen. */
 export function datesMenuItem(plan: PlanFile, boxes: readonly Box[], set: (on: boolean) => void): CtxItem {
   const on = allDated(plan, boxes);
-  return { label: 'Datoer', icon: 'calendar', checked: on, hint: HINT, onSelect: () => set(!on) };
+  return { label: 'Vis datoer', icon: 'calendar', checked: on, hint: HINT, onSelect: () => set(!on) };
 }

@@ -81,14 +81,14 @@ export function createCriticalUi(ed: CriticalUiHost) {
   };
 
   /**
-   * Valget i panelet for valgte bokser. Med bare linje 1 i planen er det en bryter som før;
-   * med flere linjer en knapp per linje.
+   * Valget i panelet for valgte bokser: alltid en knapp per linje, så valget ser likt ut
+   * enten planen har én eller flere linjer. Navnet står over knappene.
    */
   const boxLineRow = (plan: PlanFile, boxes: Box[]) => {
     const all = (n: number) => boxes.every((x) => inLine(x, n));
-    if (!usedLines(plan).some((n) => n > 1))
-      return switchRow('Med i kritisk linje', all(1), (v) => setCritical(boxes.map((x) => x.id), v, 1), 'Den kritiske linjen trekkes gjennom de merkede boksene');
-    return lineButtons(plan, 'Kritisk linje', all, (n) => setCritical(boxes.map((x) => x.id), !all(n), n), (n) => `Ta med i eller ut av kritisk linje ${n}`);
+    const row = lineButtons(plan, 'Med i kritisk linje', all, (n) => setCritical(boxes.map((x) => x.id), !all(n), n), (n) => `Ta med i eller ut av kritisk linje ${n}`);
+    row.classList.replace('prop-inline', 'prop');
+    return row;
   };
 
   const CRITICAL_COLORS: [string, string][] = [['#E00000', 'Rød'], ['#FF6600', 'Oransje'], ['#C000C0', 'Lilla'], ['#0050D0', 'Blå'], ['#000000', 'Svart']];
