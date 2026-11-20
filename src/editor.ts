@@ -1036,6 +1036,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         ...laneWidth.panelRows({ el, lockedRow }),
       );
     }
+    // I en gruppe: loddrette navn gjelder alle lanene i gruppen, som i gruppepanelet
+    const inGroup = groupOfLane(plan, l.id);
+    if (inGroup) {
+      sn.append(
+        switchRow('Loddrette navn i gruppen', !!inGroup.rotateNames, (v) => changeLaneGroup(inGroup.id, (x) => {
+          if (v) x.rotateNames = true;
+          else delete x.rotateNames;
+        }), 'Navnene på alle lanene i gruppen står loddrett, som teksten i baren. Lanene blir høye nok til navnene.'),
+      );
+    }
 
     const sc = section('Farge');
     const now = (l.fill ?? '#FFFFFF').toUpperCase();
