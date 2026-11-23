@@ -1681,7 +1681,10 @@ function milestonePiece(
 ): Piece {
   const style = { ...(box.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false }), ...box.milestoneStyle };
   const color = MILESTONE_COLORS[style.color] ?? MILESTONE_COLORS.blue;
+  // Symbolet følger planens tekst. Teksten kan ha egen størrelse (box.textScale), som bokser.
   const size = base * 1.6;
+  base *= clampScale(box.textScale);
+  lh = base * LINE_HEIGHT;
   const flag = style.symbol === 'flag';
   // Excel: datoen i vanlig skrift, teksten fet for rutermilepæler
   const textLines = wrapLines(rawLines, calloutMax, base, measure, !flag);

@@ -1280,10 +1280,12 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       }));
     const same = <T,>(get: (x: Box) => T) => (plain.length && plain.every((x) => get(x) === get(plain[0])) ? get(plain[0]) : null);
 
-    if (plain.length) {
+    const ownSize = boxes.some((x) => x.textScale);
+    if (plain.length || ownSize) {
       const st = section('Tekst');
-      st.append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
-      if (plain.some((x) => x.textScale)) st.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale)));
+      if (plain.length) st.append(...datesRows(markKit, plan, plain, (v) => commit((pl) => setBoxDates(pl, plain.map((x) => x.id), v))));
+      // Egen tekststørrelse gjelder både bokser og milepæler
+      if (ownSize) st.append(lockedRow('Noen har egen tekststørrelse', 'Som planen', 'Samme tekststørrelse som resten av planen', () => all((x) => delete x.textScale, false)));
     }
 
     if (plain.length) {
@@ -1571,7 +1573,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       el('p', { class: 'hint', title: 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.' }, 'Enter gir linjeskift, /| en loddrett strek.'),
     );
     if (!ms) st.append(...datesRows(markKit, plan, [b], (v) => commit((pl) => setBoxDates(pl, [b.id], v))));
-    if (!ms && layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
+    if (layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };
