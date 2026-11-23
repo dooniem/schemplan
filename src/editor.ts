@@ -26,6 +26,7 @@ import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
 import { transparencyRow, type TransparencyKit } from './transparencyui';
 import { canBeTransparent } from './layout/transparency';
+import { allFront, FRONT_HINT, frontMenuItem, setFront } from './frontui';
 import { inLine, styleOf } from './criticallines';
 import { datesMenuItem, datesRows } from './boxdatesui';
 import { setBoxDates } from './layout/boxdates';
@@ -1348,6 +1349,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sp = section('Høyde og plass', placeFold(boxes));
     if (plain.some((x) => x.height)) sp.append(lockedRow('Noen har fast høyde', 'Standard høyde', 'Så høye som teksten krever', () => all((x) => delete x.height)));
     if (boxes.some(pinned)) sp.append(lockedRow('Noen har fast plass', 'Løsne', 'La appen velge plassen i lanen igjen', () => all(unpinBox, false)));
+    if (plain.length) sp.append(switchRow('Tegn fremst', allFront(plain), (v) => commit((pl) => setFront(pl, plain.map((x) => x.id), v)), FRONT_HINT));
     sp.append(el('p', { class: 'hint' }, PLACE_HINT));
 
     const foot = el('div', { class: 'panel-foot' });
@@ -1735,6 +1737,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const sp = section(ms ? 'Plass' : 'Høyde og plass', ms ? undefined : placeFold([b]));
     if (!ms && b.height) sp.append(lockedRow('Fast høyde', 'Standard høyde', 'Så høy som teksten krever', () => change((x) => delete x.height)));
     if (pinned(b)) sp.append(lockedRow('Fast plass i lanen', 'Løsne', 'La appen velge plassen i lanen igjen', () => change(unpinBox)));
+    if (!ms) sp.append(switchRow('Tegn fremst', !!b.front, (v) => commit((pl) => setFront(pl, [b.id], v)), FRONT_HINT));
     // Samme som i høyreklikkmenyen: klikk boksene som skal bli like høye som denne
     if (!ms && heightCopy && canTakeHeight(b))
       sp.append(btn('Gi andre bokser samme høyde …', null, () => startHeightCopy(b.id), 'Klikk boksene som skal bli like høye som denne. Får ikke teksten plass, havner den i callout. Esc avslutter.', 'linkish'));
@@ -2509,7 +2512,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * markøren: callout-teksten til en boks kan ligge over naboen, grepene på valgt boks likeså, og et
    * klikk like ved kanten skal også treffe. Overskrifts- og Multi Lane-bokser ligger bak de andre og
    * treffes bare når ingenting annet er der. Rekkefølgen:
-   * 1. milepælssymbolet, 2. inne i en boks (den minste), 3. like ved et milepælssymbol (det er lite),
+   * 0. inne i en boks merket «Tegn fremst» (den minste), 1. milepælssymbolet, 2. inne i en boks (den minste), 3. like ved et milepælssymbol (det er lite),
    * 4. callouten eller milepælsteksten, 5. inne i en overskrifts- eller Multi Lane-boks,
    * 6. den nærmeste innenfor slingringsmonnet, der valgt boks vinner.
    */
@@ -2543,6 +2546,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const front = items.filter((it) => it.kind === 'box' && !behind(it));
     const back = items.filter(behind);
     const found =
+      pick(items.filter((it) => it.kind === 'box' && it.front), body) ??
       pick(ms, body, 2 * px) ??
       pick(front, body) ??
       pick(ms, body, 10 * px) ??
@@ -3002,6 +3006,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             : [
                 { label: 'Overskriftsboks', icon: 'header', checked: !!box.header, hint: 'Teksten øverst, og andre bokser kan ligge inne i boksen.', onSelect: () => setHeader(id, !box.header) },
                 { label: 'Multi Lane-boks', icon: 'span', checked: box.spanTo !== undefined, hint: 'Går ned over lanen under uten å gjøre lanene høyere. Velg hvor langt i panelet, eller dra i streken nederst.', onSelect: () => setSpan(id, box.spanTo === undefined) },
+                // Gjelder alle valgte bokser når boksen er blant dem
+                frontMenuItem(marksTargets(plan, id), (v) => commit((pl) => setFront(pl, marksTargets(plan, id).map((x) => x.id), v))),
               ],
         },
         // Høylytt arbeid og nattarbeid: gjelder alle valgte bokser når boksen er blant dem

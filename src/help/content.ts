@@ -211,7 +211,7 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'boksmeny', group: 'Bokser', title: 'Høyreklikk en boks',
-    text: `Høyreklikk en boks for overskriftsboks, Multi Lane-boks, merking, datoer, dupliser og kopier. Høyreklikk et tomt sted i en lane for å lage en ny boks eller milepæl der.`,
+    text: `Høyreklikk en boks for overskriftsboks, Multi Lane-boks, tegn fremst, merking, datoer, dupliser og kopier. Høyreklikk et tomt sted i en lane for å lage en ny boks eller milepæl der.`,
     when: `Pek på et valg i menyen, så står det nederst hva det gjør. Valg som er grå, gjelder ikke boksen, for eksempel ${ui('Løsne')} på en boks som ikke er festet.`,
     img: 'boksmeny', alt: 'Høyreklikkmenyen for en boks.',
     words: 'kontekstmeny meny overskrift multi lane ny boks milepæl dupliser kopier lim inn skjul', see: ['overskrift', 'merking', 'datoer'],
@@ -220,7 +220,13 @@ export const TOPICS: HelpTopic[] = [
     id: 'overskrift', group: 'Bokser', title: 'Overskriftsbokser og egne bokser',
     text: `En overskriftsboks har teksten øverst, og andre bokser kan ligge inne i den. Drar du overskriftsboksen, følger innholdet med. En Multi Lane-boks går ned over flere lanes, uten at noen lane blir høyere.`,
     when: `Bruk overskriftsbokser til å samle en fase eller et område, for eksempel «Akse 1–3» med aktivitetene inni. Egne bokser du lager i appen, kan følge start- eller sluttdatoen til en annen boks, så de flytter seg når Project endrer seg.`,
-    words: 'header gruppe ny boks egen boks følg dato kobling multi lane fase', see: ['boksmeny'],
+    words: 'header gruppe ny boks egen boks følg dato kobling multi lane fase', see: ['boksmeny', 'fremst'],
+  },
+  {
+    id: 'fremst', group: 'Bokser', title: 'Hvilken boks ligger foran',
+    text: `Vanlige bokser ligger alltid foran overskrifts- og Multi Lane-bokser. Mellom overskrifts- og Multi Lane-boksene ligger den minste foran, så ingen boks gjemmes bak en større. ${ui('Tegn fremst')} i høyreklikkmenyen legger en boks over alt annet.`,
+    when: `Bruk ${ui('Tegn fremst')} når en boks skal ligge oppå andre bokser, for eksempel en loddrett boks over en overskriftsboks. Plassen i lanen endres ikke, bare hva som ligger øverst.`,
+    words: 'foran bak bakerst fremst over under rekkefølge skjult gjemt dekker z', see: ['overskrift', 'boksmeny'],
   },
   {
     id: 'hoyde', group: 'Bokser', title: 'Høyde og lik høyde',

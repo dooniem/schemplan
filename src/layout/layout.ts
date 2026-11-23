@@ -13,6 +13,7 @@ import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday }
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapHyphenated, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
 import { seenFill, transparencyOf } from './transparency';
+import { drawOrder } from './draworder';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
@@ -124,6 +125,8 @@ export interface BoxItem {
   header?: boolean;
   /** Multi Lane-boks: går ned til bunnen av en lane lenger ned, uten å gjøre noen lane høyere. */
   span?: boolean;
+  /** «Tegn fremst»: ligger over alle andre bokser og treffes først ved klikk. */
+  front?: boolean;
   /** Gjennomsiktig fyll (0–1) på overskrifts- og Multi Lane-bokser. Uten er fyllet helt. */
   fillOpacity?: number;
   /** Ikoner for høylytt arbeid og nattarbeid på høyre kant. */
@@ -1155,9 +1158,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
       if (box?.textMiddle && p.item.text) p.item.text.y += (p.item.h - textH) / 2;
     }
   });
-  // Multi Lane-bokser tegnes aller først, så overskriftsbokser, så boksene inne i dem ligger oppå
-  const isHeader = (i: Item) => (i.kind !== 'box' ? 2 : i.span ? 0 : i.header ? 1 : 2);
-  items.sort((a, b) => isHeader(a) - isHeader(b));
+  // Bakgrunnsbokser først, den største bakerst, og «Tegn fremst» over alt
+  const front = new Set(lanes.flatMap((l) => l.boxes.filter((b) => b.front).map((b) => b.id)));
+  for (const it of items) if (it.kind === 'box' && front.has(it.id)) it.front = true;
+  items.splice(0, items.length, ...drawOrder(items));
   const plotBottom = y;
 
   // ---- Kalenderrader ----

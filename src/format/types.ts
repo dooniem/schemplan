@@ -393,6 +393,8 @@ export interface Box {
    * Kanten og teksten er hele.
    */
   transparency?: number;
+  /** Tegnes over alle andre bokser, uansett type (valgfritt). Endrer ikke plassen i lanen. */
+  front?: boolean;
   /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>> & {
     /** Rotert milepælstekst. Uten valg gjelder `rotation`, eller −90 når `milestone.rotateText` er satt. */
