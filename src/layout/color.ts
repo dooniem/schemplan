@@ -50,18 +50,32 @@ export function autoTextColor(fill: string): '#000000' | '#FFFFFF' {
 
 const toHex = (rgb: number[]) => '#' + rgb.map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
 
-/** Minste kontrast mellom kant og fyll, så to like bokser som ligger inntil hverandre kan skilles. */
-const BORDER_CONTRAST = 2;
+/**
+ * Ønsket kontrast mellom kant og fyll. Kanten er tynn (0,3 mm), så den trenger mer enn
+ * WCAG-kravet på 3:1 for grafiske elementer for å skille to like bokser som ligger inntil hverandre.
+ */
+const BORDER_CONTRAST = 4.5;
 
 /**
- * Kantfarge avledet av fyllet: samme fargetone, mørkere. Er fyllet så mørkt at en mørkere kant
- * ikke synes (marineblå, svart, mørk brun), blir kanten i stedet lysere, i samme tone.
+ * Kantfarge avledet av fyllet: samme fargetone, mørkere. Vi mørkner trinnvis til kanten har
+ * ønsket kontrast, men aldri mer enn at fargetonen fortsatt synes. Er fyllet så mørkt at en mørkere
+ * kant ikke synes (marineblå, svart, mørk brun), blir kanten i stedet lysere, i samme tone.
  */
-export function derivedBorder(fill: string, amount = 0.45): string {
+export function derivedBorder(fill: string, target = BORDER_CONTRAST): string {
   const c = hex(fill);
-  const darker = toHex(c.map((v) => v * (1 - amount)));
-  if (contrast(darker, fill) >= BORDER_CONTRAST) return darker;
-  return toHex(c.map((v) => v + (1 - v) * amount));
+  const steps = (f: (v: number, t: number) => number) => {
+    const out: string[] = [];
+    for (let t = 0.45; t <= 0.8001; t += 0.05) out.push(toHex(c.map((v) => f(v, t))));
+    return out;
+  };
+  const darker = steps((v, t) => v * (1 - t));
+  const lighter = steps((v, t) => v + (1 - v) * t);
+  const hit = darker.find((d) => contrast(d, fill) >= target) ?? lighter.find((l) => contrast(l, fill) >= target);
+  if (hit) return hit;
+  // Ingen når målet: mørkeste kant om den holder 3:1, ellers den med best kontrast
+  const dark = darker[darker.length - 1];
+  const light = lighter[lighter.length - 1];
+  return contrast(dark, fill) >= 3 || contrast(dark, fill) >= contrast(light, fill) ? dark : light;
 }
 
 /** Fargen a blandet med b: t = 0 gir a, t = 1 gir b. */

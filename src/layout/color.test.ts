@@ -17,13 +17,19 @@ describe('tekstfarge etter kontrast', () => {
     expect(autoTextColor('#000075')).toBe('#FFFFFF');
   });
   it('kantfargen er samme tone, mørkere', () => {
-    expect(derivedBorder('#FFFFFF')).toBe('#8C8C8C');
+    expect(derivedBorder('#FFFFFF')).toBe('#737373');
     expect(contrast(derivedBorder('#FFFAC8'), '#FFFAC8')).toBeGreaterThan(3);
   });
   it('mørke fyll får lysere kant, så like bokser inntil hverandre kan skilles', () => {
     for (const f of ['#000080', '#000000', '#800000', '#1E3A8A', '#8B4513', '#4169E1', '#008000', '#FF0000', '#FFFF00', '#FFFFFF']) {
-      expect(contrast(derivedBorder(f), f)).toBeGreaterThanOrEqual(2);
+      expect(contrast(derivedBorder(f), f)).toBeGreaterThanOrEqual(3);
     }
     expect(luminanceOf(derivedBorder('#000080'))).toBeGreaterThan(luminanceOf('#000080'));
+  });
+  it('grå og andre mellomtoner får kant med minst 4,5:1, så like bokser skilles på utskrift', () => {
+    for (const f of ['#A9A9A9', '#FFFFFF', '#F58231', '#42D4F4', '#FFE119', '#DCBEFF']) {
+      expect(contrast(derivedBorder(f), f)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(derivedBorder('#A9A9A9')).toBe('#3B3B3B');
   });
 });

@@ -18,6 +18,9 @@ const r = (v: number) => Math.round(v * 1000) / 1000;
 /** Gjennomsiktig fyll på bokser bak de andre; kanten er hel. */
 const seeThrough = (it: BoxItem): Attrs => (it.fillOpacity !== undefined && it.fillOpacity < 1 ? { 'fill-opacity': r(it.fillOpacity) } : {});
 
+/** Kantbredden på bokser i mm. Kraftig nok til at kanten skiller like bokser på A3-utskrift. */
+const BOX_BORDER = 0.3;
+
 type Attrs = Record<string, string | number>;
 
 function node<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Attrs = {}, parent?: Element): SVGElementTagNameMap[K] {
@@ -263,12 +266,12 @@ export function renderPlan(L: Layout): SVGSVGElement {
       const xl = it.arrowLeft ? it.x0 + tip : it.x0;
       const xr = it.arrowRight ? it.x1 - tip : it.x1;
       if (!it.arrowLeft && !it.arrowRight) {
-        node('rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: it.fill, ...seeThrough(it), stroke: it.border ?? 'none', 'stroke-width': it.border ? 0.25 : 0 }, g);
+        node('rect', { x: it.x0, y: it.y, width: it.x1 - it.x0, height: it.h, fill: it.fill, ...seeThrough(it), stroke: it.border ?? 'none', 'stroke-width': it.border ? (ny ? BOX_BORDER : 0.25) : 0 }, g);
       } else {
         const mid = it.y + it.h / 2;
         const bottom = it.y + it.h;
         const d = `M${xl} ${it.y} L${xr} ${it.y} ${it.arrowRight ? `L${it.x1} ${mid} ` : ''}L${xr} ${bottom} L${xl} ${bottom} ${it.arrowLeft ? `L${it.x0} ${mid} ` : ''}Z`;
-        node('path', { d, fill: it.fill, ...seeThrough(it), stroke: it.border ?? 'none', 'stroke-width': it.border ? 0.25 : 0 }, g);
+        node('path', { d, fill: it.fill, ...seeThrough(it), stroke: it.border ?? 'none', 'stroke-width': it.border ? (ny ? BOX_BORDER : 0.25) : 0 }, g);
       }
       if (it.text) text(it.text, g);
       // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter
@@ -442,7 +445,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
     } else if (e.symbol === 'holiday') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
     } else {
-      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: e.fill, stroke: e.border ?? '#7F7F7F', 'stroke-width': ny ? 0.25 : 0.2 }, leg);
+      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: e.fill, stroke: e.border ?? '#7F7F7F', 'stroke-width': ny ? BOX_BORDER : 0.2 }, leg);
       if (!ny) text({ x: cx, y: e.label.y, lines: ['X'], size: e.label.size, color: e.textColor, anchor: 'middle' }, leg);
     }
     text(e.label, leg);
