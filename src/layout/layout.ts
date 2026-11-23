@@ -1,6 +1,7 @@
 import type { Box, BoxChange, Lane, PlanFile, StatusLine, TradeColor } from '../format/types';
 import { boxMarks, markScaleOf, MARK_KEYS, MARK_OUT, MARK_KINDS, markName, markSize, marksHeight, marksInset, type BoxMarks, type MarkKind } from './marks';
 import { parseBoxText, splitLines } from '../format/text';
+import { colorLines, hasTextColors, type TextRun } from '../format/textcolor';
 import { boxDateText, dateColor, dateMinWidth, dateRows, DATE_SCALE, datesShown, linesHeight, type DateSub } from './boxdates';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
@@ -103,6 +104,8 @@ export interface TextBlock {
   rotate?: 0 | 90 | -90;
   /** Datoraden: linjene fra og med `from` tegnes mindre og i dempet farge (valgfritt). */
   sub?: DateSub;
+  /** Linjer med egen farge på deler av teksten, linje for linje (valgfritt). Uten for en linje har hele linjen `color`. */
+  runs?: (TextRun[] | undefined)[];
 }
 
 export interface BoxItem {
@@ -1350,6 +1353,22 @@ function grow(it: BoxItem, target: number) {
   }
 }
 
+/** Deler linjene i biter med egen farge der teksten har det. Datoene i boksen og ved milepælen får ingen. */
+function paintText(item: Item, box: Box) {
+  const paint = (t: TextBlock | null | undefined, from: number, to?: number) => {
+    if (!t) return;
+    const runs = colorLines(box.text, box.textColors, t.lines.slice(from, to));
+    if (runs) t.runs = [...new Array<undefined>(from).fill(undefined), ...runs];
+  };
+  if (item.kind === 'box') {
+    paint(item.text, 0, item.text?.sub?.from);
+    paint(item.callout?.text, 0, item.callout?.text.sub?.from);
+  } else {
+    const showDate = { ...(box.milestone ?? { showDate: true }), ...box.milestoneStyle }.showDate;
+    paint(item.label, showDate ? 1 : 0, undefined);
+  }
+}
+
 const offsetY = (item: Item, dy: number) => setY(item, (item.kind === 'box' ? item.y : Math.min(item.y - item.size / 2, item.labelBox.y)) + dy);
 
 function buildPieces(
@@ -1535,6 +1554,11 @@ function buildPieces(
 
   // Høyde og plass valgt i appen
   const byId = new Map(lane.boxes.map((b) => [b.id, b]));
+  // Egen farge på deler av teksten, når linjene er brutt for hver variant
+  for (const p of pieces) {
+    const box = byId.get(p.item.id);
+    if (box && hasTextColors(box.textColors)) for (const v of p.alts ?? [p]) paintText(v.item, box);
+  }
   for (const p of pieces) {
     const box = byId.get(p.item.id);
     if (!box) continue;

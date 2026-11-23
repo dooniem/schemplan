@@ -27,6 +27,17 @@ describe('oppdater fra Project', () => {
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
 
+  it('farget tekst følger med, også når Project har endret teksten', () => {
+    const work = testplan();
+    const wb = box(work, '1_1');
+    wb.text = 'Etasje AU2';
+    wb.textColors = [{ from: 7, to: 10, color: '#E6194B' }];
+    const fresh = testplan();
+    box(fresh, '1_1').text = 'Ny etasje AU2';
+    const { plan } = mergePlans(work, fresh);
+    expect(box(plan, '1_1').textColors).toEqual([{ from: 10, to: 13, color: '#E6194B' }]);
+  });
+
   it('husker hva som er nytt og hvilke bokser som har fått nye datoer', () => {
     const work = testplan();
     const fresh = testplan();

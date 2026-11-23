@@ -2,6 +2,8 @@
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import { effectiveRange } from './layout/range';
 import { withBreakMarks } from './breakmarks';
+import { fieldColors, textColorRows } from './textcolorui';
+import { remapRuns } from './format/textcolor';
 import { autoTextColor } from './layout/color';
 import { baseMilestoneRotation, milestoneRotation } from './layout/milestone';
 import type { Box, Lane, PlanFile, Rotation } from './format/types';
@@ -701,6 +703,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       const label = num === undefined ? name : `${num} ${name}`;
       const s = el('button', { type: 'button', class: 'swatch', title: label, 'aria-label': label, 'aria-pressed': String(current === key) });
       s.style.background = fill;
+      s.dataset.color = key;
       if (num !== undefined) {
         // Samme nummer som fargen har i fargevalget i Project
         s.textContent = String(num);
@@ -857,7 +860,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * Tekstfelt. Ett angre-steg per skriveøkt.
    * breaks: Enter og | gir linjeskift, og de tvungne linjeskiftene vises med merker i feltet.
    */
-  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks = false): HTMLElement => {
+  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks = false, colorsOf?: () => (string | undefined)[]): HTMLElement => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
     ta.value = value;
     ta.addEventListener('focus', () => (typingSession = false));
@@ -866,7 +869,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       typingSession = false;
       syncTools();
     });
-    return breaks ? withBreakMarks(ta) : ta;
+    return breaks ? withBreakMarks(ta, colorsOf) : ta;
   };
   const textColorKey = (c?: string) => (c === '#000000' ? 'black' : c === '#FFFFFF' ? 'white' : 'auto');
   const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
@@ -1565,14 +1568,26 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     }
 
     const st = section('Tekst');
+    const liveBox = () => {
+      const pl = host.getPlan();
+      return pl ? findBox(pl, b.id) : null;
+    };
+    const tf = textField('box-text', 'Tekst', b.text, '3', (v) =>
+      change((x) => {
+        keepOriginal(x);
+        // Farget tekst følger med når teksten endres
+        if (x.textColors) {
+          const runs = remapRuns(x.textColors, x.text, v);
+          if (runs.length) x.textColors = runs;
+          else delete x.textColors;
+        }
+        x.text = v;
+      }, { typing: true, rebuild: false }), true, () => fieldColors(liveBox()),
+    );
     st.append(
-      textField('box-text', 'Tekst', b.text, '3', (v) =>
-        change((x) => {
-          keepOriginal(x);
-          x.text = v;
-        }, { typing: true, rebuild: false }), true,
-      ),
+      tf,
       el('p', { class: 'hint', title: 'Enter eller | gir linjeskift (vist med ↵), og /| gir en loddrett strek.' }, 'Enter gir linjeskift, /| en loddrett strek.'),
+      ...textColorRows({ el, swatches, box: liveBox, change: (fn) => change(fn, { rebuild: false }) }, tf.querySelector('textarea')!),
     );
     if (!ms) st.append(...datesRows(markKit, plan, [b], (v) => commit((pl) => setBoxDates(pl, [b.id], v))));
     if (layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));

@@ -358,6 +358,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.compactSpanEnd !== undefined && !(typeof b.compactSpanEnd === 'number' && Number.isFinite(b.compactSpanEnd) && b.compactSpanEnd >= 0)) err(`${bp}.compactSpanEnd`, 'må være et tall, 0 eller mer');
         for (const k of ['fill', 'textColor'] as const)
           if (b[k] !== undefined && !(typeof b[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b[k] as string))) err(`${bp}.${k}`, 'må være en farge som #RRGGBB');
+        if (b.textColors !== undefined) {
+          const ok =
+            Array.isArray(b.textColors) &&
+            b.textColors.every((t) => isObj(t) && Number.isInteger(t.from) && Number.isInteger(t.to) && (t.from as number) >= 0 && (t.to as number) > (t.from as number) && typeof t.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(t.color));
+          if (!ok) err(`${bp}.textColors`, 'må være en liste med fra, til og farge som #RRGGBB');
+        }
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');
         const label = typeof b.id === 'string' ? `Boks ${b.id}` : bp;
         if (typeof b.id === 'string') {

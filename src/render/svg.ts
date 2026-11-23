@@ -60,7 +60,14 @@ function text(t: TextBlock, parent: Element) {
       span.setAttribute('font-weight', 'normal');
       span.setAttribute('class', 'box-dates');
     }
-    span.textContent = line;
+    const runs = !isSub(i) && t.runs?.[i];
+    if (runs) {
+      // Deler av linjen med egen farge
+      for (const run of runs) {
+        const part = node('tspan', run.color ? { fill: run.color } : {}, span);
+        part.textContent = run.text;
+      }
+    } else span.textContent = line;
   });
   return el;
 }

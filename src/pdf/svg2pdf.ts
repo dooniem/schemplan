@@ -257,30 +257,40 @@ function drawText(c: Ctx, el: SVGTextElement) {
     const lc = s === el ? color : (rgb(s.getAttribute('fill') ?? '') ?? color);
     const f = bold ? c.fonts.bold : c.fonts.regular;
     const set = f.getCharacterSet();
-    const safe = safeText(txt, (cp) => set.includes(cp), c.missing);
-    const w = f.widthOfTextAtSize(safe, ls);
+    // Linjen kan være delt i biter med egen farge (farget tekst i boksene)
+    const parts = s === el ? [] : Array.from(s.children).filter((p) => p.tagName === 'tspan');
+    const pieces = (parts.length ? parts : [s]).map((p) => {
+      const safe = safeText(p.textContent ?? '', (cp) => set.includes(cp), c.missing);
+      return { safe, color: p === s ? lc : (rgb(p.getAttribute('fill') ?? '') ?? lc), w: f.widthOfTextAtSize(safe, ls) };
+    });
+    const w = pieces.reduce((sum, p) => sum + p.w, 0);
     let x = num(s, 'x', num(el, 'x'));
     if (anchor === 'middle') x -= w / 2;
     else if (anchor === 'end') x -= w;
-    // Glyfene speilvendes tilbake fordi siden tegnes med y nedover
-    let a = 1, b = 0, cc = 0, d = -1, e = x, ff = y;
-    if (rot) {
-      const t = (rot * Math.PI) / 180;
-      const cos = Math.cos(t);
-      const sin = Math.sin(t);
-      // Punktet (x, y) rotert om (cx, cy)
-      e = cx + (x - cx) * cos - (y - cy) * sin;
-      ff = cy + (x - cx) * sin + (y - cy) * cos;
-      [a, b, cc, d] = [cos, sin, sin, -cos];
+    for (const p of pieces) {
+      if (p.safe) {
+        // Glyfene speilvendes tilbake fordi siden tegnes med y nedover
+        let a = 1, b = 0, cc = 0, d = -1, e = x, ff = y;
+        if (rot) {
+          const t = (rot * Math.PI) / 180;
+          const cos = Math.cos(t);
+          const sin = Math.sin(t);
+          // Punktet (x, y) rotert om (cx, cy)
+          e = cx + (x - cx) * cos - (y - cy) * sin;
+          ff = cy + (x - cx) * sin + (y - cy) * cos;
+          [a, b, cc, d] = [cos, sin, sin, -cos];
+        }
+        c.ops.push(
+          setFillingRgbColor(...p.color),
+          beginText(),
+          setFontAndSize(fontName(c, f), ls),
+          setTextMatrix(a, b, cc, d, e, ff),
+          showText(f.encodeText(p.safe)),
+          endText(),
+        );
+      }
+      x += p.w;
     }
-    c.ops.push(
-      setFillingRgbColor(...lc),
-      beginText(),
-      setFontAndSize(fontName(c, f), ls),
-      setTextMatrix(a, b, cc, d, e, ff),
-      showText(f.encodeText(safe)),
-      endText(),
-    );
   });
   if (op < 1) c.ops.push(popGraphicsState());
 }
