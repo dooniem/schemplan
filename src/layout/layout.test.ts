@@ -183,6 +183,22 @@ describe('Excel-utseende', () => {
     expect(dl.labelBox.x > dl.x || dl.labelBox.x + dl.labelBox.w < dl.x).toBe(true);
   });
 
+  it('milepælstekst kan ha egen størrelse, symbolet beholder planens', () => {
+    // Fast tekststørrelse, så resten av planen ikke krymper når milepælsteksten blir større
+    const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: false };
+    const plain = computeLayout(example(), opts, approxMeasure);
+    const f = example();
+    const ms = f.lanes.flatMap((l) => l.boxes).find((b) => b.milestone?.symbol === 'diamond')!;
+    ms.textScale = 1.5;
+    const L = computeLayout(f, opts, approxMeasure);
+    const a = plain.items.find((i) => i.id === ms.id)!;
+    const b = L.items.find((i) => i.id === ms.id)!;
+    if (a.kind !== 'milestone' || b.kind !== 'milestone') throw new Error('ikke milepæl');
+    expect(b.label.size).toBeCloseTo(a.label.size * 1.5);
+    expect(b.size).toBeCloseTo(a.size);
+    expect(b.labelBox.h).toBeGreaterThan(a.labelBox.h);
+  });
+
   it('snudd flagg henger ned fra stangen med teksten under, ruteren kan stå under teksten', () => {
     const opts = { orientation: 'landscape' as const, heightMode: 'fill' as const, textSizePt: 7, fitToSheet: true };
     const f = example();
