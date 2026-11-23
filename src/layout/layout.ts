@@ -13,6 +13,7 @@ import { autoLaneWidth, groupBarWidth, laneColumnWidth, maxLaneWidth, minLaneWid
 import { addDays, formatLong, formatShort, MONTHS_NB, parseIso, toIso, weekday } from './dates';
 import { LINE_HEIGHT, PT_TO_MM, widest, wrapHyphenated, wrapLines, type Measure } from './text';
 import { autoTextColor, derivedBorder } from './color';
+import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
 import { drawOrder } from './draworder';
 import { criticalLine, type CriticalLine } from './critical';
@@ -136,6 +137,8 @@ export interface BoxItem {
   marks?: BoxMarks;
   /** Høyden på boksen med én tekstlinje, som ikonene stilles etter. */
   lineBoxH?: number;
+  /** Fargen på den lyse innerkanten, når faget har den. */
+  innerEdge?: string;
 }
 
 export interface MilestoneItem {
@@ -293,6 +296,10 @@ export interface Layout {
   bands: Band[];
   holidays: { x0: number; x1: number }[];
   items: Item[];
+  /** Fagene som har lys innerkant på boksene, automatisk eller valgt. */
+  innerEdgeTrades: string[];
+  /** Fagene som ville fått innerkant automatisk, uansett valg. */
+  innerEdgeAuto: string[];
   legend: LegendEntry[];
   /** Planen er så lav som innholdet (Kompakt), ikke fylt ut til arket. */
   compact: boolean;
@@ -1259,6 +1266,10 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const taken = new Map<string, number[]>();
   const criticals = CRITICAL_NUMBERS.map((n) => criticalLine(items, new Set(lanes.flatMap((l) => l.boxes.filter((b) => inLine(b, n)).map((b) => b.id))), styleOf(file.plan.layout, n), n, taken)).filter((c): c is CriticalLine => !!c);
   const linePts = (n: number) => criticals.find((c) => c.n === n)?.points ?? null;
+  // Lys innerkant bare i ny stil; Excel-utskriften hadde den ikke
+  const boxItems = items.filter((i): i is BoxItem & { trade?: string } => i.kind === 'box');
+  const innerEdgeAuto = ny ? [...autoInnerEdgeTrades(boxItems)] : [];
+  const innerEdgeTrades = ny ? [...markInnerEdges(boxItems, file.plan.layout.innerEdge)] : [];
   const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
   return {
     width: W,
@@ -1285,6 +1296,8 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     bands,
     holidays,
     items,
+    innerEdgeTrades,
+    innerEdgeAuto,
     legend,
     overflow,
     belowMin: false,

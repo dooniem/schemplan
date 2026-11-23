@@ -72,6 +72,8 @@ export interface PlanSettings {
     logoScale?: number;
     /** Fagfarger valgt i appen, etter fagnavn. Går foran fargene i `colors`. */
     tradeColors?: Record<string, { fill: HexColor; text?: HexColor }>;
+    /** Lys innerkant per fag: på eller av. Uten valg avgjøres det automatisk. */
+    innerEdge?: Record<string, 'on' | 'off'>;
     /** Fag laget i appen, i rekkefølgen de står i forklaringen etter fagene fra Project. Fargen står i `tradeColors`. */
     appTrades?: string[];
     /** Utseendet til den kritiske linjen (linje 1): tykkelse i mm og farge. */

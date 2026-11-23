@@ -5,6 +5,7 @@ import type { PlacedImage } from '../layout/image';
 import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
 import { markRects, markShapes, type MarkKind } from '../layout/marks';
+import { INNER_EDGE, insetOutline } from '../layout/inneredge';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -272,6 +273,11 @@ export function renderPlan(L: Layout): SVGSVGElement {
         const bottom = it.y + it.h;
         const d = `M${xl} ${it.y} L${xr} ${it.y} ${it.arrowRight ? `L${it.x1} ${mid} ` : ''}L${xr} ${bottom} L${xl} ${bottom} ${it.arrowLeft ? `L${it.x0} ${mid} ` : ''}Z`;
         node('path', { d, fill: it.fill, ...seeThrough(it), stroke: it.border ?? 'none', 'stroke-width': it.border ? (ny ? BOX_BORDER : 0.25) : 0 }, g);
+      }
+      if (it.innerEdge) {
+        const o = BOX_BORDER / 2 + INNER_EDGE / 2;
+        const pts = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, o);
+        node('path', { class: 'inner-edge', d: `M${pts.map(([x, y]) => `${r(x)} ${r(y)}`).join(' L')} Z`, fill: 'none', stroke: it.innerEdge, 'stroke-width': INNER_EDGE, 'pointer-events': 'none' }, g);
       }
       if (it.text) text(it.text, g);
       // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter

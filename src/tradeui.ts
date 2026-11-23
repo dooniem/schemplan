@@ -7,6 +7,7 @@ import { markName, markOfKey } from './layout/marks';
 import type { EditorHost } from './editor';
 import type { ImageEditKit } from './imageedit';
 import { BOX_PALETTE } from './editmodel';
+import { innerEdgeTone, type InnerEdgeChoice } from './layout/inneredge';
 import { boxTrade, deleteTrade, isAppTrade, renameTrade, tradeColors, tradeCount, tradeFill, tradeNameProblem } from './trades';
 
 type TextColorKey = 'auto' | 'black' | 'white';
@@ -106,6 +107,35 @@ export function createTradeUi(ed: TradeUiHost) {
     }
   };
 
+  /** Lys innerkant for faget: automatisk, på eller av. Tomt valg fjernes, så filen holdes ren. */
+  const setInnerEdge = (trade: string, v: InnerEdgeChoice | 'auto') =>
+    commit((pl) => {
+      const all = { ...pl.plan.layout.innerEdge };
+      if (v === 'auto') delete all[trade];
+      else all[trade] = v;
+      if (Object.keys(all).length) pl.plan.layout.innerEdge = all;
+      else delete pl.plan.layout.innerEdge;
+    });
+
+  const innerEdgeSection = (plan: PlanFile, trade: string) => {
+    const L = ed.layout();
+    if (L && L.style !== 'ny') return;
+    const choice = plan.plan.layout.innerEdge?.[trade] ?? 'auto';
+    const s = section('Lys innerkant');
+    const auto = !!L?.innerEdgeAuto.includes(trade);
+    const tone = innerEdgeTone(tradeFill(plan, trade));
+    const why =
+      choice === 'on' ? 'På for alle boksene i faget.'
+      : choice === 'off' ? 'Av for faget.'
+      : auto ? 'Auto: på nå, fordi bokser i faget ligger kant i kant.'
+      : tone ? 'Auto: av nå. Slås på når to bokser i faget ligger kant i kant.'
+      : 'Auto: av. Fargen er for lys eller mørk til at en lys linje hjelper.';
+    s.append(
+      segmented('Innerkant', choice, [['auto', 'Auto'], ['on', 'På'], ['off', 'Av']], (v) => setInnerEdge(trade, v)),
+      el('p', { class: 'hint' }, `${why} En tynn lys linje innenfor kanten skiller like bokser som ligger inntil hverandre.`),
+    );
+  };
+
   const buildTradePanel = (plan: PlanFile, trade: string) => {
     const app = isAppTrade(plan, trade);
     const own = plan.plan.layout.tradeColors?.[trade];
@@ -176,6 +206,8 @@ export function createTradeUi(ed: TradeUiHost) {
         ? 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Faget følger med når du oppdaterer fra Project.'
         : 'Gjelder alle bokser i faget som ikke har egen farge, og forklaringen nederst. Følger med når du oppdaterer fra Project.'),
     );
+
+    innerEdgeSection(plan, trade);
 
     const sb = section('Bokser');
     const pick = btn(`Velg boksene i faget`, null, () => setGroup(ids), 'Velger alle synlige bokser i faget, så du kan gi dem et annet fag eller endre dem samlet', 'button');

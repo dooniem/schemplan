@@ -211,6 +211,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (!isObj(tc) || !Object.values(tc).every((v) => isObj(v) && hex(v.fill) && (v.text === undefined || hex(v.text))))
           err('plan.layout.tradeColors', 'må ha fill (og eventuelt text) som farge #RRGGBB for hvert fag');
       }
+      if (lay.innerEdge !== undefined && !(isObj(lay.innerEdge) && Object.values(lay.innerEdge).every((v) => v === 'on' || v === 'off')))
+        err('plan.layout.innerEdge', 'må ha on eller off for hvert fag');
       if (lay.appTrades !== undefined && !(Array.isArray(lay.appTrades) && lay.appTrades.every((v) => typeof v === 'string' && v.trim())))
         err('plan.layout.appTrades', 'må være en liste med fagnavn');
       for (const key of ['criticalLine', 'criticalLine2', 'criticalLine3'] as const) {
