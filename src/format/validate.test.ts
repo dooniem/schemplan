@@ -18,6 +18,14 @@ describe('validatePlan', () => {
     expect(s.milestones).toBe(2);
   });
 
+  it('godtar farge på deler av teksten, og sier fra om feil', () => {
+    const d = clone();
+    d.lanes[0].boxes[0].textColors = [{ from: 0, to: 3, color: '#E6194B' }];
+    expect(validatePlan(JSON.stringify(d)).errors).toEqual([]);
+    d.lanes[0].boxes[0].textColors = [{ from: 3, to: 3, color: 'rød' }];
+    expect(validatePlan(JSON.stringify(d)).errors.some((e) => e.includes('textColors'))).toBe(true);
+  });
+
   it('tåler BOM først i filen', () => {
     expect(validatePlan('﻿' + example).errors).toEqual([]);
   });

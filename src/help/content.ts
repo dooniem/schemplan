@@ -204,10 +204,10 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'tekst', group: 'Bokser', title: 'Tekst og linjeskift',
-    text: `Dobbeltklikk en boks for å skrive i den. ${k('Enter')} eller | gir linjeskift. Får ikke teksten plass i boksen, havner den i en callout ved siden av.`,
+    text: `Dobbeltklikk en boks for å skrive i den. ${k('Enter')} eller | gir linjeskift. Får ikke teksten plass i boksen, havner den i en callout ved siden av. Vil du ha noen ord i en annen farge, marker dem i tekstfeltet og trykk ${ui('A')} ved ${ui('Ordfarge')}, eller pilen ved siden av for flere farger.`,
     when: `Korte, delte linjer gir mer lesbare bokser enn én lang linje. Teksten i appen endrer ikke navnet i Project. Etter større tekstendringer gir ${ui('Omplasser')} › ${ui('Størst mulig tekst')} hver boks så stor tekst som det er plass til.`,
     img: 'tekst', alt: 'Teksten i en boks redigeres rett på arket.',
-    words: 'skrive navn linjeskift enter skriftstørrelse font callout', see: ['rediger', 'omplasser'],
+    words: 'skrive navn linjeskift enter skriftstørrelse font callout farge ordfarge skriftfarge rød ord markere', see: ['rediger', 'omplasser'],
   },
   {
     id: 'boksmeny', group: 'Bokser', title: 'Høyreklikk en boks',

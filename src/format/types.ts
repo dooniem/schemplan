@@ -331,6 +331,13 @@ export interface Lane {
 
 export type Rotation = 0 | 90 | -90;
 
+/** Egen farge på en del av teksten: tegnene fra og med `from` til (men ikke med) `to` i `Box.text`. */
+export interface TextColorRun {
+  from: number;
+  to: number;
+  color: HexColor;
+}
+
 export interface Box {
   /** "laneId_boxId". */
   id: string;
@@ -354,6 +361,8 @@ export interface Box {
   fill?: HexColor;
   /** Tekstfarge valgt i appen (valgfritt). Uten den velges svart eller hvit etter kontrast når fill er satt. */
   textColor?: HexColor;
+  /** Egen farge på deler av teksten, valgt i appen (valgfritt). Går foran `textColor` for de tegnene. */
+  textColors?: TextColorRun[];
   /** Tekst og rotasjon før første endring i appen, så de kan tilbakestilles (valgfritt). */
   original?: { text: string; rotation: Rotation };
   /** Høyde valgt i appen, i tekstlinjer (valgfritt). Boksen blir aldri lavere enn teksten krever. */
