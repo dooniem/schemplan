@@ -43,6 +43,6 @@ export function lineFold(boxes: readonly Box[]): Fold {
 
 /** Høyde og plass: fast høyde og fast plass i lanen, ellers automatisk. */
 export function placeFold(boxes: readonly Box[]): Fold {
-  const s = joinSummary([boxes.some((b) => !b.resolved?.isMilestone && b.height) && 'Fast høyde', boxes.some(pinned) && 'Fast plass']);
+  const s = joinSummary([boxes.some((b) => !b.resolved?.isMilestone && b.height) && 'Fast høyde', boxes.some(pinned) && 'Fast plass', boxes.some((b) => b.front) && 'Fremst']);
   return { summary: s || 'Automatisk', changed: !!s };
 }
