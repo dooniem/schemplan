@@ -291,7 +291,13 @@ export const TOPICS: HelpTopic[] = [
     id: 'farger', group: 'Fag og farger', title: 'Farger på bokser',
     text: `Panelet har de samme 22 fargene som i Project, med samme nummer, pluss ${ui('Egen farge')}. En egen farge vises på arket mens du prøver, og du velger ${ui('Behold')} eller ${ui('Avbryt')}.`,
     when: `Bruk egen farge sparsomt, for eksempel på én aktivitet som skal vekke oppmerksomhet. ${ui('Fagets farge')} og ${ui('Fargen fra Project')} setter fargen tilbake.`,
-    words: 'farge fargekode egen farge tekstfarge gjennomsiktighet prøve', see: ['fag', 'rediger'],
+    words: 'farge fargekode egen farge tekstfarge gjennomsiktighet prøve', see: ['fag', 'rediger', 'innerkant'],
+  },
+  {
+    id: 'innerkant', group: 'Fag og farger', title: 'Lys innerkant',
+    text: `Når to bokser i samme fag og samme mellomtone, for eksempel grå eller oransje, ligger kant i kant, får alle boksene i faget en tynn lys linje innenfor kanten. Lyse og mørke farger får den ikke. Klikk faget i forklaringen og velg ${ui('Auto')}, ${ui('På')} eller ${ui('Av')} under ${ui('Lys innerkant')}.`,
+    when: `Innerkanten gjør det lettere å se hvor én boks slutter og neste begynner i fag med mange bokser tett i tett. Hele faget får den samtidig, så forskjellen ikke kan leses som om den betyr noe. Velg ${ui('Av')} om du vil ha faget helt rolig.`,
+    words: 'innerkant kant ramme linje skille pop lesbarhet grå like bokser inntil', see: ['fag', 'farger'],
   },
   // ---- Arket ----
   {

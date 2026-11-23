@@ -113,6 +113,7 @@ export function renameTrade(plan: PlanFile, oldName: string, newName: string): v
   };
   if (lay.tradeColors) lay.tradeColors = move(lay.tradeColors);
   if (lay.legendItems) lay.legendItems = move(lay.legendItems);
+  if (lay.innerEdge) lay.innerEdge = move(lay.innerEdge);
   for (const l of plan.lanes) for (const b of l.boxes) if (b.trade === oldName) b.trade = n;
 }
 
@@ -128,6 +129,10 @@ export function deleteTrade(plan: PlanFile, name: string): void {
   if (lay.legendItems) {
     delete lay.legendItems[name];
     if (!Object.keys(lay.legendItems).length) delete lay.legendItems;
+  }
+  if (lay.innerEdge) {
+    delete lay.innerEdge[name];
+    if (!Object.keys(lay.innerEdge).length) delete lay.innerEdge;
   }
   for (const l of plan.lanes) for (const b of l.boxes) if (b.trade === name) delete b.trade;
 }

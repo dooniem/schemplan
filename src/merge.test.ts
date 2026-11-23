@@ -13,6 +13,7 @@ describe('oppdater fra Project', () => {
     Object.assign(box(work, '1_1'), { fill: '#112233', height: 3, top: 1, header: true });
     work.lanes[0].height = 10;
     work.plan.layout.style = 'ny';
+    work.plan.layout.innerEdge = { Betong: 'off' };
     const fresh = testplan();
     box(fresh, '1_1').resolved!.finish = '2026-04-30';
     const { plan, report } = mergePlans(work, fresh);
@@ -23,6 +24,7 @@ describe('oppdater fra Project', () => {
     expect(b.resolved!.finish).toBe('2026-04-30');
     expect(plan.lanes[0].height).toBe(10);
     expect(plan.plan.layout.style).toBe('ny');
+    expect(plan.plan.layout.innerEdge).toEqual({ Betong: 'off' });
     expect(report.kept).toBeGreaterThan(5);
     expect(validatePlan(JSON.stringify(plan)).errors).toEqual([]);
   });
