@@ -6,6 +6,7 @@ import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
 import { markRects, markShapes, type MarkKind } from '../layout/marks';
 import { INNER_EDGE, insetOutline } from '../layout/inneredge';
+import { carryEmptyDy } from './linedy';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
@@ -50,11 +51,14 @@ function text(t: TextBlock, parent: Element) {
   const isSub = (i: number) => !!sub && i >= sub.from;
   const hOf = (i: number) => (isSub(i) ? sub!.size * LINE_HEIGHT : lh);
   const total = t.lines.reduce((sum, _l, i) => sum + hOf(i), 0);
+  // Rotert: linjene står side om side, sentrert om (x, y)
+  const dys = carryEmptyDy(
+    t.lines,
+    t.lines.map((_l, i) => (t.rotate ? (i === 0 ? -(total - hOf(0)) / 2 : (hOf(i - 1) + hOf(i)) / 2) : i > 0 ? hOf(i) : null)),
+  );
   t.lines.forEach((line, i) => {
     const span = node('tspan', { x: t.x }, el);
-    // Rotert: linjene står side om side, sentrert om (x, y)
-    if (t.rotate) span.setAttribute('dy', String(i === 0 ? -(total - hOf(0)) / 2 : (hOf(i - 1) + hOf(i)) / 2));
-    else if (i > 0) span.setAttribute('dy', String(hOf(i)));
+    if (dys[i] !== null) span.setAttribute('dy', String(dys[i]));
     if (t.boldLines?.[i]) span.setAttribute('font-weight', 'bold');
     if (isSub(i)) {
       span.setAttribute('font-size', String(Math.round(sub!.size * 1000) / 1000));
