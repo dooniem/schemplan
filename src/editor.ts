@@ -6,7 +6,7 @@ import { fieldColors, textColorRows } from './textcolorui';
 import { remapRuns } from './format/textcolor';
 import { autoTextColor } from './layout/color';
 import { baseMilestoneRotation, milestoneRotation } from './layout/milestone';
-import type { Box, Lane, PlanFile, Rotation } from './format/types';
+import type { Box, Lane, PlanFile, Rotation, TextAlign } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { paintCriticalOnly, shownItems } from './criticalonly';
 import type { FitTextResult, FitTextScope } from './layout/fittext';
@@ -29,6 +29,7 @@ import { createCriticalUi } from './criticalui';
 import { transparencyRow, type TransparencyKit } from './transparencyui';
 import { hatchSection, type HatchKit } from './hatchui';
 import { canBeTransparent } from './layout/transparency';
+import { alignOf } from './layout/textalign';
 import { allFront, FRONT_HINT, frontMenuItem, setFront } from './frontui';
 import { inLine, styleOf } from './criticallines';
 import { datesMenuItem, datesRows } from './boxdatesui';
@@ -1707,6 +1708,14 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       // Tre valg trenger hele bredden, så navnet står over knappene
       sf.lastElementChild!.classList.replace('prop-inline', 'prop');
+      // Samme valg og navn som for fritekst, så teksten kan flyttes bort fra bokser som ligger foran
+      const alignRow = () =>
+        segmented<TextAlign>('Justering', alignOf(b), [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
+          change((x) => {
+            if (v === 'center') delete x.textAlign;
+            else x.textAlign = v;
+          }),
+        );
       if (b.header || b.spanTo !== undefined)
         sf.append(
           switchRow('Fet skrift', !!b.bold, (v) =>
@@ -1716,6 +1725,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
+      if (b.header && b.rotation === 0) sf.append(alignRow());
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
       if (b.spanTo !== undefined && plan) {
         const wrap = el('label', { class: 'prop prop-inline' });
@@ -1737,6 +1747,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
+        if (b.rotation === 0) sf.append(alignRow());
         if (b.spanEnd !== undefined) sf.append(lockedRow('Egen høyde, slutter inne i lanen', 'Fyll lanen', 'La boksen gå helt ned til bunnen av lanen', () => setSpan(b.id, b.spanTo!)));
         sf.append(el('p', { class: 'hint' }, 'Boksen går ned i lanene under uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å endre høyden; den snapper til bunnen av hver lane.'));
       }

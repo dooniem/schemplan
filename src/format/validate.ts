@@ -335,6 +335,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.critical !== undefined && typeof b.critical !== 'boolean' && !(Array.isArray(b.critical) && b.critical.length && b.critical.every((n, i, a) => (n === 1 || n === 2 || n === 3) && a.indexOf(n) === i)))
           err(`${bp}.critical`, 'må være true, false eller en liste med linjenumre fra 1 til 3');
         for (const k of ['hidden', 'manual', 'header', 'loud', 'night', 'custom', 'textMiddle', 'bold', 'front', 'showDates'] as const) if (b[k] !== undefined && typeof b[k] !== 'boolean') err(`${bp}.${k}`, 'må være true eller false');
+        if (b.textAlign !== undefined && !['left', 'center', 'right'].includes(b.textAlign as string)) err(`${bp}.textAlign`, 'må være left, center eller right');
         if (b.transparency !== undefined && !transparencyOk(b.transparency)) err(`${bp}.transparency`, 'må være et helt tall fra 0 til 90');
         if (b.hatch !== undefined) {
           const h = b.hatch;

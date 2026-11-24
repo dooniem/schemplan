@@ -404,6 +404,8 @@ export interface Box {
    * Kanten og teksten er hele.
    */
   transparency?: number;
+  /** Justering av teksten i overskrifts- og Multi Lane-bokser (valgfritt). Uten er teksten midtstilt. */
+  textAlign?: TextAlign;
   /** Tegnes over alle andre bokser, uansett type (valgfritt). Endrer ikke plassen i lanen. */
   front?: boolean;
   /** Skravering over fyllet, valgt i appen (valgfritt). Teksten får et felt uten streker rundt seg. */
@@ -503,3 +505,6 @@ export interface Task {
   baselineStart?: IsoDate | null;
   baselineFinish?: IsoDate | null;
 }
+
+/** Justering av tekst i en boks. */
+export type TextAlign = 'left' | 'center' | 'right';
