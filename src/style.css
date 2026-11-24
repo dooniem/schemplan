@@ -545,6 +545,8 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .tip dt { color: var(--muted); }
 .tip dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tip dd.warn { color: var(--error); }
+.tip-dur { display: flex; align-items: center; gap: 4px; }
+.tip-ico { flex: none; width: 12px; height: 12px; fill: none; stroke: var(--muted); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .work { position: relative; }
 .focus-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 4px 6px 4px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px; }
 .focus-bar[hidden] { display: none; }

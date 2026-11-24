@@ -6,6 +6,8 @@ import { bounds } from './editmodel';
 import { formatLong, isoWeek, parseIso } from './layout/dates';
 import { planRows, type DataRow } from './data/rows';
 import { boxMarks, marksLabel, marksMatch, type MarkKind } from './layout/marks';
+import { workDayCount } from './layout/workdays';
+import { icon, type IconName } from './ctxmenu';
 
 const NS = 'http://www.w3.org/2000/svg';
 const ACCENT = '#1F5FBF';
@@ -40,6 +42,9 @@ export function duration(start: string, finish: string): string {
   const d = days(start, finish);
   return d <= 1 ? '1 dag' : `${d} dager`;
 }
+
+/** «48 arbeidsdager», «1 kalenderdag». */
+export const dayCount = (n: number, kind: 'arbeidsdag' | 'kalenderdag') => `${n} ${kind}${n === 1 ? '' : 'er'}`;
 
 /** Bokser og milepæler som ligger helt eller delvis i perioden (datoene tas med). */
 export function rowsIn(rows: DataRow[], start: string, end: string): DataRow[] {
@@ -100,24 +105,37 @@ export function createFocus(
   const tipFor = (id: string) => {
     const r = rows.get(id);
     if (!r || !r.finish) return null;
+    const plan = getPlan();
     const dl = document.createElement('dl');
-    const add = (k: string, v: string) => {
+    const add = (k: string, v: string | Node[]) => {
       const dt = document.createElement('dt');
       dt.textContent = k;
       const dd = document.createElement('dd');
-      dd.textContent = v;
+      if (typeof v === 'string') dd.textContent = v;
+      else dd.append(...v);
       dl.append(dt, dd);
+    };
+    // Én linje per varighet, med symbolet foran: hjelm for arbeidsdager, kalender for kalenderdager
+    const line = (ico: IconName, text: string) => {
+      const s = document.createElement('span');
+      s.className = 'tip-dur';
+      s.append(icon(ico, 'tip-ico'), text);
+      return s;
     };
     if (r.type === 'Milepæl') add('Dato', formatLong(r.finish));
     else {
       add('Start', formatLong(r.start));
       add('Slutt', formatLong(r.finish));
-      if (r.start) add('Varighet', duration(r.start, r.finish));
+      if (r.start) {
+        const lines: Node[] = [];
+        if (plan) lines.push(line('hardhat', dayCount(workDayCount(plan, r.start, r.finish), 'arbeidsdag')));
+        lines.push(line('calendar', dayCount(days(r.start, r.finish), 'kalenderdag')));
+        add('Varighet', lines);
+      }
     }
     if (r.progress) add('Ferdig', r.progress);
     if (r.baseline) add('Baseline', r.baseline);
     if (r.fromProject) add('Oppdatering', r.fromProject);
-    if (r.taskNames) add(r.taskNames.includes('; ') ? 'Aktiviteter' : 'Aktivitet', r.taskNames.split('; ').slice(0, 3).join(', ') + (r.taskNames.split('; ').length > 3 ? ' …' : ''));
     return dl;
   };
 
