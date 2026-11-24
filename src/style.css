@@ -561,15 +561,36 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .tip dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tip dd.warn { color: var(--error); }
 .tip-dur { display: flex; align-items: center; gap: 4px; }
-.tip.tip-wide { max-width: 504px; }
-/* Kommentaren under datoene: teksten med linjeskift, så bildene */
+.tip.tip-wide { max-width: 260px; }
+/* Kommentaren under datoene: kort, så detaljene aldri dekker mye av planen */
 .tip-comment { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .tip-comment:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.tip-comment-text { margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tip-imgs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.tip-comment-text + .tip-imgs { margin-top: 6px; }
-.tip-comment > .tip-imgs:first-child { margin-top: 0; }
-.tip-imgs img { display: block; border-radius: 4px; background: var(--border); }
+.tip-comment-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tip-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.tip-comment > .tip-thumbs:first-child { margin-top: 0; }
+.tip-thumbs img { display: block; border-radius: 3px; background: var(--border); }
+.tip-more { padding: 0 2px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tip-open { margin: 6px 0 0; color: var(--muted); }
+/* Hele kommentaren: et lite kort ved boksen, med bildene små til musen holdes over dem */
+.comment-card { position: fixed; z-index: 21; display: flex; flex-direction: column; gap: 8px; width: max-content; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16); font-size: 13px; line-height: 1.45; }
+.comment-card[hidden] { display: none; }
+.comment-card-head { display: flex; align-items: flex-start; gap: 8px; }
+.comment-card-title { flex: 1; min-width: 0; margin: 2px 0 0; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.comment-card-close { display: grid; place-items: center; flex: none; width: 26px; height: 26px; margin: -4px -6px 0 0; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.comment-card-close:hover { background: var(--bg); color: var(--text); }
+.comment-card-text { max-width: 60ch; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-card-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.comment-thumb { display: block; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--border); cursor: zoom-in; overflow: hidden; }
+.comment-thumb img { display: block; }
+.comment-thumb:hover, .comment-thumb[aria-pressed='true'] { border-color: var(--accent); }
+.comment-thumb[aria-pressed='true'] { box-shadow: 0 0 0 1px var(--accent); }
+.comment-card :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.comment-card-hint { margin: 0; font-size: 11.5px; color: var(--muted); }
+/* Bildet stort ved siden av kortet eller panelet */
+.comment-preview { position: fixed; z-index: 22; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2); pointer-events: none; }
+.comment-preview[hidden] { display: none; }
+.comment-preview img { display: block; border-radius: 5px; }
+.comment-img img { cursor: zoom-in; }
 .tip-ico { flex: none; width: 12px; height: 12px; fill: none; stroke: var(--muted); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .work { position: relative; }
 .focus-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 4px 6px 4px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px; }

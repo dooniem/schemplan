@@ -3,6 +3,7 @@
 import type { Box, CommentImage } from './format/types';
 import { icon, type IconName } from './ctxmenu';
 import type { Fold } from './panelfold';
+import { commentPreview } from './commenttip';
 import { imageFiles, readImage } from './imagefile';
 import { addCommentImages, COMMENT_MAX_IMAGES, COMMENT_MAX_PX, COMMENT_PNG_LIMIT, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText } from './comment';
 
@@ -35,6 +36,8 @@ async function readAll(files: File[]): Promise<{ images: CommentImage[]; failed:
 
 export function commentSection(kit: CommentKit, b: Box): void {
   const { el } = kit;
+  // Panelet bygges på nytt: et bilde som vises stort, hører til det gamle panelet
+  commentPreview().hide();
   const c = commentOf(b);
   const s = kit.section('Kommentar', { summary: commentSummary(b), changed: !!c });
   const imgs = c?.images ?? [];
@@ -82,6 +85,13 @@ export function commentSection(kit: CommentKit, b: Box): void {
         return x;
       };
       acts.append(small('trash', 'Ta bort', () => kit.apply(b.id, (x) => removeCommentImage(x, i))));
+      // Stort ved siden av panelet når musen holdes over bildet
+      const preview = commentPreview();
+      img.addEventListener('pointerenter', () => {
+        const panel = li.closest('#panel') ?? li;
+        preview.show(im, panel.getBoundingClientRect(), img.getBoundingClientRect());
+      });
+      img.addEventListener('pointerleave', () => preview.hide());
       li.append(img, acts);
       list.append(li);
     });
