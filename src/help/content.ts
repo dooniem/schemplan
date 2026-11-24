@@ -242,9 +242,9 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'kommentar', group: 'Bokser', title: 'Kommentarer med tekst og bilder',
-    text: `Velg en boks eller milepæl og åpne ${ui('Kommentar')} i panelet. Skriv en kommentar, og legg til bilder med ${ui('Legg til bilde')}, ved å lime inn i tekstfeltet eller dra dem inn. Kommentaren vises når musen holdes over boksen, og en liten rød trekant i hjørnet viser hvilke bokser som har kommentar.`,
+    text: `Velg en boks eller milepæl og åpne ${ui('Kommentar')} i panelet. Skriv en kommentar, og legg til bilder med ${ui('Legg til bilde')}, ved å lime inn i tekstfeltet eller dra dem inn. Kommentaren vises når musen holdes over boksen, og en liten rød trekant i hjørnet viser hvilke bokser som har kommentar. Klikk boksen for å se hele kommentaren; nettadresser kan da klikkes og åpnes i en ny fane, og bildene vises store når musen holdes over dem.`,
     when: `Nyttig i møter: mer detaljer i planen uten at arket blir fullt. Kommentarer kommer aldri med på arket, i utskrift eller i PDF for deling, men lagres i arbeidsfilen og følger boksen ved oppdatering fra Project. Bildene gjøres mindre, så arbeidsfilen ikke blir unødig stor.`,
-    words: 'notat merknad bilde foto mouse-over musepeker detaljer møte', see: ['rediger', 'lagre'],
+    words: 'notat merknad bilde foto mouse-over musepeker detaljer møte lenke url nettadresse', see: ['rediger', 'lagre'],
   },
   {
     id: 'merking', group: 'Bokser', title: 'Høylytt arbeid og nattarbeid',

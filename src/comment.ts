@@ -94,3 +94,36 @@ export function withoutCommentImages(key: string, v: unknown): unknown {
   const c = v as BoxComment;
   return { text: c.text, images: c.images?.map((im) => `${im.data.length}:${im.data.slice(-24)}`) };
 }
+
+/** Del av kommentarteksten: vanlig tekst, eller en lenke med adressen den åpner. */
+export interface TextPart {
+  text: string;
+  href?: string;
+}
+
+/** Nettadresser i teksten: med http(s):// foran, eller som begynner med www. */
+const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+/** Tegn som avslutter en setning heller enn adressen. */
+const TRAIL_RE = /[.,;:!?'»”)\]]+$/;
+
+/** Deler teksten i vanlig tekst og lenker. Bare http og https blir lenker. */
+export function splitLinks(text: string): TextPart[] {
+  const out: TextPart[] = [];
+  let at = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let url = m[0];
+    // Avsluttende tegn hører til setningen, men en parentes som åpnes i adressen hører til den
+    const trail = url.match(TRAIL_RE)?.[0] ?? '';
+    if (trail) {
+      let keep = trail;
+      while (keep.startsWith(')') && (url.slice(0, url.length - keep.length).match(/\(/g)?.length ?? 0) > (url.slice(0, url.length - keep.length).match(/\)/g)?.length ?? 0)) keep = keep.slice(1);
+      url = url.slice(0, url.length - keep.length);
+    }
+    const i = m.index!;
+    if (i > at) out.push({ text: text.slice(at, i) });
+    out.push({ text: url, href: /^https?:\/\//i.test(url) ? url : `https://${url}` });
+    at = i + url.length;
+  }
+  if (at < text.length) out.push({ text: text.slice(at) });
+  return out;
+}

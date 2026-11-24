@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCommentImages, COMMENT_MAX_IMAGES, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText, validComment } from './comment';
+import { splitLinks, addCommentImages, COMMENT_MAX_IMAGES, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText, validComment } from './comment';
 import { fitSize } from './commenttip';
 import { mergePlans } from './merge';
 import { samePlanApartFromImages, snapshotOf } from './editmodel';
@@ -72,6 +72,23 @@ describe('kommentarer på bokser', () => {
     box(work, '1_1').comment = { text: 'Leveranse fra Tyskland', images: [img()] };
     const { plan } = mergePlans(work, testplan());
     expect(box(plan, '1_1').comment).toEqual({ text: 'Leveranse fra Tyskland', images: [img()] });
+  });
+
+  it('finner lenker i teksten', () => {
+    expect(splitLinks('Se https://eksempel.no/a?b=1. Og www.vg.no, takk')).toEqual([
+      { text: 'Se ' },
+      { text: 'https://eksempel.no/a?b=1', href: 'https://eksempel.no/a?b=1' },
+      { text: '. Og ' },
+      { text: 'www.vg.no', href: 'https://www.vg.no' },
+      { text: ', takk' },
+    ]);
+    expect(splitLinks('(https://no.wikipedia.org/wiki/Kran_(maskin))')).toEqual([
+      { text: '(' },
+      { text: 'https://no.wikipedia.org/wiki/Kran_(maskin)', href: 'https://no.wikipedia.org/wiki/Kran_(maskin)' },
+      { text: ')' },
+    ]);
+    expect(splitLinks('javascript:alert(1) og ftp://x')).toEqual([{ text: 'javascript:alert(1) og ftp://x' }]);
+    expect(splitLinks('')).toEqual([]);
   });
 
   it('søket finner teksten i kommentaren', () => {

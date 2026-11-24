@@ -5,7 +5,7 @@ import type { Box, CommentImage } from './format/types';
 import type { Layout } from './layout/layout';
 import { plainText } from './format/text';
 import { icon } from './ctxmenu';
-import { commentOf } from './comment';
+import { commentOf, splitLinks } from './comment';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** Rødt som kommentarmerket i Excel, med hvit kant så det synes på røde bokser også. */
@@ -35,6 +35,31 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?
   return e;
 };
 
+/**
+ * Teksten med lenkene som egne elementer. I kortet kan de klikkes og åpnes i en ny fane; i detaljene
+ * ved musepeker (som ikke kan klikkes) er de bare understreket.
+ */
+function textWithLinks(cls: string, text: string, clickable: boolean): HTMLElement {
+  const p = make('p', cls);
+  for (const part of splitLinks(text)) {
+    if (!part.href) {
+      p.append(part.text);
+      continue;
+    }
+    if (!clickable) {
+      p.append(make('span', 'comment-link', part.text));
+      continue;
+    }
+    const a = make('a', 'comment-link', part.text);
+    a.href = part.href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = `Åpne ${part.href} i en ny fane`;
+    p.append(a);
+  }
+  return p;
+}
+
 /** Lite bilde med fast størrelse før det er lest inn, så ingenting hopper. */
 function thumb(im: CommentImage, max: { w: number; h: number }, alt = ''): HTMLImageElement {
   const img = make('img');
@@ -56,7 +81,7 @@ export function commentTip(b: Box, canOpen = false): HTMLElement | null {
   if (!c) return null;
   const wrap = make('div', 'tip-comment');
   const text = c.text?.trim();
-  if (text) wrap.append(make('p', 'tip-comment-text', text));
+  if (text) wrap.append(textWithLinks('tip-comment-text', text, false));
   const imgs = c.images ?? [];
   if (imgs.length) {
     const row = make('div', 'tip-thumbs');
@@ -188,7 +213,7 @@ export function createCommentCard(preview: Preview): CommentCard {
       head.append(make('h2', 'comment-card-title', title), x);
       const body: Node[] = [head];
       const text = c.text?.trim();
-      if (text) body.push(make('p', 'comment-card-text', text));
+      if (text) body.push(textWithLinks('comment-card-text', text, true));
       const imgs = c.images ?? [];
       if (imgs.length) {
         const row = make('div', 'comment-card-thumbs');
