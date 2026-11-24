@@ -17,7 +17,7 @@ import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
 import { boxHatch } from './hatch';
 import { drawOrder } from './draworder';
-import { alignedText, alignOf } from './textalign';
+import { alignedText, alignOf, rotatedX } from './textalign';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
@@ -1491,7 +1491,8 @@ function buildPieces(
       // Datoraden står ved siden av teksten, så teksten får litt mindre plass i bredden
       lines = rotatedLines(nameLines, tw - 2 * PAD_X - (dt ? ds * LINE_HEIGHT : 0), bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
       item.h = Math.max(Math.max(widest(lines, bs, measure), dt ? measure(dt, ds) : 0) + 2 * PAD_Y + 1, marksH());
-      item.text = { x: bx0 + tw / 2, y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, bg) };
+      const block = (lines.length * bs + (dt ? ds : 0)) * LINE_HEIGHT;
+      item.text = { x: rotatedX(alignOf(box), bx0, tw, PAD_X, block), y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, bg) };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;
     }

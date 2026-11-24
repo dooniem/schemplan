@@ -33,7 +33,7 @@ export function formFold(b: Box): Fold {
   const type = b.spanTo !== undefined ? 'Multi Lane' : b.header ? 'Overskrift' : 'Vanlig';
   const rot = b.rotation === 90 ? '90°' : b.rotation === -90 ? '−90°' : '';
   const align = alignOf(b) === 'left' ? 'venstrejustert' : alignOf(b) === 'right' ? 'høyrejustert' : '';
-  return { summary: joinSummary([type, rot && `rotert ${rot}`, !rot && align]), changed: type !== 'Vanlig' || !!rot };
+  return { summary: joinSummary([type, rot && `rotert ${rot}`, align]), changed: type !== 'Vanlig' || !!rot };
 }
 
 /** Kritisk linje: linjene boksene er med i, ellers Ingen. */

@@ -1725,7 +1725,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-      if (b.spanTo === undefined && b.rotation === 0) sf.append(alignRow());
+      if (b.spanTo === undefined) sf.append(alignRow());
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
       if (b.spanTo !== undefined && plan) {
         const wrap = el('label', { class: 'prop prop-inline' });
@@ -1747,7 +1747,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-        if (b.rotation === 0) sf.append(alignRow());
+        sf.append(alignRow());
         if (b.spanEnd !== undefined) sf.append(lockedRow('Egen høyde, slutter inne i lanen', 'Fyll lanen', 'La boksen gå helt ned til bunnen av lanen', () => setSpan(b.id, b.spanTo!)));
         sf.append(el('p', { class: 'hint' }, 'Boksen går ned i lanene under uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å endre høyden; den snapper til bunnen av hver lane.'));
       }

@@ -41,7 +41,7 @@ describe('tekstjustering', () => {
     expect(right.t.x).toBeGreaterThan(mid.t.x);
   });
 
-  it('gjelder vanlige bokser og Multi Lane, men ikke rotert tekst', () => {
+  it('gjelder vanlige bokser og Multi Lane, også rotert tekst', () => {
     const { p, box } = pick();
     box.textAlign = 'left';
     expect(textOf(p, box.id).t.anchor).toBe('start');
@@ -49,7 +49,12 @@ describe('tekstjustering', () => {
     expect(textOf(p, box.id).t.anchor).toBe('start');
     delete box.spanTo;
     box.rotation = 90;
-    expect(textOf(p, box.id).t.anchor).toBe('middle');
+    const left = textOf(p, box.id);
+    box.textAlign = 'right';
+    const right = textOf(p, box.id);
+    expect(left.t.x).toBeLessThan(right.t.x);
+    expect(left.t.x).toBeGreaterThan(left.it.x0);
+    expect(right.t.x).toBeLessThan(right.it.x1);
   });
 
   it('valideres og fjernes av Tilbakestill', () => {

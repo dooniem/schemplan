@@ -12,3 +12,11 @@ export function alignedText(align: TextAlign, x0: number, w: number, pad: number
   if (align === 'right') return { x: x0 + w - pad, anchor: 'end' };
   return { x: x0 + w / 2, anchor: 'middle' };
 }
+
+/** Midten av rotert tekst: linjene står side om side og fyller `block` i bredden, så hele blokken flyttes mot kanten. */
+export function rotatedX(align: TextAlign, x0: number, w: number, pad: number, block: number): number {
+  const half = Math.min(block, w - 2 * pad) / 2;
+  if (align === 'left') return x0 + pad + half;
+  if (align === 'right') return x0 + w - pad - half;
+  return x0 + w / 2;
+}
