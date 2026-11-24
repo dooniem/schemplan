@@ -332,6 +332,8 @@ export interface Lane {
   mergedInto?: string;
   /** Lanefargen vises også dempet som bakgrunn bak boksene (valgfritt). */
   tintBackground?: boolean;
+  /** Hvor sterk lanefargen bak boksene er, i prosent av standard (valgfritt, 25–200). Uten den: 100. */
+  tintStrength?: number;
   /** Hvit skrift på lanenavnet (valgfritt). Uten den er navnet svart. */
   whiteText?: boolean;
 }

@@ -225,6 +225,7 @@ function mergeLane(ol: Lane, lane: Lane, report: MergeReport) {
   if (ol.hidden) lane.hidden = true;
   if (ol.mergedInto) lane.mergedInto = ol.mergedInto;
   if (ol.tintBackground) lane.tintBackground = true;
+  if (ol.tintStrength !== undefined) lane.tintStrength = ol.tintStrength;
   if (ol.whiteText) lane.whiteText = true;
   if (!ol.original) return;
   const orig = { name: lane.name, fill: lane.fill };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { laneTint } from './lanetint';
+import { laneTint, setTintStrength, tintStrengthOf } from './lanetint';
 import { luminance } from './color';
 import { toOklch } from './oklch';
 import { computeLayout } from './layout';
@@ -44,6 +44,30 @@ describe('lanefarge som bakgrunn', () => {
     expect(toOklch(g.dark).c).toBeLessThan(0.003);
     const bg = laneTint('#6E6E78', true)!; // svak blågrå, metning ca. 0,02
     expect(toOklch(bg.dark).c).toBeLessThanOrEqual(toOklch('#6E6E78').c + 0.003);
+  });
+
+  it('styrken skalerer metningen, men ikke lysheten', () => {
+    for (const c of ['#0E6C7E', '#92D050', '#5F5F7F']) {
+      const svak = laneTint(c, true, 50)!;
+      const std = laneTint(c, true)!;
+      const sterk = laneTint(c, true, 200)!;
+      expect(toOklch(svak.dark).c).toBeLessThan(toOklch(std.dark).c);
+      expect(toOklch(sterk.dark).c).toBeGreaterThan(toOklch(std.dark).c);
+      expect(toOklch(svak.dark).l).toBeCloseTo(toOklch(std.dark).l, 1);
+      // Selv sterkeste valg holder bakgrunnen lys nok for svart tekst
+      expect(luminance(sterk.dark)).toBeGreaterThan(0.7);
+    }
+  });
+
+  it('lagrer bare styrke som avviker fra standard, innenfor grensene', () => {
+    const l: { tintStrength?: number } = {};
+    setTintStrength(l, 100);
+    expect(l.tintStrength).toBeUndefined();
+    setTintStrength(l, 999);
+    expect(l.tintStrength).toBe(200);
+    setTintStrength(l, 62);
+    expect(l.tintStrength).toBe(60);
+    expect(tintStrengthOf({ tintStrength: 7 })).toBe(100);
   });
 
   it('legger fargede felt over hele lanen når bryteren er på', () => {
