@@ -4,6 +4,7 @@ import { readLookahead } from '../layout/lookahead';
 import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
 import { transparencyOk } from '../layout/transparency';
+import { tintStrengthOk, TINT_MAX, TINT_MIN } from '../layout/lanetint';
 import { isHatchDensity, isHatchPattern } from '../layout/hatch';
 import { barWidthOk, laneWidthOk, MAX_WIDTH_EM, MIN_WIDTH_EM } from '../layout/lanewidth';
 
@@ -309,6 +310,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       needBool(l, 'shown', p);
       optPos(l, 'height', p);
       for (const k of ['hidden', 'manual', 'tintBackground', 'whiteText'] as const) if (l[k] !== undefined && typeof l[k] !== 'boolean') err(`${p}.${k}`, 'må være true eller false');
+      if (l.tintStrength !== undefined && !tintStrengthOk(l.tintStrength)) err(`${p}.tintStrength`, `må være et helt tall fra ${TINT_MIN} til ${TINT_MAX}`);
       if (l.mergedInto !== undefined && typeof l.mergedInto !== 'string') err(`${p}.mergedInto`, 'må være tekst');
       if (l.order !== undefined && !(Array.isArray(l.order) && l.order.every((x: unknown) => typeof x === 'string'))) err(`${p}.order`, 'må være en liste med boks-id-er');
       if (l.original !== undefined) {

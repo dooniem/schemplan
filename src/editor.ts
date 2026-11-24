@@ -27,6 +27,7 @@ import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
 import { transparencyRow, type TransparencyKit } from './transparencyui';
+import { tintStrengthRow, type TintStrengthKit } from './lanetintui';
 import { hatchSection, type HatchKit } from './hatchui';
 import { canBeTransparent } from './layout/transparency';
 import { alignOf } from './layout/textalign';
@@ -1084,6 +1085,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const noTint = !l.fill || l.fill.toUpperCase() === '#FFFFFF';
     bg.querySelector('input')!.disabled = noTint;
     sc.append(bg);
+    if (l.tintBackground && !noTint) sc.append(tintStrengthRow(tintStrengthKit, l));
     if (noTint && l.tintBackground) sc.append(el('p', { class: 'hint' }, 'Hvit lane har ingen farge å vise bak boksene.'));
 
     const sp = section('Plass');
@@ -1247,6 +1249,16 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     box: () => {
       const pl = host.getPlan();
       return pl && selected ? findBox(pl, selected) : null;
+    },
+    redraw: () => host.redraw(),
+    syncTools,
+  };
+  const tintStrengthKit: TintStrengthKit = {
+    el,
+    snapshot,
+    lane: () => {
+      const pl = host.getPlan();
+      return pl && selectedLane ? findLane(pl, selectedLane) : null;
     },
     redraw: () => host.redraw(),
     syncTools,

@@ -21,7 +21,7 @@ import { drawOrder } from './draworder';
 import { alignedText, alignOf, textAtOf } from './textalign';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
-import { laneTint, type LaneTint } from './lanetint';
+import { laneTint, tintStrengthOf, type LaneTint } from './lanetint';
 import { statusLabel, type StatusMoment } from './status';
 import { deltaText, frontPath, frontPoints } from './progress';
 import type { LookaheadExtras } from './lookahead';
@@ -1252,7 +1252,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     strong: ny ? c.year !== axis.columns[i].year : c.monthYear !== axis.columns[i].monthYear,
     month: axis.mode === 'week' && c.monthLabel !== axis.columns[i].monthLabel,
   }));
-  const bands: Band[] = monthBands(axis, ny, laneLayouts.map((ln, i) => ({ ...ln, tint: lanes[i].tintBackground ? laneTint(ln.fill, ny) : null })));
+  const bands: Band[] = monthBands(axis, ny, laneLayouts.map((ln, i) => ({ ...ln, tint: lanes[i].tintBackground ? laneTint(ln.fill, ny, tintStrengthOf(lanes[i])) : null })));
   const holidays = spans
     .filter((h) => h.e >= axis.start && h.s < axis.end)
     .map((h) => {
