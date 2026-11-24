@@ -10,7 +10,7 @@ import type { Box, Lane, PlanFile, Rotation, TextAlign } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { paintCriticalOnly, shownItems } from './criticalonly';
 import type { FitTextResult, FitTextScope } from './layout/fittext';
-import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_BOX_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
@@ -772,7 +772,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   /**
    * Tekststørrelse for boksen, i halve punkter. Lagres i forhold til planens tekst, så boksen
-   * følger med når planen krymper eller vokser. Aldri under halvparten eller over det dobbelte.
+   * følger med når planen krymper eller vokser. Aldri under halvparten eller over det tredobbelte.
    */
   const textSizeRow = (b: Box, planPt: number) =>
     sizeStepper(b.textScale, planPt, (s) =>
@@ -780,6 +780,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
         if (s === undefined) delete x.textScale;
         else x.textScale = s;
       }),
+      { max: MAX_BOX_TEXT_SCALE },
     );
   /** − / + i halve punkter. set får forholdet til planens tekst, eller undefined for standardstørrelsen. */
   /** def: standardstørrelsen i forhold til planens tekst. Velges den, lagres ingen egen størrelse. */
@@ -787,15 +788,15 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     scaleNow: number | undefined,
     planPt: number,
     set: (s: number | undefined) => void,
-    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string; std?: string; unit?: string; step?: number; what?: string } = {},
+    o: { note?: string; def?: number; resetLabel?: string; resetTitle?: string; std?: string; unit?: string; step?: number; what?: string; max?: number } = {},
   ) => {
-    const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen', unit = 'pt', step = 0.5, what = 'tekst' } = o;
+    const { note = 'Egen størrelse', def = 1, resetLabel = 'Som planen', resetTitle = 'Samme tekststørrelse som resten av planen', unit = 'pt', step = 0.5, what = 'tekst', max = MAX_TEXT_SCALE } = o;
     const cur = planPt * (scaleNow ?? def);
     const lo = planPt * MIN_TEXT_SCALE;
-    const hi = planPt * MAX_TEXT_SCALE;
+    const hi = planPt * max;
     const fmt = (v: number) => v.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
     const setPt = (pt: number) => {
-      const s = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, pt / planPt));
+      const s = Math.min(max, Math.max(MIN_TEXT_SCALE, pt / planPt));
       set(Math.abs(s - def) < 1e-3 ? undefined : Math.round(s * 10000) / 10000);
     };
     const wrap = el('div', { class: 'prop prop-inline' });
@@ -1028,7 +1029,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             const target = s * planPtNow;
             let pt = planPtNow;
             for (let i = 0; i < 6; i++) {
-              pl.plan.layout.laneTitleScale = Math.round(Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, target / pt)) * 10000) / 10000;
+              pl.plan.layout.laneTitleScale = Math.round(Math.min(MAX_BOX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, target / pt)) * 10000) / 10000;
               const next = host.layoutOf(pl).textSizePt;
               if (Math.abs(next - pt) < 1e-6) break;
               pt = next;
@@ -1038,6 +1039,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           def: defaultLaneTitleScale(layoutNow.textSizePt),
           resetLabel: 'Standard',
           resetTitle: 'Litt større enn teksten i boksene',
+          max: MAX_BOX_TEXT_SCALE,
         }),
         el('p', { class: 'hint' }, 'Størrelsen gjelder navnene på alle lanes, så de er like store. Som standard er de litt større enn teksten i boksene.'),
         ...laneWidth.panelRows({ el, lockedRow }),
