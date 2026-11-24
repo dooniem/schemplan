@@ -17,6 +17,7 @@ import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
 import { boxHatch } from './hatch';
 import { drawOrder } from './draworder';
+import { alignedText, alignOf } from './textalign';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
@@ -1530,7 +1531,7 @@ function buildPieces(
           if (best.m) item.marks = best.m;
           item.h = Math.max(h, marksH());
           const tw = w - inset();
-          item.text = { x: bx0 + tw / 2, y: firstBase(best.ls.length), lines, size: bs, color: textColor, anchor: 'middle', ...(bold ? { bold } : {}), ...sub(best.ls.length, textColor, bg) };
+          item.text = { ...alignedText(alignOf(box), bx0, tw, PAD_X), y: firstBase(best.ls.length), lines, size: bs, color: textColor, ...(bold ? { bold } : {}), ...sub(best.ls.length, textColor, bg) };
         }
       }
     }
