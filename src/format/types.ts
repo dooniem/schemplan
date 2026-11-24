@@ -163,6 +163,11 @@ export interface PlanImage {
    * punkt til midten av det synlige, som andel av arkets bredde. Milepælens eget symbol tegnes ikke.
    */
   milestone?: { id: string; dx: number; dy: number };
+  /**
+   * Festet til en lane: midten av det synlige står v ned i lanen (0 er toppen, 1 bunnen) og følger
+   * lanen når den flyttes eller endrer høyde. Kan kombineres med `date`. Vises ikke lanen, brukes y.
+   */
+  lane?: { id: string; v: number };
   /** Fritekst: bildet er tegnet fra denne teksten og tegnes på nytt når den endres. */
   note?: PlanNote;
 }

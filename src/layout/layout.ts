@@ -5,6 +5,7 @@ import { colorLines, hasTextColors, type TextRun } from '../format/textcolor';
 import { boxDateText, dateColor, dateMinWidth, dateRows, DATE_SCALE, datesShown, linesHeight, type DateSub } from './boxdates';
 import { inCalendar } from '../format/validate';
 import { placeImage, type PlacedImage } from './image';
+import { laneSpanOf } from './imagelane';
 import { placeArrows, type PlacedArrow, type Rect } from './arrow';
 import { areaPolygon, edgeMm, edgeRange, MIN_AREA_H, type AreaEdges, type Pt } from './area';
 import { sheetSize, type Orientation, type Paper } from '../sheet';
@@ -1281,7 +1282,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const boxItems = items.filter((i): i is BoxItem & { trade?: string } => i.kind === 'box');
   const innerEdgeAuto = ny ? [...autoInnerEdgeTrades(boxItems)] : [];
   const innerEdgeTrades = ny ? [...markInnerEdges(boxItems, file.plan.layout.innerEdge)] : [];
-  const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
+  const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt, laneSpan: (id) => laneSpanOf(id, laneLayouts, file.lanes) })).filter((p): p is PlacedImage => !!p);
   // Skravering til slutt, når boksene og teksten står der de skal
   const boxById = new Map(file.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as const)));
   for (const it of boxItems) {
