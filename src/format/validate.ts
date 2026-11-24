@@ -18,8 +18,8 @@ export interface ValidationResult {
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
-/** Tekststørrelse i forhold til planens tekst: fra halvparten til det dobbelte. */
-const textScaleOk = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0.5 && v <= 2;
+/** Størrelse i forhold til standarden: fra halvparten til det dobbelte (bokser og lane-navn: tredobbelte). */
+const textScaleOk = (v: unknown, max = 2) => typeof v === 'number' && Number.isFinite(v) && v >= 0.5 && v <= max;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
@@ -132,7 +132,8 @@ export function validatePlan(input: string | unknown): ValidationResult {
           err('plan.layout.legendItems', 'må ha hidden (true/false) og/eller text (tekst) for hver oppføring');
       }
       if (lay.editedAt !== undefined && !isIsoDate(lay.editedAt)) err('plan.layout.editedAt', 'må være en dato som YYYY-MM-DD');
-      for (const k of ['laneTitleScale', 'headerRightScale', 'legendScale', 'logoScale', 'markScale'] as const)
+      if (lay.laneTitleScale !== undefined && !textScaleOk(lay.laneTitleScale, 3)) err('plan.layout.laneTitleScale', 'må være et tall fra 0,5 til 3');
+      for (const k of ['headerRightScale', 'legendScale', 'logoScale', 'markScale'] as const)
         if (lay[k] !== undefined && !textScaleOk(lay[k])) err(`plan.layout.${k}`, 'må være et tall fra 0,5 til 2');
       if (lay.laneTitleWidth !== undefined && !laneWidthOk(lay.laneTitleWidth)) err('plan.layout.laneTitleWidth', `må være et tall fra ${MIN_WIDTH_EM} til ${MAX_WIDTH_EM}`);
       for (const k of ['title', 'headerRight'] as const) if (lay[k] !== undefined && typeof lay[k] !== 'string') err(`plan.layout.${k}`, 'må være tekst');
@@ -333,7 +334,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         if (b.callout !== undefined) needEnum(b, 'callout', bp, ['auto', 'on', 'off']);
         if (b.calloutSide !== undefined) needEnum(b, 'calloutSide', bp, ['auto', 'left', 'right']);
         optPos(b, 'height', bp);
-        if (b.textScale !== undefined && !textScaleOk(b.textScale)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 2');
+        if (b.textScale !== undefined && !textScaleOk(b.textScale, 3)) err(`${bp}.textScale`, 'må være et tall fra 0,5 til 3');
         if (b.calloutWidthCm !== undefined && !(typeof b.calloutWidthCm === 'number' && b.calloutWidthCm >= 1 && b.calloutWidthCm <= 15)) err(`${bp}.calloutWidthCm`, 'må være et tall fra 1 til 15');
         if (b.critical !== undefined && typeof b.critical !== 'boolean' && !(Array.isArray(b.critical) && b.critical.length && b.critical.every((n, i, a) => (n === 1 || n === 2 || n === 3) && a.indexOf(n) === i)))
           err(`${bp}.critical`, 'må være true, false eller en liste med linjenumre fra 1 til 3');

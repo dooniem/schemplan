@@ -26,6 +26,18 @@ describe('validatePlan', () => {
     expect(validatePlan(JSON.stringify(d)).errors.some((e) => e.includes('textColors'))).toBe(true);
   });
 
+  it('godtar inntil tre ganger tekst i bokser og lane-navn, men bare to ganger ellers', () => {
+    const d = clone();
+    d.lanes[0].boxes[0].textScale = 3;
+    d.plan.layout.laneTitleScale = 3;
+    expect(validatePlan(JSON.stringify(d)).errors).toEqual([]);
+    d.lanes[0].boxes[0].textScale = 3.5;
+    d.plan.layout.legendScale = 2.5;
+    const errs = validatePlan(JSON.stringify(d)).errors;
+    expect(errs.some((e) => e.includes('textScale'))).toBe(true);
+    expect(errs.some((e) => e.includes('legendScale'))).toBe(true);
+  });
+
   it('tåler BOM først i filen', () => {
     expect(validatePlan('﻿' + example).errors).toEqual([]);
   });

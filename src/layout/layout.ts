@@ -586,10 +586,15 @@ export function rotatedLines(raw: string[], innerW: number, size: number, measur
 }
 
 export const DEFAULT_MIN_TEXT_PT = 6;
-/** Tekst i en boks eller lane-titlene er aldri mer enn dobbelt så stor, eller under halvparten av planens tekst. */
+/** Topptekst, forklaring, logo og merker er aldri mer enn dobbelt så store, eller under halvparten av standarden. */
 export const MAX_TEXT_SCALE = 2;
+/**
+ * Tekst i en boks eller lane-titlene kan bli tre ganger så stor som planens tekst. På en tett plan
+ * krymper planens tekst mye, og da trengs mer rom for å løfte enkeltbokser og lane-navn.
+ */
+export const MAX_BOX_TEXT_SCALE = 3;
 export const MIN_TEXT_SCALE = 0.5;
-const clampScale = (s: number | undefined) => Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, s ?? 1));
+const clampScale = (s: number | undefined, max = MAX_TEXT_SCALE) => Math.min(max, Math.max(MIN_TEXT_SCALE, s ?? 1));
 /** Lane-navnene er litt større enn teksten i boksene når ingen annen størrelse er valgt. */
 export const LANE_TITLE_DEFAULT = 1.15;
 /** Standardstørrelsen på lane-navnene i forhold til planens tekst, rundet til halve punkter. */
@@ -598,7 +603,7 @@ export function defaultLaneTitleScale(planPt: number): number {
 }
 /** Lane-navnenes størrelse i forhold til planens tekst: valgt størrelse, ellers standard. */
 export function laneTitleScaleOf(layout: { laneTitleScale?: number }, planPt: number): number {
-  return clampScale(layout.laneTitleScale ?? defaultLaneTitleScale(planPt));
+  return clampScale(layout.laneTitleScale ?? defaultLaneTitleScale(planPt), MAX_BOX_TEXT_SCALE);
 }
 /** Lenger ned krymper vi aldri, heller ikke for å få plass. */
 export const ABS_MIN_TEXT_PT = 3;
@@ -1433,7 +1438,7 @@ function buildPieces(
 
     // Tekststørrelse valgt for boksen, i forhold til planens tekst. Høyder og plass i lanen
     // regnes fortsatt i planens tekstlinjer (lh), så de ikke endres når teksten i boksen gjør det.
-    const bs = base * clampScale(box.textScale);
+    const bs = base * clampScale(box.textScale, MAX_BOX_TEXT_SCALE);
     const blh = bs * LINE_HEIGHT;
     const trade = boxTrade(box) ?? r.trade;
     const c = colors.get(trade) ?? noneColor;
@@ -1745,7 +1750,7 @@ function milestonePiece(
   const color = MILESTONE_COLORS[style.color] ?? MILESTONE_COLORS.blue;
   // Symbolet følger planens tekst. Teksten kan ha egen størrelse (box.textScale), som bokser.
   const size = base * 1.6;
-  base *= clampScale(box.textScale);
+  base *= clampScale(box.textScale, MAX_BOX_TEXT_SCALE);
   lh = base * LINE_HEIGHT;
   const flag = style.symbol === 'flag';
   // Excel: datoen i vanlig skrift, teksten fet for rutermilepæler
