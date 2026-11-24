@@ -342,6 +342,8 @@ export interface Layout {
 const MARGIN = 6;
 /** Toppen er litt smalere enn sidene og bunnen, så logo og overskrift står nærmere arkets kant. Skrivere klarer 5 mm. */
 const TOP_MARGIN = 5;
+/** Bunnen er smalest: forklaringen og datoen tåler å stå nær kanten, og de fleste skrivere klarer 4 mm. */
+const BOTTOM_MARGIN = 4;
 export const PAD_X = 0.7;
 export const PAD_Y = 0.25; // Excel har lite luft over og under teksten
 const GAP = 0; // Excel stabler boksene kant i kant
@@ -943,7 +945,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     return d >= axis.start && d < axis.end;
   })();
   const statusH = statusIn ? base * 0.85 * 1.35 + 0.6 : 0;
-  const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + MARGIN;
+  const fixedBottom = (bottomCal ? calH : 0) + ovH + legendH + BOTTOM_MARGIN;
   const natTop = TOP_MARGIN + headerH + statusH + calH;
   const natBottom = H - fixedBottom;
   // Egendefinert: kantene dratt i appen. Kalenderen står over det høyeste punktet på toppkanten,
