@@ -32,9 +32,9 @@ describe('lanefarge som bakgrunn', () => {
     for (const c of ['#92D050', '#0E6C7E', '#1B6E50', '#000075', '#C00000', '#7030A0', '#FFC000']) {
       for (const ny of [true, false]) {
         const t = laneTint(c, ny)!;
-        expect(toOklch(t.dark).c).toBeGreaterThan(0.035);
-        expect(toOklch(t.dark).c).toBeLessThan(0.045);
-        expect(toOklch(t.light).c).toBeGreaterThan(0.013);
+        expect(toOklch(t.dark).c).toBeGreaterThan(0.026);
+        expect(toOklch(t.dark).c).toBeLessThan(0.034);
+        expect(toOklch(t.light).c).toBeGreaterThan(0.009);
       }
     }
   });

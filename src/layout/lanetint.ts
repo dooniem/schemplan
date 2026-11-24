@@ -4,7 +4,7 @@
 import { fromOklch, inGamut, toOklch } from './oklch';
 
 /** Hvor mye mørkere enn de grå feltene en nyanse kan bli for å få plass til metningen. */
-const MAX_DARKEN = 0.04;
+const MAX_DARKEN = 0.025;
 
 /**
  * Nyanse med gitt lyshet og metning i OKLCH, i lanefargens fargetone.
@@ -43,8 +43,8 @@ export function laneTint(fill: string | null | undefined, ny: boolean): LaneTint
   // Lyst felt i ny stil er hvitt, så her må det litt under for at fargen skal synes.
   const [light, dark, darkAlt] = ny ? [0.96, 0.89, 0.935] : [0.93, 0.83, 0.885];
   return {
-    light: shade(fill, light, 0.016),
-    dark: shade(fill, dark, 0.04),
-    darkAlt: shade(fill, darkAlt, 0.03),
+    light: shade(fill, light, 0.012),
+    dark: shade(fill, dark, 0.03),
+    darkAlt: shade(fill, darkAlt, 0.022),
   };
 }
