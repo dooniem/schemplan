@@ -1709,13 +1709,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Tre valg trenger hele bredden, så navnet står over knappene
       sf.lastElementChild!.classList.replace('prop-inline', 'prop');
       // Samme valg og navn som for fritekst, så teksten kan flyttes bort fra bokser som ligger foran
+      // Rotert tekst flyttes langs høyden i stedet; det synes når boksen er høyere enn teksten
       const alignRow = () =>
-        segmented<TextAlign>('Justering', alignOf(b), [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
-          change((x) => {
-            if (v === 'center') delete x.textAlign;
-            else x.textAlign = v;
-          }),
-        );
+        b.rotation === 0
+          ? segmented<TextAlign>('Justering', alignOf(b), [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
+              change((x) => {
+                if (v === 'center') delete x.textAlign;
+                else x.textAlign = v;
+              }),
+            )
+          : segmented<'top' | 'middle' | 'bottom'>('Justering', b.textAt ?? 'middle', [['top', 'Oppe'], ['middle', 'Midt'], ['bottom', 'Nede']], (v) =>
+              change((x) => {
+                if (v === 'middle') delete x.textAt;
+                else x.textAt = v;
+              }),
+            );
       if (b.header || b.spanTo !== undefined)
         sf.append(
           switchRow('Fet skrift', !!b.bold, (v) =>
@@ -1725,7 +1733,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-      if (b.header && b.rotation === 0) sf.append(alignRow());
+      if (b.spanTo === undefined) sf.append(alignRow());
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
       if (b.spanTo !== undefined && plan) {
         const wrap = el('label', { class: 'prop prop-inline' });

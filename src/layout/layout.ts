@@ -17,7 +17,7 @@ import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
 import { boxHatch } from './hatch';
 import { drawOrder } from './draworder';
-import { alignedText, alignOf } from './textalign';
+import { alignedText, alignOf, textAtOf } from './textalign';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, type LaneTint } from './lanetint';
@@ -134,6 +134,8 @@ export interface BoxItem {
   header?: boolean;
   /** Multi Lane-boks: går ned til bunnen av en lane lenger ned, uten å gjøre noen lane høyere. */
   span?: boolean;
+  /** Rotert tekst i en høyere boks: andelen av den ekstra høyden over teksten (0 oppe, 1 nede). Uten står den i midten. */
+  textAt?: number;
   /** «Tegn fremst»: ligger over alle andre bokser og treffes først ved klikk. */
   front?: boolean;
   /** Gjennomsiktig fyll (0–1) på overskrifts- og Multi Lane-bokser. Uten er fyllet helt. */
@@ -1368,7 +1370,7 @@ function setY(item: Item, y: number) {
 /** Gjør boksen høyere, med teksten midt i. Callouten midtstilles mot boksen når den får plass
     innenfor boksens høyde, ellers flukter den med toppen, så den stikker minst mulig ut under. */
 function grow(it: BoxItem, target: number) {
-  const d = it.header ? 0 : (target - it.h) / 2;
+  const d = it.textAt !== undefined ? (target - it.h) * it.textAt : it.header ? 0 : (target - it.h) / 2;
   const scale = target / it.h;
   it.h = target;
   if (it.text) it.text.y += d;
@@ -1491,6 +1493,8 @@ function buildPieces(
       // Datoraden står ved siden av teksten, så teksten får litt mindre plass i bredden
       lines = rotatedLines(nameLines, tw - 2 * PAD_X - (dt ? ds * LINE_HEIGHT : 0), bs, measure, box.height ? box.height * lh - 2 * PAD_Y - 1 : 0);
       item.h = Math.max(Math.max(widest(lines, bs, measure), dt ? measure(dt, ds) : 0) + 2 * PAD_Y + 1, marksH());
+      const at = textAtOf(box);
+      if (at !== undefined) item.textAt = at;
       item.text = { x: bx0 + tw / 2, y: item.h / 2, lines: dt ? [...lines, dt] : lines, size: bs, color: textColor, anchor: 'middle', rotate: box.rotation, ...sub(lines.length, textColor, bg) };
       pieces.push({ item, fx0: bx0, fx1: bx1, h: item.h, sortX: bx0, sortW: w });
       continue;

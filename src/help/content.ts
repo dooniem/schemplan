@@ -225,7 +225,7 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'fremst', group: 'Bokser', title: 'Hvilken boks ligger foran',
     text: `Vanlige bokser ligger alltid foran overskrifts- og Multi Lane-bokser. Mellom overskrifts- og Multi Lane-boksene ligger den minste foran, så ingen boks gjemmes bak en større. ${ui('Tegn fremst')} i høyreklikkmenyen legger en boks over alt annet.`,
-    when: `Bruk ${ui('Tegn fremst')} når en boks skal ligge oppå andre bokser, for eksempel en loddrett boks over en overskriftsboks. Plassen i lanen endres ikke, bare hva som ligger øverst. Dekker boksen teksten i en overskrifts- eller Multi Lane-boks, kan teksten der justeres til venstre eller høyre (${ui('Justering')} under Form i panelet).`,
+    when: `Bruk ${ui('Tegn fremst')} når en boks skal ligge oppå andre bokser, for eksempel en loddrett boks over en overskriftsboks. Plassen i lanen endres ikke, bare hva som ligger øverst. Dekker boksen teksten i en annen boks, kan teksten der justeres til venstre eller høyre (${ui('Justering')} under Form i panelet).`,
     words: 'foran bak bakerst fremst over under rekkefølge skjult gjemt dekker z justering venstre høyre midtstilt', see: ['overskrift', 'boksmeny'],
   },
   {
