@@ -27,6 +27,7 @@ import { createImageEdit } from './imageedit';
 import { createTradeUi } from './tradeui';
 import { createCriticalUi } from './criticalui';
 import { transparencyRow, type TransparencyKit } from './transparencyui';
+import { hatchSection, type HatchKit } from './hatchui';
 import { canBeTransparent } from './layout/transparency';
 import { allFront, FRONT_HINT, frontMenuItem, setFront } from './frontui';
 import { inLine, styleOf } from './criticallines';
@@ -1238,6 +1239,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     };
   };
   const markKit = { section, switchRow, el };
+  const hatchKit: HatchKit = { el, section, segmented, swatches, colorRow, trial };
   const transparencyKit: TransparencyKit = {
     el,
     snapshot,
@@ -1325,6 +1327,8 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
           else x.textColor = v === 'black' ? '#000000' : '#FFFFFF';
         })),
     );
+
+    if (plain.length) hatchSection(hatchKit, plain, `group:${group.join(',')}`, same((x) => currentFill(plan, x)), all);
 
     const so = section('Callout', calloutFold(plain));
     so.append(
@@ -1668,6 +1672,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       );
       // Bokser som ligger bak de andre kan gjøres gjennomsiktige, så linjene bak synes
       if (canBeTransparent(b)) sc.lastElementChild!.before(transparencyRow(transparencyKit, b));
+      hatchSection(hatchKit, [b], `box:${b.id}`, nowFill, change);
 
       const so = section('Callout', calloutFold([b]));
       so.append(

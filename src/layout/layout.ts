@@ -15,6 +15,7 @@ import { LINE_HEIGHT, PT_TO_MM, widest, wrapHyphenated, wrapLines, type Measure 
 import { autoTextColor, derivedBorder } from './color';
 import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
+import { boxHatch } from './hatch';
 import { drawOrder } from './draworder';
 import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
@@ -109,6 +110,9 @@ export interface TextBlock {
   runs?: (TextRun[] | undefined)[];
 }
 
+/** Hvor langt spissen på en boks som fortsetter utenfor kalenderen går inn i boksen, i mm. */
+export const ARROW_MM = 1.6;
+
 export interface BoxItem {
   kind: 'box';
   id: string;
@@ -139,6 +143,8 @@ export interface BoxItem {
   lineBoxH?: number;
   /** Fargen på den lyse innerkanten, når faget har den. */
   innerEdge?: string;
+  /** Skravering: strekene som én sti (M og L), fargen og strekbredden. */
+  hatch?: { d: string; color: string; width: number };
 }
 
 export interface MilestoneItem {
@@ -1273,6 +1279,13 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   const innerEdgeAuto = ny ? [...autoInnerEdgeTrades(boxItems)] : [];
   const innerEdgeTrades = ny ? [...markInnerEdges(boxItems, file.plan.layout.innerEdge)] : [];
   const images = (file.plan.layout.images ?? []).map((im) => placeImage(im, W, H, { xOfDate, milestoneAt })).filter((p): p is PlacedImage => !!p);
+  // Skravering til slutt, når boksene og teksten står der de skal
+  const boxById = new Map(file.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as const)));
+  for (const it of boxItems) {
+    const b = boxById.get(it.id);
+    const h = b && boxHatch(b, it, ny, measure);
+    if (h) it.hatch = h;
+  }
   return {
     width: W,
     height: H,
