@@ -1,4 +1,4 @@
-// Støtte når planen diskuteres: datoer og detaljer når musen holdes over en boks, og en periode
+// Støtte når planen diskuteres: datoer, detaljer og kommentar når musen holdes over en boks, og en periode
 // (år, måned eller uke) som fremheves ved klikk i kalenderen. Ingenting av dette kommer med i PDF-en.
 import type { PlanFile } from './format/types';
 import type { Item, Layout } from './layout/layout';
@@ -8,6 +8,8 @@ import { planRows, type DataRow } from './data/rows';
 import { boxMarks, marksLabel, marksMatch, type MarkKind } from './layout/marks';
 import { workDayCount } from './layout/workdays';
 import { icon, type IconName } from './ctxmenu';
+import { commentTip, drawCommentMarks } from './commenttip';
+import type { Box } from './format/types';
 
 const NS = 'http://www.w3.org/2000/svg';
 const ACCENT = '#1F5FBF';
@@ -77,6 +79,8 @@ export function createFocus(
   let svg: SVGSVGElement | null = null;
   let L: Layout | null = null;
   let rows = new Map<string, DataRow>();
+  /** Boksene i planen, til kommentarene. */
+  let boxOf = new Map<string, Box>();
   let period: Period | null = null;
   let trades = new Set<string>();
   let onlyTrades = false;
@@ -102,9 +106,11 @@ export function createFocus(
 
   // Kort og stille: bare datoene, og først når musen har holdt seg på boksen en liten stund
   const DELAY_MS = 500;
-  const tipFor = (id: string) => {
+  const tipFor = (id: string): Node | null => {
     const r = rows.get(id);
-    if (!r || !r.finish) return null;
+    const b = boxOf.get(id);
+    const note = b ? commentTip(b) : null;
+    if (!r || !r.finish) return note;
     const plan = getPlan();
     const dl = document.createElement('dl');
     const add = (k: string, v: string | Node[]) => {
@@ -136,7 +142,11 @@ export function createFocus(
     if (r.progress) add('Ferdig', r.progress);
     if (r.baseline) add('Baseline', r.baseline);
     if (r.fromProject) add('Oppdatering', r.fromProject);
-    return dl;
+    if (!note) return dl;
+    // Kommentaren under datoene, med tekst og bilder
+    const all = document.createDocumentFragment();
+    all.append(dl, note);
+    return all;
   };
 
   let timer = 0;
@@ -179,6 +189,7 @@ export function createFocus(
       pending = '';
       if (!content) return;
       tip.replaceChildren(content);
+      tip.classList.toggle('tip-wide', !!tip.querySelector('.tip-comment'));
       tip.hidden = false;
       tipId = id;
       place();
@@ -298,7 +309,7 @@ export function createFocus(
   function paintTrades() {
     if (!svg) return;
     const on = anyPick();
-    svg.querySelectorAll<SVGGElement>('g.items > g[data-id], g.marks > g[data-for]').forEach((g) => {
+    svg.querySelectorAll<SVGGElement>('g.items > g[data-id], g.marks > g[data-for], g.comment-marks > g[data-for]').forEach((g) => {
       g.classList.toggle('focus-out', on && !inPick(g.getAttribute('data-id') ?? g.getAttribute('data-for')!));
     });
     svg.querySelectorAll<SVGGElement>('g[data-trade]').forEach((g) => {
@@ -402,6 +413,8 @@ export function createFocus(
       rows = new Map(plan ? planRows(plan).map((r) => [r.id, r]) : []);
       tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])) : []);
       marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b, !!plan.plan.layout.customMark)] as [string, MarkKind[]])) : []);
+      boxOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as [string, Box])) : []);
+      drawCommentMarks(s, layout, boxOf);
       hideTip();
       paint();
     },

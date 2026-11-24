@@ -29,6 +29,7 @@ import { createCriticalUi } from './criticalui';
 import { transparencyRow, type TransparencyKit } from './transparencyui';
 import { tintStrengthRow, type TintStrengthKit } from './lanetintui';
 import { hatchSection, type HatchKit } from './hatchui';
+import { commentSection, type CommentKit } from './commentui';
 import { canBeTransparent } from './layout/transparency';
 import { alignOf } from './layout/textalign';
 import { allFront, FRONT_HINT, frontMenuItem, setFront } from './frontui';
@@ -1245,6 +1246,18 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
   };
   const markKit = { section, switchRow, el };
   const hatchKit: HatchKit = { el, section, segmented, swatches, colorRow, trial };
+  const commentKit: CommentKit = {
+    el,
+    section,
+    textField: (id, label, value, rows, onInput) => textField(id, label, value, rows, onInput),
+    btn,
+    typing: (fn) => change(fn, { typing: true, rebuild: false }),
+    apply: (id, fn) =>
+      commit((pl) => {
+        const x = findBox(pl, id);
+        if (x) fn(x);
+      }),
+  };
   const transparencyKit: TransparencyKit = {
     el,
     snapshot,
@@ -1610,6 +1623,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     );
     if (!ms) st.append(...datesRows(markKit, plan, [b], (v) => commit((pl) => setBoxDates(pl, [b.id], v))));
     if (layoutNow) st.append(...textSizeRow(b, layoutNow.textSizePt));
+    commentSection(commentKit, b);
     if (ms) {
       // Utseende fra appen går foran det som er valgt i Project
       const base = b.milestone ?? { symbol: 'diamond', color: 'blue', showDate: true, verticalLine: false };

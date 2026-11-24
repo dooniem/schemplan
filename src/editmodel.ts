@@ -16,13 +16,14 @@ export function snapshotOf<T>(v: T): T {
 import type { Box, Lane, PlanFile } from './format/types';
 import type { Item } from './layout/layout';
 import { homeLane } from './lanemerge';
+import { withoutCommentImages } from './comment';
 
 /**
- * Er planene like, sett bort fra bilder og logo? Omplasser og tekststørrelse endrer aldri bildene,
+ * Er planene like, sett bort fra bilder, kommentarbilder og logo? Omplasser og tekststørrelse endrer aldri bildene,
  * så de sammenlignes ikke. Ellers ville store bilder blitt gjort om til tekst to ganger per klikk.
  */
 export function samePlanApartFromImages(a: PlanFile, b: PlanFile): boolean {
-  const key = (p: PlanFile) => JSON.stringify([p.lanes, { ...p.plan.layout, images: undefined, logo: undefined }]);
+  const key = (p: PlanFile) => JSON.stringify([p.lanes, { ...p.plan.layout, images: undefined, logo: undefined }], withoutCommentImages);
   return key(a) === key(b);
 }
 

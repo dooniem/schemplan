@@ -6,6 +6,8 @@ export interface ReadImage {
   data: string;
   /** Opprinnelig størrelse i piksler, før eventuell krymping. */
   px: [number, number];
+  /** Størrelsen som er lagret, etter eventuell krymping. */
+  size: [number, number];
 }
 
 /** Største PNG før et bilde uten gjennomsiktighet lagres som JPEG i stedet (bytes). */
@@ -16,7 +18,8 @@ const isImage = (f: File | Blob) => f.type.startsWith('image/');
 /** Bildefilene blant filene, i rekkefølge. */
 export const imageFiles = (list: FileList | File[] | null | undefined): File[] => [...(list ?? [])].filter(isImage);
 
-export async function readImage(file: Blob): Promise<ReadImage> {
+/** maxPx og pngLimit kan settes lavere der bildet bare skal vises lite, som i kommentarer. */
+export async function readImage(file: Blob, { maxPx = MAX_PX, pngLimit = PNG_LIMIT } = {}): Promise<ReadImage> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
@@ -26,7 +29,7 @@ export async function readImage(file: Blob): Promise<ReadImage> {
     const w0 = img.naturalWidth;
     const h0 = img.naturalHeight;
     if (!w0 || !h0) throw new Error('Bildet har ingen størrelse');
-    const k = Math.min(1, MAX_PX / Math.max(w0, h0));
+    const k = Math.min(1, maxPx / Math.max(w0, h0));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(w0 * k));
     canvas.height = Math.max(1, Math.round(h0 * k));
@@ -36,8 +39,8 @@ export async function readImage(file: Blob): Promise<ReadImage> {
     const jpegIn = file.type === 'image/jpeg';
     let data = '';
     if (!jpegIn || hasAlpha(ctx, canvas.width, canvas.height)) data = canvas.toDataURL('image/png');
-    if (!data || (data.length * 0.75 > PNG_LIMIT && !hasAlpha(ctx, canvas.width, canvas.height))) data = canvas.toDataURL('image/jpeg', 0.9);
-    return { data, px: [w0, h0] };
+    if (!data || (data.length * 0.75 > pngLimit && !hasAlpha(ctx, canvas.width, canvas.height))) data = canvas.toDataURL('image/jpeg', 0.9);
+    return { data, px: [w0, h0], size: [canvas.width, canvas.height] };
   } finally {
     URL.revokeObjectURL(url);
   }

@@ -414,6 +414,16 @@ details summary { cursor: pointer; font-size: 13px; }
 .swatch[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
 .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .swatch { transition: transform 120ms ease-out; } }
+/* Kommentar: bildene som små ruter med knapper under, og delen fremheves når bilder dras inn */
+.comment-imgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.comment-img { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.comment-img img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; background: var(--border); }
+.comment-img-acts { display: flex; justify-content: center; gap: 2px; }
+.panel .comment-img-acts .icon { width: 24px; height: 24px; margin: 0; }
+.linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.linkish .pico { vertical-align: -2px; margin-right: 4px; }
+.comment-status:empty { display: none; }
+.pg-body.drop-on { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 8px; }
 .hatch-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
 .hatch-tile { height: 24px; padding: 0; border: 1px solid rgb(0 0 0 / 0.2); border-radius: 5px; overflow: hidden; background: none; cursor: pointer; }
 .hatch-tile .hatch-ico { display: block; width: 100%; height: 100%; }
@@ -551,6 +561,15 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .tip dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tip dd.warn { color: var(--error); }
 .tip-dur { display: flex; align-items: center; gap: 4px; }
+.tip.tip-wide { max-width: 504px; }
+/* Kommentaren under datoene: teksten med linjeskift, så bildene */
+.tip-comment { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.tip-comment:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.tip-comment-text { margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tip-imgs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tip-comment-text + .tip-imgs { margin-top: 6px; }
+.tip-comment > .tip-imgs:first-child { margin-top: 0; }
+.tip-imgs img { display: block; border-radius: 4px; background: var(--border); }
 .tip-ico { flex: none; width: 12px; height: 12px; fill: none; stroke: var(--muted); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .work { position: relative; }
 .focus-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 4px 6px 4px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px; }
@@ -571,7 +590,8 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 /* Fag i fokus: de andre tones ned eller skjules. Bare på skjermen. */
 .sheet-host g.focus-out { opacity: 0.15; }
 .sheet-host.focus-only g.items > g.focus-out,
-.sheet-host.focus-only g.marks > g.focus-out { display: none; }
+.sheet-host.focus-only g.marks > g.focus-out,
+.sheet-host.focus-only g.comment-marks > g.focus-out { display: none; }
 .sheet-host g[data-trade],
 .sheet-host g[data-mark] { cursor: pointer; }
 /* Valgt merke: blå ring rundt ikonet i forklaringen */
