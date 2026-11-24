@@ -1,4 +1,4 @@
-// Støtte når planen diskuteres: datoer og detaljer når musen holdes over en boks, og en periode
+// Støtte når planen diskuteres: datoer, detaljer og kommentar når musen holdes over en boks, og en periode
 // (år, måned eller uke) som fremheves ved klikk i kalenderen. Ingenting av dette kommer med i PDF-en.
 import type { PlanFile } from './format/types';
 import type { Item, Layout } from './layout/layout';
@@ -8,6 +8,9 @@ import { planRows, type DataRow } from './data/rows';
 import { boxMarks, marksLabel, marksMatch, type MarkKind } from './layout/marks';
 import { workDayCount } from './layout/workdays';
 import { icon, type IconName } from './ctxmenu';
+import { commentPreview, commentTip, createCommentCard, drawCommentMarks } from './commenttip';
+import { commentOf } from './comment';
+import type { Box } from './format/types';
 
 const NS = 'http://www.w3.org/2000/svg';
 const ACCENT = '#1F5FBF';
@@ -77,6 +80,8 @@ export function createFocus(
   let svg: SVGSVGElement | null = null;
   let L: Layout | null = null;
   let rows = new Map<string, DataRow>();
+  /** Boksene i planen, til kommentarene. */
+  let boxOf = new Map<string, Box>();
   let period: Period | null = null;
   let trades = new Set<string>();
   let onlyTrades = false;
@@ -102,9 +107,12 @@ export function createFocus(
 
   // Kort og stille: bare datoene, og først når musen har holdt seg på boksen en liten stund
   const DELAY_MS = 500;
-  const tipFor = (id: string) => {
+  const tipFor = (id: string): Node | null => {
     const r = rows.get(id);
-    if (!r || !r.finish) return null;
+    const b = boxOf.get(id);
+    // Klikk på boksen åpner hele kommentaren, bare når planen vises (i redigering står den i panelet)
+    const note = b ? commentTip(b, !isEditing()) : null;
+    if (!r || !r.finish) return note;
     const plan = getPlan();
     const dl = document.createElement('dl');
     const add = (k: string, v: string | Node[]) => {
@@ -136,7 +144,11 @@ export function createFocus(
     if (r.progress) add('Ferdig', r.progress);
     if (r.baseline) add('Baseline', r.baseline);
     if (r.fromProject) add('Oppdatering', r.fromProject);
-    return dl;
+    if (!note) return dl;
+    // Kommentaren under datoene, med tekst og bilder
+    const all = document.createDocumentFragment();
+    all.append(dl, note);
+    return all;
   };
 
   let timer = 0;
@@ -161,10 +173,12 @@ export function createFocus(
     tip.style.left = `${Math.max(8, x)}px`;
     tip.style.top = `${Math.max(8, y)}px`;
   };
+  // Hele kommentaren i et kort når en boks med kommentar klikkes
+  const card = createCommentCard(commentPreview());
   host.addEventListener('pointermove', (e) => {
     // Knapp nede (dra eller panorer) eller berøring: ingen detaljer. Leses fra hendelsen selv, så et
     // tapt «slipp» (f.eks. etter høyreklikkmenyen) ikke stopper detaljene for godt.
-    if (e.buttons !== 0 || e.pointerType === 'touch') return hideTip();
+    if (e.buttons !== 0 || e.pointerType === 'touch' || card.isOpen) return hideTip();
     const g = (e.target as Element | null)?.closest?.('g[data-id]');
     const id = g?.getAttribute('data-id') ?? '';
     last = { x: e.clientX, y: e.clientY };
@@ -179,6 +193,7 @@ export function createFocus(
       pending = '';
       if (!content) return;
       tip.replaceChildren(content);
+      tip.classList.toggle('tip-wide', !!tip.querySelector('.tip-comment'));
       tip.hidden = false;
       tipId = id;
       place();
@@ -220,6 +235,14 @@ export function createFocus(
     // Bare et klikk, ikke slutten på en panorering
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4 || !L) return;
     // Fag i forklaringen (i redigering velger klikket faget for å endre farge i stedet)
+    // Boks med kommentar: åpne hele kommentaren
+    const boxId = (e.target as Element | null)?.closest?.('g[data-id]')?.getAttribute('data-id');
+    const withNote = boxId && !isEditing() ? boxOf.get(boxId) : undefined;
+    if (withNote && commentOf(withNote)) {
+      hideTip();
+      card.open(withNote, { x: e.clientX, y: e.clientY });
+      return;
+    }
     const tradeG = (e.target as Element | null)?.closest?.('g[data-trade]');
     const markG = (e.target as Element | null)?.closest?.('g[data-mark]');
     if ((tradeG || markG) && !isEditing()) {
@@ -298,7 +321,7 @@ export function createFocus(
   function paintTrades() {
     if (!svg) return;
     const on = anyPick();
-    svg.querySelectorAll<SVGGElement>('g.items > g[data-id], g.marks > g[data-for]').forEach((g) => {
+    svg.querySelectorAll<SVGGElement>('g.items > g[data-id], g.marks > g[data-for], g.comment-marks > g[data-for]').forEach((g) => {
       g.classList.toggle('focus-out', on && !inPick(g.getAttribute('data-id') ?? g.getAttribute('data-for')!));
     });
     svg.querySelectorAll<SVGGElement>('g[data-trade]').forEach((g) => {
@@ -396,16 +419,20 @@ export function createFocus(
       return onlyTrades && anyPick();
     },
     afterDraw(s, layout) {
+      card.close();
       svg = s;
       L = layout;
       const plan = getPlan();
       rows = new Map(plan ? planRows(plan).map((r) => [r.id, r]) : []);
       tradeOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b.trade ?? b.resolved?.trade ?? ''] as [string, string])) : []);
       marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b, !!plan.plan.layout.customMark)] as [string, MarkKind[]])) : []);
+      boxOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as [string, Box])) : []);
+      drawCommentMarks(s, layout, boxOf);
       hideTip();
       paint();
     },
     reset() {
+      card.close();
       period = null;
       trades.clear();
       marks.clear();

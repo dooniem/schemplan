@@ -414,6 +414,16 @@ details summary { cursor: pointer; font-size: 13px; }
 .swatch[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
 .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .swatch { transition: transform 120ms ease-out; } }
+/* Kommentar: bildene som små ruter med knapper under, og delen fremheves når bilder dras inn */
+.comment-imgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.comment-img { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.comment-img img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; background: var(--border); }
+.comment-img-acts { display: flex; justify-content: center; gap: 2px; }
+.panel .comment-img-acts .icon { width: 24px; height: 24px; margin: 0; }
+.linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.linkish .pico { vertical-align: -2px; margin-right: 4px; }
+.comment-status:empty { display: none; }
+.pg-body.drop-on { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 8px; }
 .hatch-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
 .hatch-tile { height: 24px; padding: 0; border: 1px solid rgb(0 0 0 / 0.2); border-radius: 5px; overflow: hidden; background: none; cursor: pointer; }
 .hatch-tile .hatch-ico { display: block; width: 100%; height: 100%; }
@@ -551,6 +561,38 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .tip dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tip dd.warn { color: var(--error); }
 .tip-dur { display: flex; align-items: center; gap: 4px; }
+.tip.tip-wide { max-width: 260px; }
+/* Kommentaren under datoene: kort, så detaljene aldri dekker mye av planen */
+.tip-comment { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.tip-comment:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.tip-comment-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tip-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.tip-comment > .tip-thumbs:first-child { margin-top: 0; }
+.tip-thumbs img { display: block; border-radius: 3px; background: var(--border); }
+.tip-more { padding: 0 2px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tip-open { margin: 6px 0 0; color: var(--muted); }
+/* Hele kommentaren: et lite kort ved boksen, med bildene små til musen holdes over dem */
+.comment-card { position: fixed; z-index: 21; display: flex; flex-direction: column; gap: 8px; width: max-content; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16); font-size: 13px; line-height: 1.45; }
+.comment-card[hidden] { display: none; }
+.comment-card-head { display: flex; align-items: flex-start; gap: 8px; }
+.comment-card-title { flex: 1; min-width: 0; margin: 2px 0 0; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.comment-card-close { display: grid; place-items: center; flex: none; width: 26px; height: 26px; margin: -4px -6px 0 0; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.comment-card-close:hover { background: var(--bg); color: var(--text); }
+.comment-card-text { max-width: 60ch; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-card-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.comment-thumb { display: block; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--border); cursor: zoom-in; overflow: hidden; }
+.comment-thumb img { display: block; }
+.comment-thumb:hover, .comment-thumb[aria-pressed='true'] { border-color: var(--accent); }
+.comment-thumb[aria-pressed='true'] { box-shadow: 0 0 0 1px var(--accent); }
+.comment-card :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.comment-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+a.comment-link:hover { text-decoration-thickness: 2px; }
+.comment-card-hint { margin: 0; font-size: 11.5px; color: var(--muted); }
+/* Bildet stort ved siden av kortet eller panelet */
+.comment-preview { position: fixed; z-index: 22; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2); pointer-events: none; }
+.comment-preview[hidden] { display: none; }
+.comment-preview img { display: block; border-radius: 5px; }
+.comment-img img { cursor: zoom-in; }
 .tip-ico { flex: none; width: 12px; height: 12px; fill: none; stroke: var(--muted); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .work { position: relative; }
 .focus-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 4px 6px 4px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px; }
@@ -571,7 +613,8 @@ dialog.ask p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 /* Fag i fokus: de andre tones ned eller skjules. Bare på skjermen. */
 .sheet-host g.focus-out { opacity: 0.15; }
 .sheet-host.focus-only g.items > g.focus-out,
-.sheet-host.focus-only g.marks > g.focus-out { display: none; }
+.sheet-host.focus-only g.marks > g.focus-out,
+.sheet-host.focus-only g.comment-marks > g.focus-out { display: none; }
 .sheet-host g[data-trade],
 .sheet-host g[data-mark] { cursor: pointer; }
 /* Valgt merke: blå ring rundt ikonet i forklaringen */

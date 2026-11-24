@@ -443,6 +443,24 @@ export interface Box {
   textScale?: number;
   /** Start- og sluttdato under teksten, valgt for boksen (valgfritt). Uten valg gjelder plan.layout.showDates. */
   showDates?: boolean;
+  /**
+   * Kommentar med tekst og bilder (valgfritt). Vises bare når musen holdes over boksen på skjermen,
+   * aldri på arket eller i PDF-en for deling. Lagres i arbeidsfilen.
+   */
+  comment?: BoxComment;
+}
+
+export interface BoxComment {
+  /** "\n" = linjeskift. */
+  text?: string;
+  images?: CommentImage[];
+}
+
+/** Bilde i en kommentar: PNG eller JPEG som data-URL, med størrelsen i piksler. */
+export interface CommentImage {
+  data: string;
+  w: number;
+  h: number;
 }
 
 /** Mønsteret i skraveringen: skrå, skrå andre vei, skrå kryss, vannrett, loddrett eller rutenett. */

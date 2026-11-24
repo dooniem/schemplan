@@ -61,7 +61,7 @@ export const TOUR: TourStep[] = [
   },
   {
     title: 'Se deg rundt',
-    text: `Zoom med ${k('Ctrl')} og hjulet, og dra for å flytte arket. Klikk et fag i forklaringen nederst for å fremheve boksene i faget, og hold musen over en boks for å se datoene.`,
+    text: `Zoom med ${k('Ctrl')} og hjulet, og dra for å flytte arket. Klikk et fag i forklaringen nederst for å fremheve boksene i faget, og hold musen over en boks for å se datoene og eventuell kommentar.`,
     img: 'fremhev',
     alt: 'Faget Betong er fremhevet. De andre boksene er nedtonet, og en linje øverst gir valg for faget.',
     topic: 'fremhev', more: 'Mer om å fremheve fag',
@@ -142,7 +142,7 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'sok', group: 'Se planen', title: 'Søk i planen',
-    text: `Skriv i søkefeltet øverst (${k('Ctrl', 'F')}), så lyser boksene med ordene opp. ${k('Enter')} går til neste treff og ${k('Shift', 'Enter')} til forrige.`,
+    text: `Skriv i søkefeltet øverst (${k('Ctrl', 'F')}), så lyser boksene med ordene opp. Søket ser også i kommentarene. ${k('Enter')} går til neste treff og ${k('Shift', 'Enter')} til forrige.`,
     when: `Raskeste vei til en bestemt aktivitet i en stor plan. I redigering kan du søke, trykke ${k('Enter')} til riktig boks og så endre den.`,
     img: 'sok', alt: 'Søk etter «lorem» med treffene uthevet på arket.',
     words: 'finne lete treff', see: ['data'],
@@ -239,6 +239,12 @@ export const TOPICS: HelpTopic[] = [
     text: `Start- og sluttdato slås på for alle under ${ui('Innstillinger')} › ${ui('Vis på arket')}, der du også velger format. Høyreklikk en boks og velg ${ui('Vis datoer')}, eller bruk bryteren i panelet, for å slå dem av eller på bare for den.`,
     when: `Datoer på alle bokser gjør arket fullt. Ofte er det nok å vise dem på milepæler og de viktigste boksene, og slå dem på per boks.`,
     words: 'dato start slutt format vis', see: ['boksmeny', 'innstillinger'],
+  },
+  {
+    id: 'kommentar', group: 'Bokser', title: 'Kommentarer med tekst og bilder',
+    text: `Velg en boks eller milepæl og åpne ${ui('Kommentar')} i panelet. Skriv en kommentar, og legg til bilder med ${ui('Legg til bilde')}, ved å lime inn i tekstfeltet eller dra dem inn. Kommentaren vises når musen holdes over boksen, og en liten rød trekant i hjørnet viser hvilke bokser som har kommentar. Klikk boksen for å se hele kommentaren; nettadresser kan da klikkes og åpnes i en ny fane, og bildene vises store når musen holdes over dem.`,
+    when: `Nyttig i møter: mer detaljer i planen uten at arket blir fullt. Kommentarer kommer aldri med på arket, i utskrift eller i PDF for deling, men lagres i arbeidsfilen og følger boksen ved oppdatering fra Project. Bildene gjøres mindre, så arbeidsfilen ikke blir unødig stor.`,
+    words: 'notat merknad bilde foto mouse-over musepeker detaljer møte lenke url nettadresse', see: ['rediger', 'lagre'],
   },
   {
     id: 'merking', group: 'Bokser', title: 'Høylytt arbeid og nattarbeid',

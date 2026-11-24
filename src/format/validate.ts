@@ -1,5 +1,6 @@
 import { FORMAT_NAME, FORMAT_VERSION, type PlanFile } from './types';
 import { migrate } from './migrate';
+import { COMMENT_MAX_IMAGES, validComment } from '../comment';
 import { readLookahead } from '../layout/lookahead';
 import { readCalendarRange } from '../layout/range';
 import { readStatusLine } from '../layout/status';
@@ -349,6 +350,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
         }
         if (b.spanTo !== undefined && typeof b.spanTo !== 'string') err(`${bp}.spanTo`, 'må være id-en til en lane');
         if (b.spanEnd !== undefined && !(typeof b.spanEnd === 'number' && Number.isFinite(b.spanEnd) && b.spanEnd >= 0)) err(`${bp}.spanEnd`, 'må være et tall, 0 eller mer');
+        if (b.comment !== undefined && !validComment(b.comment)) err(`${bp}.comment`, `må ha tekst og høyst ${COMMENT_MAX_IMAGES} bilder (PNG eller JPEG som data-URL med størrelse)`);
         if (b.fromLane !== undefined && typeof b.fromLane !== 'string') err(`${bp}.fromLane`, 'må være tekst');
         if (b.follows !== undefined) {
           const f = b.follows;
