@@ -291,7 +291,13 @@ export const TOPICS: HelpTopic[] = [
     id: 'farger', group: 'Fag og farger', title: 'Farger på bokser',
     text: `Panelet har de samme 22 fargene som i Project, med samme nummer, pluss ${ui('Egen farge')}. En egen farge vises på arket mens du prøver, og du velger ${ui('Behold')} eller ${ui('Avbryt')}.`,
     when: `Bruk egen farge sparsomt, for eksempel på én aktivitet som skal vekke oppmerksomhet. ${ui('Fagets farge')} og ${ui('Fargen fra Project')} setter fargen tilbake.`,
-    words: 'farge fargekode egen farge tekstfarge gjennomsiktighet prøve', see: ['fag', 'rediger', 'innerkant'],
+    words: 'farge fargekode egen farge tekstfarge gjennomsiktighet prøve', see: ['fag', 'rediger', 'innerkant', 'skravering'],
+  },
+  {
+    id: 'skravering', group: 'Fag og farger', title: 'Skravering',
+    text: `Under ${ui('Skravering')} i panelet velger du mønster (skrå, skrå andre vei, skrå kryss, vannrett, loddrett eller rutenett), hvor tett strekene står og fargen på dem. Det gjelder alle bokser, også overskrifts- og Multi Lane-bokser, og kommer med i PDF-en. Teksten og ikonene får et felt uten streker rundt seg.`,
+    when: `Skravering skiller noe som ikke er vanlig arbeid, for eksempel et område som er stengt. Røde skrå streker på hvit boks gir et tydelig «stopp». ${ui('Ingen')} tar skraveringen bort.`,
+    words: 'skravering skravur hatch striper streker mønster stopp stengt kryss rutenett', see: ['farger'],
   },
   {
     id: 'innerkant', group: 'Fag og farger', title: 'Lys innerkant',

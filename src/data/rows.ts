@@ -69,6 +69,7 @@ function changesOf(b: Box): string[] {
   if (b.bold) c.push('fet skrift');
   if (b.textMiddle) c.push('tekst i midten');
   if (b.transparency) c.push('gjennomsiktig');
+  if (b.hatch) c.push('skravert');
   if (b.front) c.push('tegnes fremst');
   if (b.milestoneStyle) c.push('milepælsutseende');
   if (b.textScale !== undefined) c.push('tekststørrelse');

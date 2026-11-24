@@ -406,6 +406,8 @@ export interface Box {
   transparency?: number;
   /** Tegnes over alle andre bokser, uansett type (valgfritt). Endrer ikke plassen i lanen. */
   front?: boolean;
+  /** Skravering over fyllet, valgt i appen (valgfritt). Teksten får et felt uten streker rundt seg. */
+  hatch?: BoxHatch;
   /** Milepælens utseende valgt i appen (valgfritt). Går foran `milestone` fra Project, felt for felt. */
   milestoneStyle?: Partial<Pick<MilestoneStyle, 'symbol' | 'color' | 'verticalLine' | 'showDate'>> & {
     /** Rotert milepælstekst. Uten valg gjelder `rotation`, eller −90 når `milestone.rotateText` er satt. */
@@ -430,6 +432,19 @@ export interface Box {
   textScale?: number;
   /** Start- og sluttdato under teksten, valgt for boksen (valgfritt). Uten valg gjelder plan.layout.showDates. */
   showDates?: boolean;
+}
+
+/** Mønsteret i skraveringen: skrå, skrå andre vei, skrå kryss, vannrett, loddrett eller rutenett. */
+export type HatchPattern = 'diagUp' | 'diagDown' | 'diagCross' | 'horizontal' | 'vertical' | 'grid';
+/** Hvor tett strekene står. */
+export type HatchDensity = 'tight' | 'normal' | 'loose';
+
+export interface BoxHatch {
+  pattern: HatchPattern;
+  /** Fargen på strekene. Uten er de røde. */
+  color?: HexColor;
+  /** Uten står strekene middels tett. */
+  density?: HatchDensity;
 }
 
 /** Formatet på datoraden i boksene. Eksemplene gjelder 03.11–14.11.2026. */

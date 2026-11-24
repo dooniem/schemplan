@@ -1,4 +1,4 @@
-import { CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type BoxItem, type Layout, type TextBlock } from '../layout/layout';
+import { ARROW_MM, CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type BoxItem, type Layout, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
@@ -9,8 +9,6 @@ import { INNER_EDGE, insetOutline } from '../layout/inneredge';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
 export const FONT_FAMILY = "Carlito, Calibri, 'Segoe UI', Arial, sans-serif";
-/** Hvor langt spissen på en boks som fortsetter utenfor kalenderen går inn i boksen, i mm. */
-const ARROW_MM = 1.6;
 const NS = 'http://www.w3.org/2000/svg';
 const GRID = '#C8C8C8';
 const MONTH_DOT = '#ADADAF';
@@ -279,6 +277,8 @@ export function renderPlan(L: Layout): SVGSVGElement {
         const pts = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, o);
         node('path', { class: 'inner-edge', d: `M${pts.map(([x, y]) => `${r(x)} ${r(y)}`).join(' L')} Z`, fill: 'none', stroke: it.innerEdge, 'stroke-width': INNER_EDGE, 'pointer-events': 'none' }, g);
       }
+      // Skravering over fyllet. Strekene er allerede klippet til boksen og holder seg unna teksten.
+      if (it.hatch) node('path', { class: 'hatch', d: it.hatch.d, fill: 'none', stroke: it.hatch.color, 'stroke-width': it.hatch.width, 'pointer-events': 'none' }, g);
       if (it.text) text(it.text, g);
       // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter
       if (it.marks) markEdges.push([it, xr]);
