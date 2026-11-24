@@ -404,7 +404,7 @@ export interface Box {
    * Kanten og teksten er hele.
    */
   transparency?: number;
-  /** Justering av teksten i overskrifts- og Multi Lane-bokser (valgfritt). Uten er teksten midtstilt. */
+  /** Justering av teksten i boksen (valgfritt). Uten er teksten midtstilt. Gjelder ikke rotert tekst eller callout. */
   textAlign?: TextAlign;
   /** Tegnes over alle andre bokser, uansett type (valgfritt). Endrer ikke plassen i lanen. */
   front?: boolean;

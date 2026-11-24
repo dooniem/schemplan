@@ -1725,7 +1725,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-      if (b.header && b.rotation === 0) sf.append(alignRow());
+      if (b.spanTo === undefined && b.rotation === 0) sf.append(alignRow());
       if (b.header) sf.append(el('p', { class: 'hint' }, 'Teksten står øverst. Dra andre bokser inn i den; de flyttes med når du flytter overskriftsboksen.'));
       if (b.spanTo !== undefined && plan) {
         const wrap = el('label', { class: 'prop prop-inline' });
