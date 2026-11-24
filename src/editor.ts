@@ -1709,13 +1709,21 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       // Tre valg trenger hele bredden, så navnet står over knappene
       sf.lastElementChild!.classList.replace('prop-inline', 'prop');
       // Samme valg og navn som for fritekst, så teksten kan flyttes bort fra bokser som ligger foran
+      // Rotert tekst flyttes langs høyden i stedet; det synes når boksen er høyere enn teksten
       const alignRow = () =>
-        segmented<TextAlign>('Justering', alignOf(b), [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
-          change((x) => {
-            if (v === 'center') delete x.textAlign;
-            else x.textAlign = v;
-          }),
-        );
+        b.rotation === 0
+          ? segmented<TextAlign>('Justering', alignOf(b), [['left', 'Venstre'], ['center', 'Midt'], ['right', 'Høyre']], (v) =>
+              change((x) => {
+                if (v === 'center') delete x.textAlign;
+                else x.textAlign = v;
+              }),
+            )
+          : segmented<'top' | 'middle' | 'bottom'>('Justering', b.textAt ?? 'middle', [['top', 'Oppe'], ['middle', 'Midt'], ['bottom', 'Nede']], (v) =>
+              change((x) => {
+                if (v === 'middle') delete x.textAt;
+                else x.textAt = v;
+              }),
+            );
       if (b.header || b.spanTo !== undefined)
         sf.append(
           switchRow('Fet skrift', !!b.bold, (v) =>
@@ -1747,7 +1755,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
             }),
           ),
         );
-        sf.append(alignRow());
+        if (b.rotation === 0) sf.append(alignRow());
         if (b.spanEnd !== undefined) sf.append(lockedRow('Egen høyde, slutter inne i lanen', 'Fyll lanen', 'La boksen gå helt ned til bunnen av lanen', () => setSpan(b.id, b.spanTo!)));
         sf.append(el('p', { class: 'hint' }, 'Boksen går ned i lanene under uten å gjøre noen lane høyere. Den ligger bak de andre boksene, så de kan stå inni. Dra i den blå streken nederst for å endre høyden; den snapper til bunnen av hver lane.'));
       }

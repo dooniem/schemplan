@@ -404,8 +404,10 @@ export interface Box {
    * Kanten og teksten er hele.
    */
   transparency?: number;
-  /** Justering av teksten i boksen (valgfritt). Uten er teksten midtstilt. Rotert tekst flyttes mot venstre eller høyre kant. Gjelder ikke callout. */
+  /** Justering av teksten i boksen (valgfritt). Uten er teksten midtstilt. Gjelder vannrett tekst, ikke callout. */
   textAlign?: TextAlign;
+  /** Rotert tekst i en boks som er høyere enn teksten: oppe eller nede (valgfritt). Uten står teksten i midten. */
+  textAt?: 'top' | 'bottom';
   /** Tegnes over alle andre bokser, uansett type (valgfritt). Endrer ikke plassen i lanen. */
   front?: boolean;
   /** Skravering over fyllet, valgt i appen (valgfritt). Teksten får et felt uten streker rundt seg. */

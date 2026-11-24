@@ -41,7 +41,7 @@ describe('tekstjustering', () => {
     expect(right.t.x).toBeGreaterThan(mid.t.x);
   });
 
-  it('gjelder vanlige bokser og Multi Lane, også rotert tekst', () => {
+  it('gjelder vanlige bokser og Multi Lane, men ikke rotert tekst', () => {
     const { p, box } = pick();
     box.textAlign = 'left';
     expect(textOf(p, box.id).t.anchor).toBe('start');
@@ -49,12 +49,22 @@ describe('tekstjustering', () => {
     expect(textOf(p, box.id).t.anchor).toBe('start');
     delete box.spanTo;
     box.rotation = 90;
-    const left = textOf(p, box.id);
-    box.textAlign = 'right';
-    const right = textOf(p, box.id);
-    expect(left.t.x).toBeLessThan(right.t.x);
-    expect(left.t.x).toBeGreaterThan(left.it.x0);
-    expect(right.t.x).toBeLessThan(right.it.x1);
+    expect(textOf(p, box.id).t.anchor).toBe('middle');
+  });
+
+  it('rotert tekst i en høyere boks: oppe, midt eller nede', () => {
+    const { p, box } = pick();
+    box.rotation = -90;
+    box.height = 30;
+    const mid = textOf(p, box.id).t.y;
+    box.textAt = 'top';
+    const top = textOf(p, box.id);
+    box.textAt = 'bottom';
+    const bottom = textOf(p, box.id);
+    expect(top.t.y).toBeLessThan(mid);
+    expect(bottom.t.y).toBeGreaterThan(mid);
+    expect(top.t.y).toBeGreaterThan(top.it.y);
+    expect(bottom.t.y).toBeLessThan(bottom.it.y + bottom.it.h);
   });
 
   it('valideres og fjernes av Tilbakestill', () => {

@@ -68,6 +68,7 @@ function changesOf(b: Box): string[] {
   if (b.spanTo !== undefined) c.push('multi lane-boks');
   if (b.bold) c.push('fet skrift');
   if (b.textMiddle) c.push('tekst i midten');
+  if (b.textAt) c.push(b.textAt === 'top' ? 'rotert tekst oppe' : 'rotert tekst nede');
   if (b.textAlign && b.textAlign !== 'center') c.push(b.textAlign === 'left' ? 'venstrejustert' : 'høyrejustert');
   if (b.transparency) c.push('gjennomsiktig');
   if (b.hatch) c.push('skravert');
