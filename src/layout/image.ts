@@ -1,6 +1,7 @@
 // Bilder satt inn i planen: plassering på arket, beskjæring og regning for dra i håndtak.
 // Bildet har egne koordinater (u, v) fra 0 til 1 over hele bildet, uansett beskjæring.
 import type { PlanImage } from '../format/types';
+import { yInLane, type LaneSpan } from './imagelane';
 
 export type Pt = { x: number; y: number };
 export type Uv = [number, number];
@@ -25,6 +26,8 @@ export interface PlacedImage {
   date: string | null;
   /** Symbolet til denne milepælen (boks-id). */
   milestone: string | null;
+  /** Festet til denne lanen (id), og står v ned i den. */
+  lane: string | null;
 }
 
 export interface Anchors {
@@ -32,6 +35,8 @@ export interface Anchors {
   xOfDate?: (iso: string) => number | null;
   /** Punktet til en milepæl som tegnes, eller null. */
   milestoneAt?: (id: string) => Pt | null;
+  /** Lanen et bilde er festet til, eller null når den ikke vises. */
+  laneSpan?: (id: string) => LaneSpan | null;
 }
 
 export const FULL: UvRect = [0, 0, 1, 1];
@@ -109,6 +114,7 @@ export function placeImage(img: PlanImage, W: number, H: number, a: Anchors = {}
     points: img.points && img.points.length >= 3 ? img.points : null,
     date: img.date?.day ?? null,
     milestone: img.milestone?.id ?? null,
+    lane: img.lane?.id ?? null,
   };
   if (img.milestone) {
     // Symbol for en milepæl: står der milepælen står, eller vises ikke når milepælen ikke tegnes
@@ -124,6 +130,11 @@ export function placeImage(img: PlanImage, W: number, H: number, a: Anchors = {}
     // Festet til en dato som ikke er med i kalenderen (f.eks. i utkikk): bildet vises ikke
     if (x === null) return null;
     p.cx += x + img.date.dx * W - frameCenter(p).x;
+  }
+  if (img.lane) {
+    // Lanen er skjult eller ikke med: bildet står der det sist sto
+    const s = a.laneSpan?.(img.lane.id);
+    if (s) p.cy += yInLane(s, img.lane.v) - frameCenter(p).y;
   }
   return p;
 }

@@ -40,6 +40,7 @@ const ICONS = {
   rotateLeft: 'M4 12a8 8 0 1 0 2.4-5.7 M4 4v4.5h4.5',
   resize: 'M4 9V4h5 M4 4l6 6 M20 15v5h-5 M20 20l-6-6',
   calendar: 'M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5',
+  lane: 'M3 4h18 M3 20h18 M8 9h8v6H8z',
   hardhat: 'M2.5 19h19 M4.5 19v-2.5a7.5 7.5 0 0 1 15 0V19 M12 9v5 M8 10.5l1 3.5 M16 10.5l-1 3.5',
   front: 'M9 9h11v11H9z M4 15V4h11',
   link: 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1 M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1',

@@ -1,5 +1,5 @@
 // Bilder og fritekst i redigeringen: sett inn (fildialog, utklippstavle, dra inn), velg, flytt, endre
-// størrelse, roter og beskjær, fest til dato eller milepæl, og panelet og høyreklikkmenyen for dem.
+// størrelse, roter og beskjær, fest til dato, lane eller milepæl, og panelet og høyreklikkmenyen for dem.
 // Valgt bilde får håndtak for størrelse og rotasjon. «Beskjær» gir kanthåndtak, «Rediger punkter» en mangekant.
 import type { PlanFile, NoteFont, PlanImage, PlanNote } from './format/types';
 import type { Layout } from './layout/layout';
@@ -13,6 +13,8 @@ import { imageFiles, readImage, type ReadImage } from './imagefile';
 import { findBox, type Swatch } from './editmodel';
 import { plainText } from './format/text';
 import { formatLong } from './layout/dates';
+import { laneAtY, laneSpanOf, moveToLane, pinLane, storeLane } from './layout/imagelane';
+import { laneName } from './lanepick';
 import type { Back, Drag, EditorHost, Trial } from './editor';
 
 export type ImageMode = 'none' | 'crop' | 'points';
@@ -156,6 +158,7 @@ export function createImageEdit(ed: ImageEditHost) {
     const im = findImage(plan, p.id);
     if (!im || !layoutNow) return;
     storeImage(im, p, layoutNow.width, layoutNow.height, anchorOf(im));
+    storeLane(im, frameCenter(p).y, layoutNow.lanes);
     // Dras en fritekst større eller mindre, blir skriftstørrelsen det den ser ut som
     fitNote(im, layoutNow.width);
   };
@@ -407,6 +410,7 @@ export function createImageEdit(ed: ImageEditHost) {
     }
     delete copy.milestone;
     delete copy.date;
+    delete copy.lane;
     commit((pl) => (pl.plan.layout.images ??= []).push(copy));
     selectImage(copy.id);
   };
@@ -437,6 +441,35 @@ export function createImageEdit(ed: ImageEditHost) {
       im.date = { day, dx: Math.round(((c.x - x) / L.width) * 10000) / 10000 };
     });
   };
+  /** Fest til lanen midten av det synlige står i, uten at bildet flytter seg. Eller løsne fra lanen. */
+  const pinImageLane = (id: string, on: boolean) => {
+    const p = placedOf(id);
+    const L = layoutNow;
+    if (!p || !L) return;
+    changeImage(id, (im) => {
+      storeImage(im, p, L.width, L.height, anchorOf(im));
+      pinLane(im, frameCenter(p).y, L.lanes, on);
+    });
+  };
+  /** Flytter et bilde festet til en lane til en annen lane, like langt ned i den. */
+  const setImageLane = (id: string, lane: string) => changeImage(id, (im) => moveToLane(im, lane));
+  /** Navnet på lanen bildet er festet til, eller den lanen er slått sammen med. */
+  const laneOfImage = (plan: PlanFile, im: PlanImage): string | null => {
+    if (!im.lane) return null;
+    const s = layoutNow ? laneSpanOf(im.lane.id, layoutNow.lanes, plan.lanes) : null;
+    const l = plan.lanes.find((x) => x.id === (s?.id ?? im.lane!.id));
+    return l ? laneName(l.name) : null;
+  };
+  /** Hva bildet er festet til, kort: til panelet og menyen. */
+  const whereOf = (plan: PlanFile, im: PlanImage): string => {
+    const ln = laneOfImage(plan, im);
+    if (im.date && im.lane) return `Festet til ${formatLong(im.date.day)} i ${ln ?? 'en skjult lane'}`;
+    if (im.date) return `Festet til ${formatLong(im.date.day)}`;
+    if (im.lane) return `Festet til ${ln ?? 'en skjult lane'}`;
+    return 'Fritt på arket';
+  };
+  /** Lanen midten av det synlige står i nå. */
+  const laneAtYOf = (p: PlacedImage) => (layoutNow ? laneAtY(layoutNow.lanes, frameCenter(p).y) : null);
   /** Ny dato for et festet bilde: det flyttes sidelengs til datoen. */
   const setImageDate = (id: string, day: string) =>
     changeImage(id, (im) => {
@@ -602,6 +635,10 @@ export function createImageEdit(ed: ImageEditHost) {
       add('line', { x1: anchor.x, y1: anchor.y, x2: fc.x, y2: fc.y, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
     if (im?.date && anchor)
       add('line', { x1: anchor.x, y1: layoutNow.plot.y0, x2: anchor.x, y2: layoutNow.plot.y1, stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke' });
+    // Festet til en lane: stiplet ramme rundt lanen
+    const ls = im?.lane ? laneSpanOf(im.lane.id, layoutNow.lanes, host.getPlan()!.lanes) : null;
+    if (ls)
+      add('rect', { x: layoutNow.plot.x0, y: ls.y0, width: layoutNow.plot.x1 - layoutNow.plot.x0, height: ls.y1 - ls.y0, fill: 'none', stroke: ACCENT, 'stroke-width': 1, 'stroke-dasharray': '3 3', 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'none' });
     const f = frameUv(p.crop, p.points);
     // Fritekst skaleres bare i hjørnene, så teksten ikke strekkes
     for (const h of im?.note ? HANDLES.filter((x) => x.length === 2) : HANDLES) {
@@ -624,7 +661,7 @@ export function createImageEdit(ed: ImageEditHost) {
   const buildImagePanel = (plan: PlanFile, im: PlanImage) => {
     const p = placedOf(im.id);
     const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
-    const where = ms ? `Symbol for «${plainText(ms.text) || 'milepæl'}»` : im.date ? `Festet til ${formatLong(im.date.day)}` : 'Fritt på arket';
+    const where = ms ? `Symbol for «${plainText(ms.text) || 'milepæl'}»` : whereOf(plan, im);
     panelHead(im.note ? 'Tekst' : 'Bilde', im.note ? where : `${im.px[0]} × ${im.px[1]} px · ${where}`);
     const cm = (mm: number) => Math.round(mm) / 10;
     /** Tallfelt med navnet over, som datofeltene. */
@@ -827,7 +864,8 @@ export function createImageEdit(ed: ImageEditHost) {
       const others = layoutNow?.items.filter((it) => it.kind === 'milestone' && it.id !== im.milestone!.id) ?? [];
       sp.append(el('p', { class: 'hint' }, `Dra bildet for å flytte milepælen opp eller ned. Hold Alt mens du drar, eller bruk piltastene, for å flytte bare bildet. Kopierer du milepælen, får kopien samme bilde.${others.length ? ' Høyreklikk en annen milepæl og velg «Bruk samme bilde» for å bruke bildet der også.' : ''}`));
     } else {
-      sp.append(switchRow('Fest til dato', !!im.date, (v) => pinImage(im.id, v), 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned'));
+      const what = im.note ? 'Teksten' : 'Bildet';
+      sp.append(switchRow('Fest til dato', !!im.date, (v) => pinImage(im.id, v), `${what} følger datoen sidelengs når kalenderen endres`));
       if (im.date) {
         const wrap = el('label', { class: 'prop prop-inline' });
         wrap.append(el('span', { class: 'prop-label' }, 'Dato'));
@@ -836,7 +874,31 @@ export function createImageEdit(ed: ImageEditHost) {
         wrap.append(d);
         sp.append(wrap);
       }
-      sp.append(el('p', { class: 'hint' }, im.date ? 'Midten av bildet står på datoen. Dra bildet opp eller ned; løsne det for å flytte sidelengs.' : 'Dra bildet hvor du vil. Fest det til en dato for at det skal følge tidslinjen.'));
+      sp.append(switchRow('Fest til lane', !!im.lane, (v) => pinImageLane(im.id, v), `${what} står like langt ned i lanen når lanen flyttes eller endrer høyde, også på et annet ark`));
+      if (im.lane) {
+        const wrap = el('label', { class: 'prop prop-inline' });
+        wrap.append(el('span', { class: 'prop-label' }, 'Lane'));
+        const sel = el('select', { id: 'image-lane', 'aria-label': `Lanen ${im.note ? 'teksten' : 'bildet'} er festet til` }) as HTMLSelectElement;
+        const cur = (layoutNow && laneSpanOf(im.lane.id, layoutNow.lanes, plan.lanes)?.id) ?? im.lane.id;
+        for (const s of layoutNow?.lanes ?? []) {
+          const l = plan.lanes.find((x) => x.id === s.id);
+          const o = el('option', { value: s.id }, plainText((l?.name ?? '').replace(/\|/g, ' ')) || 'Uten navn') as HTMLOptionElement;
+          o.selected = s.id === cur;
+          sel.append(o);
+        }
+        if (!layoutNow?.lanes.some((s) => s.id === cur)) sel.prepend(Object.assign(el('option', { value: '' }, 'Skjult lane') as HTMLOptionElement, { selected: true, disabled: true }));
+        sel.addEventListener('change', () => sel.value && setImageLane(im.id, sel.value));
+        wrap.append(sel);
+        sp.append(wrap);
+      }
+      const hint = im.date && im.lane
+        ? 'Følger datoen sidelengs og lanen opp og ned. Dra til en annen lane for å feste den der.'
+        : im.date
+          ? 'Midten står på datoen. Dra opp eller ned; løsne fra datoen for å flytte sidelengs.'
+          : im.lane
+            ? 'Følger lanen når arket byttes eller lanene flyttes. Dra til en annen lane for å feste den der.'
+            : 'Dra hvor du vil. Fest til dato og lane for at plassen skal følge planen når den endres.';
+      sp.append(el('p', { class: 'hint' }, hint));
     }
     if (imagesOf(plan).length > 1) {
       const row = el('div', { class: 'row img-actions' });
@@ -888,7 +950,10 @@ export function createImageEdit(ed: ImageEditHost) {
     const ms = im.milestone ? findBox(plan, im.milestone.id) : null;
     const nat = naturalSize(im.px, layoutNow!.width, layoutNow!.height);
     const x0 = frameCenter(p).x;
-    ctx.open(e.clientX, e.clientY, 'Bilde', [
+    const here = laneAtYOf(p);
+    const hereName = here && plan.lanes.find((l) => l.id === here.id)?.name;
+    const hereLane = hereName !== undefined && hereName !== null ? laneName(hereName) : 'lanen';
+    ctx.open(e.clientX, e.clientY, im.note ? 'Tekst' : 'Bilde', [
       {
         heading: 'Beskjæring',
         items: [
@@ -921,7 +986,10 @@ export function createImageEdit(ed: ImageEditHost) {
               { label: 'Fjern bildet', icon: 'trash', hint: 'Milepælen får flagget eller ruteren igjen. Angre med Ctrl+Z.', onSelect: () => removeImage(id) },
               { label: 'Løsne fra milepælen', icon: 'unpin', hint: 'Bildet blir stående, og milepælen får flagget eller ruteren igjen. For å flytte bildet litt i forhold til milepælen holder du heller Alt mens du drar.', onSelect: () => pinImage(id, false) },
             ]
-          : [{ label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${formatLong(im.date.day)}. Velg igjen for å flytte fritt.` : 'Bildet følger datoen når kalenderen endres, og flyttes bare opp og ned.', onSelect: () => pinImage(id, !im.date) }],
+          : [
+              { label: 'Fest til dato', icon: 'calendar', checked: !!im.date, hint: im.date ? `Festet til ${formatLong(im.date.day)}. Velg igjen for å flytte fritt sidelengs.` : 'Følger datoen sidelengs når kalenderen endres.', onSelect: () => pinImage(id, !im.date) },
+              { label: 'Fest til lane', icon: 'lane', checked: !!im.lane, hint: im.lane ? `Festet til ${laneOfImage(plan, im) ?? 'en skjult lane'}. Velg igjen for å løsne.` : `Følger ${hereLane} opp og ned, også når arket byttes.`, onSelect: () => pinImageLane(id, !im.lane) },
+            ],
       },
       {
         items: [
@@ -935,7 +1003,7 @@ export function createImageEdit(ed: ImageEditHost) {
         ],
       },
       { items: [{ label: 'Slett', icon: 'trash', danger: true, kbd: 'Delete', hint: 'Angre med Ctrl+Z.', onSelect: () => removeImage(id) }] },
-    ], ms ? `Symbol for ${plainText(ms.text) || 'milepæl'}` : im.date ? `Festet til ${formatLong(im.date.day)}` : im.note ? 'Tekst' : `${im.px[0]} × ${im.px[1]} px`);
+    ], ms ? `Symbol for ${plainText(ms.text) || 'milepæl'}` : im.date || im.lane ? whereOf(plan, im) : im.note ? 'Tekst' : `${im.px[0]} × ${im.px[1]} px`);
   };
 
   /** «Sett inn tekst» i høyreklikkmenyene. */

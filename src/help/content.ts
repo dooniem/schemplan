@@ -356,8 +356,8 @@ export const TOPICS: HelpTopic[] = [
   {
     id: 'bilder', group: 'Arket', title: 'Bilder og fritekst',
     text: `Høyreklikk arket og velg ${ui('Sett inn bilde')} eller ${ui('Sett inn tekst')}, eller lim inn et bilde med ${k('Ctrl', 'V')}. Dobbeltklikk et bilde for å beskjære det. En fritekst kan få en pil som festes til en boks.`,
-    when: `Et kart over området gjør planen lettere å forstå for folk utenfra. Fritekst med pil passer til korte merknader, som «Avhengig av tillatelse». Et bilde kan også brukes som symbol på en milepæl: velg milepælen og ${ui('Bruk bilde som symbol')} under Utseende i panelet. Der kan du også redigere, bytte eller fjerne bildet.`,
-    words: 'bilde kart logo beskjær rotere tekst pil notat milepæl symbol', see: ['planomrade'],
+    when: `Et kart over området gjør planen lettere å forstå for folk utenfra. Fritekst med pil passer til korte merknader, som «Avhengig av tillatelse». Et bilde kan også brukes som symbol på en milepæl: velg milepælen og ${ui('Bruk bilde som symbol')} under Utseende i panelet. Der kan du også redigere, bytte eller fjerne bildet. Høyreklikk et bilde eller en tekst og velg ${ui('Fest til dato')} og ${ui('Fest til lane')}, så følger den planen når du bytter ark eller lanene flytter seg.`,
+    words: 'bilde kart logo beskjær rotere tekst pil notat milepæl symbol fest dato lane', see: ['planomrade'],
   },
   // ---- Lagre og dele ----
   {
