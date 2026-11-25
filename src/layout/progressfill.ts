@@ -8,12 +8,16 @@
 import { ARROW_MM, type BoxItem } from './layout';
 import { luminance, mixColor } from './color';
 import { insetOutline } from './inneredge';
-import { boxGaps, stripesPath, subtractSpans, type Pt } from './hatch';
+import { boxGaps, stripes, subtractSpans, type Pt } from './hatch';
 import type { Measure } from './text';
 
 /** Bredden på båndene og avstanden mellom dem, i mm. */
 export const BAND_WIDTH = 0.9;
 const BAND_STEP = 2.1;
+/** Kortere bånd enn dette (mm) mellom tekstlinjene tegnes svakt, som bak teksten. */
+const MIN_BAND = 2.5;
+/** Hvor sterke båndene er bak teksten, mot ellers. */
+export const UNDER_BAND = 0.4;
 /** Fronten: loddrett strek der fremdriften står. Den brytes rundt teksten. */
 export const FRONT_WIDTH = 0.45;
 /** Den lyse kanten øverst og den mørke nederst, innenfor konturen. */
@@ -24,6 +28,8 @@ export interface ProgressFill {
   poly: Pt[];
   /** Båndene som én sti (M og L), strøket med BAND_WIDTH. */
   bands: string;
+  /** Båndene bak teksten, tegnet svakt (UNDER_BAND av band). */
+  bandsUnder: string;
   /** Svart på lyse fyll, hvit på mørke. Tonen og båndene tegnes i denne fargen, gjennomsiktig. */
   ink: '#000000' | '#FFFFFF';
   wash: number;
@@ -70,12 +76,14 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
   const dark = luminance(it.fill) < DARK;
   const gaps = boxGaps(it, measure);
   // Endene på de brede båndene skal heller ikke nå inn i feltet rundt teksten
-  const bands = stripesPath([45], BAND_STEP, poly, gaps.map(([a, b, c, e]) => [a - BAND_WIDTH * 0.75, b - BAND_WIDTH * 0.75, c + BAND_WIDTH * 0.75, e + BAND_WIDTH * 0.75]));
+  // Korte biter mellom tekstlinjene ser ødelagte ut; de tegnes svakt sammen med resten bak teksten
+  const pad = BAND_WIDTH * 0.75;
+  const { out: bands, under: bandsUnder } = stripes([45], BAND_STEP, poly, gaps.map(([a, b, c, e]) => [a - pad, b - pad, c + pad, e + pad]), MIN_BAND);
   let front = '';
   if (d < 1) {
     const x = it.x0 + (it.x1 - it.x0) * d;
-    const pad = FRONT_WIDTH / 2;
-    const cuts = gaps.filter((g) => g[0] - pad < x && g[2] + pad > x).map((g): [number, number] => [g[1], g[3]]);
+    const fp = FRONT_WIDTH / 2;
+    const cuts = gaps.filter((g) => g[0] - fp < x && g[2] + fp > x).map((g): [number, number] => [g[1], g[3]]);
     front = subtractSpans([it.y + inset, it.y + it.h - inset], cuts)
       .filter(([a, b]) => b - a > 0.2)
       .map(([a, b]) => `M${r(x)} ${r(a)}L${r(x)} ${r(b)}`)
@@ -84,6 +92,7 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
   return {
     poly,
     bands,
+    bandsUnder,
     ink: dark ? '#FFFFFF' : '#000000',
     wash: dark ? 0.14 : 0.1,
     band: dark ? 0.2 : 0.15,

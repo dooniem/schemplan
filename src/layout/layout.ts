@@ -148,8 +148,8 @@ export interface BoxItem {
   lineBoxH?: number;
   /** Fargen på den lyse innerkanten, når faget har den. */
   innerEdge?: string;
-  /** Skravering: strekene som én sti (M og L), fargen og strekbredden. */
-  hatch?: { d: string; color: string; width: number };
+  /** Skravering: strekene som én sti (M og L), de svake strekene bak teksten, fargen og strekbredden. */
+  hatch?: { d: string; under: string; color: string; width: number };
   /** Fremdrift som felt i boksen (plan.layout.progressStyle = 'fill'). */
   progressFill?: ProgressFill;
 }
