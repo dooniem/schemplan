@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Box } from '../format/types';
 import { approxMeasure } from './text';
 import type { TextBlock } from './layout';
-import { hatchOf, hatchPath, setHatch, textGaps, type Gap, type Pt } from './hatch';
+import { hatchOf, hatchPath, setHatch, stripes, textGaps, type Gap, type Pt } from './hatch';
 
 const rect = (x0: number, y0: number, x1: number, y1: number): Pt[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 /** Linjestykkene i stien som [x0, y0, x1, y1]. */
@@ -93,5 +93,20 @@ describe('setHatch og hatchOf', () => {
     setHatch(b, null);
     expect(b.hatch).toBeUndefined();
     expect(hatchOf(b)).toBeNull();
+  });
+});
+
+describe('stripes bak teksten', () => {
+  it('strekene i feltene kommer i under, og korte biter regnes dit', () => {
+    const poly: Pt[] = [[0, 0], [20, 0], [20, 10], [0, 10]];
+    const gap: Gap = [5, 3, 15, 7];
+    const all = stripes([0], 1, poly, []);
+    const part = stripes([0], 1, poly, [gap]);
+    expect(all.under).toBe('');
+    expect(part.under).toContain('M5 4L15 4');
+    // Med minste lengde 6 blir bitene på 5 mm på hver side av feltet også svake
+    const long = stripes([0], 1, poly, [gap], 6);
+    expect(long.out).not.toContain('M0 4L5 4');
+    expect(long.under).toContain('M0 4L20 4');
   });
 });

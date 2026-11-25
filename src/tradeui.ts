@@ -2,7 +2,7 @@
 // og teksten og størrelsen i forklaringen nederst på arket.
 import type { PlanFile } from './format/types';
 import type { Layout } from './layout/layout';
-import { FERIE_KEY } from './layout/layout';
+import { FERIE_KEY, PROGRESS_KEY } from './layout/layout';
 import { markName, markOfKey } from './layout/marks';
 import type { EditorHost } from './editor';
 import type { ImageEditKit } from './imageedit';
@@ -69,7 +69,7 @@ export function createTradeUi(ed: TradeUiHost) {
     }
     syncTools();
   };
-  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : markOfKey(key) ? markName(markOfKey(key)!, host.getPlan()?.plan.layout.customMark?.name) : tradeName(key));
+  const legendName = (key: string) => (key === FERIE_KEY ? 'Ferie' : key === PROGRESS_KEY ? 'Ferdig' : markOfKey(key) ? markName(markOfKey(key)!, host.getPlan()?.plan.layout.customMark?.name) : tradeName(key));
   /** Vis eller skjul i forklaringen, og teksten som står der. */
   const legendSection = (plan: PlanFile, key: string, ownText = true) => {
     const item = plan.plan.layout.legendItems?.[key] ?? {};

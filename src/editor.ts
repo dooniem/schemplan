@@ -10,7 +10,7 @@ import type { Box, Lane, PlanFile, Rotation, TextAlign } from './format/types';
 import { MILESTONE_COLORS, type ArrangeOptions, type ArrangeResult, type BoxItem, type Item, type LaneLayout, type Layout } from './layout/layout';
 import { paintCriticalOnly, shownItems } from './criticalonly';
 import type { FitTextResult, FitTextScope } from './layout/fittext';
-import { DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, MAX_BOX_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
+import { CHANGE_KEYS, DEFAULT_TITLE_PT, defaultLaneTitleScale, FERIE_KEY, PROGRESS_KEY, MAX_BOX_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './layout/layout';
 import { PT_TO_MM } from './layout/text';
 import { todayIso } from './layout/lookahead';
 import { createCtxMenu, icon, type CtxGroup, type CtxItem, type IconName } from './ctxmenu';
@@ -2954,7 +2954,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       e.preventDefault();
       const key = legHit.getAttribute('data-trade') ?? legHit.getAttribute('data-legend')!;
       const legMark = markOfKey(key);
-      const isTrade = key !== FERIE_KEY && !legMark;
+      const isTrade = key !== FERIE_KEY && key !== PROGRESS_KEY && !(Object.values(CHANGE_KEYS) as string[]).includes(key) && !legMark;
       // Valgte bokser (ikke milepæler) kan få faget herfra
       const ids = (group.length ? group : selected ? [selected] : []).filter((id) => {
         const x = findBox(plan, id);

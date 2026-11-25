@@ -150,6 +150,7 @@ export function validatePlan(input: string | unknown): ValidationResult {
       if (lay.dateFormat !== undefined) needEnum(lay, 'dateFormat', 'plan.layout', ['dm', 'dmShort', 'dmy', 'dmyyyy', 'dmon', 'dmonyyyy', 'wdm', 'week']);
       if (lay.showProgress !== undefined) needBool(lay, 'showProgress', 'plan.layout');
       if (lay.showBaseline !== undefined) needBool(lay, 'showBaseline', 'plan.layout');
+      if (lay.progressStyle !== undefined) needEnum(lay, 'progressStyle', 'plan.layout', ['stripe', 'fill']);
       if (lay.revision !== undefined) {
         const rv = lay.revision;
         if (!isObj(rv) || typeof rv.on !== 'boolean' || typeof rv.number !== 'string' || (rv.text !== undefined && typeof rv.text !== 'string'))

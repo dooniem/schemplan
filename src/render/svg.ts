@@ -6,6 +6,8 @@ import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
 import { markRects, markShapes, type MarkKind } from '../layout/marks';
 import { INNER_EDGE, insetOutline } from '../layout/inneredge';
+import { BAND_WIDTH, BEVEL_WIDTH, FRONT_WIDTH, KNOCK, UNDER_BAND, type ProgressFill } from '../layout/progressfill';
+import { UNDER_TEXT } from '../layout/hatch';
 import { carryEmptyDy } from './linedy';
 
 // Carlito følger med appen og bygges inn i PDF-en, så skjerm og PDF blir like
@@ -282,8 +284,14 @@ export function renderPlan(L: Layout): SVGSVGElement {
         const pts = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, o);
         node('path', { class: 'inner-edge', d: `M${pts.map(([x, y]) => `${r(x)} ${r(y)}`).join(' L')} Z`, fill: 'none', stroke: it.innerEdge, 'stroke-width': INNER_EDGE, 'pointer-events': 'none' }, g);
       }
-      // Skravering over fyllet. Strekene er allerede klippet til boksen og holder seg unna teksten.
-      if (it.hatch) node('path', { class: 'hatch', d: it.hatch.d, fill: 'none', stroke: it.hatch.color, 'stroke-width': it.hatch.width, 'pointer-events': 'none' }, g);
+      // Skravering over fyllet. Strekene er allerede klippet til boksen, og er svake bak teksten.
+      if (it.hatch) {
+        const hg = node('g', { class: 'hatch', 'pointer-events': 'none' }, g);
+        if (it.hatch.d) node('path', { d: it.hatch.d, fill: 'none', stroke: it.hatch.color, 'stroke-width': it.hatch.width }, hg);
+        if (it.hatch.under) node('path', { d: it.hatch.under, fill: 'none', stroke: it.hatch.color, 'stroke-width': it.hatch.width, 'stroke-opacity': UNDER_TEXT }, hg);
+      }
+      // Fremdrift som felt oppå skraveringen, så den aldri ser ut til å ligge under en annen markering
+      if (it.progressFill) progressFill(it.id, it.progressFill, it.x0, it.x1, it.y, it.h, g, defs);
       // Fremdrift i en Multi Lane-boks hører til boksen, så boksene oppå dekker den som de dekker boksen
       const pm = behind.get(it.id);
       if (pm?.done) progressStripe(pm, g);
@@ -453,6 +461,13 @@ export function renderPlan(L: Layout): SVGSVGElement {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, rx: 0.4, fill: '#FFFFFF', stroke: CHANGE_COLOR, 'stroke-width': e.symbol === 'new' ? 0.6 : 0.4, ...(e.symbol === 'moved' ? { 'stroke-dasharray': '1.6 0.8' } : {}) }, leg);
     } else if (e.symbol === 'loud' || e.symbol === 'night' || e.symbol === 'custom') {
       drawMark(e.symbol, cx - e.h / 2, e.y, e.h, leg, L.customMark);
+    } else if (e.symbol === 'progress') {
+      // Som en boks i lys grå som er godt over halvveis: tone, bånd, pregning og front
+      const fill = '#D9D9D9';
+      node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill, stroke: '#7F7F7F', 'stroke-width': ny ? BOX_BORDER : 0.2 }, leg);
+      const xf = e.x + e.w * 0.65;
+      const sample = { bandsUnder: '', poly: [[e.x, e.y], [xf, e.y], [xf, e.y + e.h], [e.x, e.y + e.h]] as [number, number][], bands: legendBands(e.x, xf, e.y, e.h), ink: '#000000' as const, wash: 0.1, band: 0.15, front: `M${r(xf)} ${r(e.y)}L${r(xf)} ${r(e.y + e.h)}`, frontColor: '#525252', done: 0.65 };
+      progressFill(`leg-${e.key}`, sample, e.x, e.x + e.w, e.y, e.h, leg, defs);
     } else if (e.symbol === 'holiday') {
       node('rect', { x: e.x, y: e.y, width: e.w, height: e.h, fill: 'url(#ferie)', stroke: '#C8C8C8', 'stroke-width': 0.12 }, leg);
     } else {
@@ -477,6 +492,40 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.headerRight) text(L.headerRight, svg);
   text(L.subtitle, svg);
   return svg;
+}
+
+/**
+ * Andel ferdig som felt i boksen: tone, brede bånd, pregning (lys kant øverst, mørk nederst) og kontur,
+ * alt klippet til det ferdige feltet. data-clip leses av PDF-eksporten.
+ */
+function progressFill(id: string, pf: ProgressFill, x0: number, x1: number, y: number, h: number, g: Element, defs: Element) {
+  const pts = pf.poly.map(([x, y]) => `${r(x)} ${r(y)}`).join(' ');
+  const cid = `pf-${id.replace(/[^\w-]/g, '_')}`;
+  const cp = node('clipPath', { id: cid }, defs);
+  node('polygon', { points: pts }, cp);
+  const pg = node('g', { class: 'progress-fill', 'pointer-events': 'none', 'clip-path': `url(#${cid})`, 'data-clip': pts }, g);
+  const d = `M${pf.poly.map(([x, y]) => `${r(x)} ${r(y)}`).join(' L')} Z`;
+  node('path', { d, fill: pf.ink, 'fill-opacity': pf.wash }, pg);
+  // Vanlig skravering under båndene dempes, så fremdriften er det tydeligste der de krysser
+  if (pf.knock) for (const d of [pf.bands, pf.bandsUnder]) if (d) node('path', { d, fill: 'none', stroke: pf.knock, 'stroke-opacity': KNOCK, 'stroke-width': BAND_WIDTH }, pg);
+  if (pf.bands) node('path', { d: pf.bands, fill: 'none', stroke: pf.ink, 'stroke-opacity': pf.band, 'stroke-width': BAND_WIDTH }, pg);
+  if (pf.bandsUnder) node('path', { d: pf.bandsUnder, fill: 'none', stroke: pf.ink, 'stroke-opacity': r(pf.band * UNDER_BAND), 'stroke-width': BAND_WIDTH }, pg);
+  // Pregning: lys kant øverst, mørk nederst
+  const bw = BEVEL_WIDTH;
+  const inset = 0.15;
+  if (h > 4 * bw) {
+    node('rect', { x: x0, y: y + inset, width: x1 - x0, height: bw, fill: '#FFFFFF', 'fill-opacity': 0.5 }, pg);
+    node('rect', { x: x0, y: y + h - inset - bw, width: x1 - x0, height: bw, fill: '#000000', 'fill-opacity': 0.15 }, pg);
+  }
+  // Fronten står utenfor klippingen, så hele streken synes
+  if (pf.front) node('path', { class: 'progress-front', 'pointer-events': 'none', d: pf.front, fill: 'none', stroke: pf.frontColor, 'stroke-width': FRONT_WIDTH }, g);
+}
+
+/** Bånd i 45° for prøven i forklaringen, som i boksene. */
+function legendBands(x0: number, x1: number, y: number, h: number): string {
+  let d = '';
+  for (let x = x0 - h; x < x1 + h; x += 2.1) d += `M${r(x)} ${r(y + h)}L${r(x + h)} ${r(y)}`;
+  return d;
 }
 
 /** Andel ferdig som mørk stripe nederst i boksen. */

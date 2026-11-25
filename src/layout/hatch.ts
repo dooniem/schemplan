@@ -1,7 +1,7 @@
 // Skravering i bokser: tynne streker i et mønster over fyllet, i en farge du velger.
 // Strekene regnes ut som rette linjestykker, klippet til boksens omriss, så skjerm, PNG og PDF
-// tegner nøyaktig det samme uten mønstre eller klipping. Rundt teksten og ikonene står det et lite
-// felt uten streker, så teksten er like lett å lese som uten skravering.
+// tegner nøyaktig det samme uten mønstre eller klipping. Bak teksten og ikonene er strekene svake
+// (UNDER_TEXT), så mønsteret henger sammen og teksten er like lett å lese som uten skravering.
 
 import type { Box, BoxHatch, HatchDensity, HatchPattern, HexColor } from '../format/types';
 import { ARROW_MM, type BoxItem, type TextBlock } from './layout';
@@ -24,6 +24,8 @@ export const DENSITY_NAMES: Record<HatchDensity, string> = { tight: 'Tett', norm
 const SPACING: Record<HatchDensity, number> = { tight: 1.2, normal: 2, loose: 3.2 };
 /** Strekbredden i mm. Tynn nok til at fyllet fortsatt er fargen boksen har. */
 export const HATCH_WIDTH = 0.3;
+/** Hvor sterke strekene er bak teksten, mot ellers. */
+export const UNDER_TEXT = 0.25;
 /** Fargen skraveringen får når den slås på: rød, som på et stoppskilt. */
 export const HATCH_DEFAULT_COLOR: HexColor = '#FF0000';
 
@@ -105,7 +107,7 @@ function insideRect(p: Pt, t: Pt, g: Gap): [number, number] | null {
 }
 
 /** Tar bort delene som ligger i feltene. Svarer med det som er igjen, i rekkefølge. */
-function subtract(span: [number, number], cuts: [number, number][]): [number, number][] {
+export function subtractSpans(span: [number, number], cuts: [number, number][]): [number, number][] {
   let parts: [number, number][] = [span];
   for (const [c0, c1] of cuts) {
     const next: [number, number][] = [];
@@ -129,10 +131,23 @@ const r = (v: number) => Math.round(v * 1000) / 1000;
  * poly er omrisset strekene skal holde seg innenfor (konvekst), gaps feltene som skal stå tomme.
  */
 export function hatchPath(pattern: HatchPattern, density: HatchDensity, poly: readonly Pt[], gaps: readonly Gap[] = []): string {
-  if (poly.length < 3) return '';
-  const step = SPACING[density];
-  const parts: string[] = [];
-  for (const deg of ANGLES[pattern]) {
+  return stripesPath(ANGLES[pattern], SPACING[density], poly, gaps);
+}
+
+/** Parallelle streker i vinklene (grader), step mm fra hverandre, klippet til poly og uten om gaps. */
+export function stripesPath(angles: readonly number[], step: number, poly: readonly Pt[], gaps: readonly Gap[] = []): string {
+  return stripes(angles, step, poly, gaps).out;
+}
+
+/**
+ * Strekene delt i to: out utenfor feltene, under inni feltene (bak teksten). Stykker utenfor som er
+ * kortere enn minLen regnes til under, så det ikke blir småbiter mellom tekstlinjene.
+ */
+export function stripes(angles: readonly number[], step: number, poly: readonly Pt[], gaps: readonly Gap[] = [], minLen = 0.05): { out: string; under: string } {
+  if (poly.length < 3) return { out: '', under: '' };
+  const out: string[] = [];
+  const under: string[] = [];
+  for (const deg of angles) {
     const a = (deg * Math.PI) / 180;
     // Langs streken (t) og på tvers av den (n). y går nedover på arket, så vinkelen speiles.
     const t: Pt = [Math.cos(a), -Math.sin(a)];
@@ -140,19 +155,19 @@ export function hatchPath(pattern: HatchPattern, density: HatchDensity, poly: re
     const proj = poly.map((q) => q[0] * n[0] + q[1] * n[1]);
     const k0 = Math.ceil(Math.min(...proj) / step);
     const k1 = Math.floor(Math.max(...proj) / step);
+    const seg = (p: Pt, s0: number, s1: number) => `M${r(p[0] + t[0] * s0)} ${r(p[1] + t[1] * s0)}L${r(p[0] + t[0] * s1)} ${r(p[1] + t[1] * s1)}`;
     for (let k = k0; k <= k1; k++) {
       const c = k * step;
       const p: Pt = [n[0] * c, n[1] * c];
       const span = clipToPolygon(p, t, poly);
       if (!span) continue;
       const cuts = gaps.map((g) => insideRect(p, t, g)).filter((x): x is [number, number] => !!x);
-      for (const [s0, s1] of subtract(span, cuts)) {
-        if (s1 - s0 < 0.05) continue;
-        parts.push(`M${r(p[0] + t[0] * s0)} ${r(p[1] + t[1] * s0)}L${r(p[0] + t[0] * s1)} ${r(p[1] + t[1] * s1)}`);
-      }
+      const kept = subtractSpans(span, cuts).filter(([s0, s1]) => s1 - s0 >= minLen);
+      for (const [s0, s1] of kept) out.push(seg(p, s0, s1));
+      for (const [s0, s1] of subtractSpans(span, kept)) if (s1 - s0 >= 0.05) under.push(seg(p, s0, s1));
     }
   }
-  return parts.join('');
+  return { out: out.join(''), under: under.join('') };
 }
 
 /**
@@ -215,12 +230,18 @@ export function boxHatch(b: Pick<Box, 'hatch'>, it: BoxItem, ny: boolean, measur
   const inset = it.border ? (ny ? 0.3 : 0.25) / 2 : 0;
   const tip = Math.min(ARROW_MM, (it.x1 - it.x0) / 3);
   const poly = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, inset);
+  const { out: d, under } = stripes(ANGLES[h.pattern], SPACING[h.density], poly, boxGaps(it, measure));
+  return d || under ? { d, under, color: h.color, width: HATCH_WIDTH } : null;
+}
+
+/** Feltene rundt teksten og ikonene i boksen, som streker skal holde seg unna. pad legges til rundt hvert felt. */
+export function boxGaps(it: BoxItem, measure: Measure, pad = 0): Gap[] {
   const gaps = it.text ? textGaps(it.text, measure) : [];
   if (it.marks) {
+    const tip = Math.min(ARROW_MM, (it.x1 - it.x0) / 3);
     const edge = it.arrowRight ? it.x1 - tip : it.x1;
-    const pad = 0.3;
-    for (const m of markRects(it.marks, edge, it.y, it.h, it.lineBoxH ?? it.h)) gaps.push([m.x - pad, m.y - pad, m.x + m.s + pad, m.y + m.s + pad]);
+    const mp = 0.3;
+    for (const m of markRects(it.marks, edge, it.y, it.h, it.lineBoxH ?? it.h)) gaps.push([m.x - mp, m.y - mp, m.x + m.s + mp, m.y + m.s + mp]);
   }
-  const d = hatchPath(h.pattern, h.density, poly, gaps);
-  return d ? { d, color: h.color, width: HATCH_WIDTH } : null;
+  return pad ? gaps.map(([a, b, c, d]) => [a - pad, b - pad, c + pad, d + pad]) : gaps;
 }

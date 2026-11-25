@@ -182,9 +182,16 @@
               <input type="checkbox" id="show-legend" role="switch" />
             </label>
             <label class="set-switch">
-              <span><strong>Fremdrift</strong><small>% ferdig som mørk stripe nederst i boksene</small></span>
+              <span><strong>Fremdrift</strong><small>% ferdig fra Project, som stripe eller felt</small></span>
               <input type="checkbox" id="show-progress" role="switch" />
             </label>
+            <div class="set-switch-sub" id="progress-style-row" hidden>
+              <label for="progress-style">Vis som</label>
+              <select id="progress-style">
+                <option value="stripe">Stripe nederst</option>
+                <option value="fill">Stripe og felt i boksen</option>
+              </select>
+            </div>
             <label class="set-switch">
               <span><strong>Baseline</strong><small>Tynn strek under boksene der baseline lå</small></span>
               <input type="checkbox" id="show-baseline" role="switch" />
