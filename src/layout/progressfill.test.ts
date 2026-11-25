@@ -51,7 +51,7 @@ describe('boxProgressFill', () => {
 
 describe('fremdrift som felt i planen', () => {
   const opts = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
-  it('erstatter stripen og forklares i forklaringen', () => {
+  it('kommer i tillegg til stripen og forklares i forklaringen', () => {
     const p = testplan();
     p.plan.layout.showProgress = true;
     for (const t of p.tasks) t.percentComplete = 40;

@@ -16,6 +16,8 @@ export const BAND_WIDTH = 0.9;
 const BAND_STEP = 2.1;
 /** Kortere bånd enn dette (mm) mellom tekstlinjene tegnes svakt, som bak teksten. */
 const MIN_BAND = 2.5;
+/** Hvor mye av skraveringen under båndene som dekkes av fyllfargen. */
+export const KNOCK = 0.85;
 /** Hvor sterke båndene er bak teksten, mot ellers. */
 export const UNDER_BAND = 0.4;
 /** Fronten: loddrett strek der fremdriften står. Den brytes rundt teksten. */
@@ -40,6 +42,8 @@ export interface ProgressFill {
   frontColor: string;
   /** Andel ferdig, 0–1. */
   done: number;
+  /** Boksen har vanlig skravering: båndene tegnes først i fyllfargen, så skraveringen dempes der de krysser. */
+  knock?: string;
 }
 
 const r = (v: number) => Math.round(v * 1000) / 1000;
@@ -98,5 +102,6 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
     front,
     frontColor: dark ? mixColor(it.fill, '#FFFFFF', 0.7) : mixColor(it.fill, '#000000', 0.62),
     done: d,
+    ...(it.hatch ? { knock: it.fill } : {}),
   };
 }

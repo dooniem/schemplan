@@ -6,7 +6,7 @@ import type { PlacedArrow } from '../layout/arrow';
 import { isStraight } from '../layout/area';
 import { markRects, markShapes, type MarkKind } from '../layout/marks';
 import { INNER_EDGE, insetOutline } from '../layout/inneredge';
-import { BAND_WIDTH, BEVEL_WIDTH, FRONT_WIDTH, UNDER_BAND, type ProgressFill } from '../layout/progressfill';
+import { BAND_WIDTH, BEVEL_WIDTH, FRONT_WIDTH, KNOCK, UNDER_BAND, type ProgressFill } from '../layout/progressfill';
 import { UNDER_TEXT } from '../layout/hatch';
 import { carryEmptyDy } from './linedy';
 
@@ -294,7 +294,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
       if (it.progressFill) progressFill(it.id, it.progressFill, it.x0, it.x1, it.y, it.h, g, defs);
       // Fremdrift i en Multi Lane-boks hører til boksen, så boksene oppå dekker den som de dekker boksen
       const pm = behind.get(it.id);
-      if (pm?.done && !pm.asFill) progressStripe(pm, g);
+      if (pm?.done) progressStripe(pm, g);
       if (it.text) text(it.text, g);
       // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter
       if (it.marks) markEdges.push([it, xr]);
@@ -365,7 +365,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.progress.length) {
     const pg = node('g', { class: 'progress', 'pointer-events': 'none' }, svg);
     for (const m of L.progress) {
-      if (m.done && !m.behind && !m.asFill) progressStripe(m, pg);
+      if (m.done && !m.behind) progressStripe(m, pg);
       if (m.base) {
         const by = m.y + m.h + 0.45;
         node('path', { 'data-for': m.id, d: `M${r(m.base.x0)} ${r(by - 0.35)} L${r(m.base.x0)} ${r(by)} L${r(m.base.x1)} ${r(by)} L${r(m.base.x1)} ${r(by - 0.35)}`, fill: 'none', stroke: '#404040', 'stroke-width': 0.25 }, pg);
@@ -506,6 +506,8 @@ function progressFill(id: string, pf: ProgressFill, x0: number, x1: number, y: n
   const pg = node('g', { class: 'progress-fill', 'pointer-events': 'none', 'clip-path': `url(#${cid})`, 'data-clip': pts }, g);
   const d = `M${pf.poly.map(([x, y]) => `${r(x)} ${r(y)}`).join(' L')} Z`;
   node('path', { d, fill: pf.ink, 'fill-opacity': pf.wash }, pg);
+  // Vanlig skravering under båndene dempes, så fremdriften er det tydeligste der de krysser
+  if (pf.knock) for (const d of [pf.bands, pf.bandsUnder]) if (d) node('path', { d, fill: 'none', stroke: pf.knock, 'stroke-opacity': KNOCK, 'stroke-width': BAND_WIDTH }, pg);
   if (pf.bands) node('path', { d: pf.bands, fill: 'none', stroke: pf.ink, 'stroke-opacity': pf.band, 'stroke-width': BAND_WIDTH }, pg);
   if (pf.bandsUnder) node('path', { d: pf.bandsUnder, fill: 'none', stroke: pf.ink, 'stroke-opacity': r(pf.band * UNDER_BAND), 'stroke-width': BAND_WIDTH }, pg);
   // Pregning: lys kant øverst, mørk nederst

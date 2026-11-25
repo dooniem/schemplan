@@ -278,7 +278,7 @@ export interface ProgressMark {
   base: { x0: number; x1: number } | null;
   /** Multi Lane-boks: stripen tegnes sammen med boksen, bak boksene som ligger oppå den. */
   behind?: boolean;
-  /** Fremdriften vises som felt i boksen (BoxItem.progressFill), ikke som stripe. */
+  /** Fremdriften vises også som felt i boksen (BoxItem.progressFill), i tillegg til stripen. */
   asFill?: boolean;
 }
 
@@ -1309,7 +1309,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const h = b && boxHatch(b, it, ny, measure);
     if (h) it.hatch = h;
   }
-  // Fremdrift som felt i boksen, i stedet for stripen nederst
+  // Fremdrift som felt i boksen, i tillegg til stripen nederst
   const progress = progressMarks(items, file, axis);
   if (file.plan.layout.progressStyle === 'fill') {
     const byId = new Map(boxItems.map((i) => [i.id, i]));
