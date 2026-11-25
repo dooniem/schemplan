@@ -25,14 +25,21 @@ export function breakParts(value: string): BreakPart[] {
   return out;
 }
 
+/** Utseendet til et tegn i feltet: egen farge og/eller understreket. */
+export interface FieldMark {
+  color?: string;
+  underline?: boolean;
+}
+
 /** Hendelse som tegner speilet på nytt, når noe annet enn skriving har endret det som skal vises. */
 export const REDRAW_MARKS = 'marks:redraw';
 
 /**
  * Legger tekstfeltet i en ramme med speilet bak. Returnerer rammen, som settes inn der feltet skulle stått.
- * colorsOf gir fargen til hvert tegn i feltet; tekst med egen farge får en strek under i den fargen.
+ * marksOf gir utseendet til hvert tegn i feltet: tekst med egen farge får en tykk strek under i den fargen,
+ * og understreket tekst en tynn strek i tekstens farge, tett under ordet.
  */
-export function withBreakMarks(ta: HTMLTextAreaElement, colorsOf?: () => (string | undefined)[]): HTMLElement {
+export function withBreakMarks(ta: HTMLTextAreaElement, marksOf?: () => (FieldMark | undefined)[]): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'ta-marks';
   const mirror = document.createElement('div');
@@ -40,23 +47,34 @@ export function withBreakMarks(ta: HTMLTextAreaElement, colorsOf?: () => (string
   mirror.setAttribute('aria-hidden', 'true');
   const draw = () => {
     const nodes: Node[] = [];
-    const colors = colorsOf?.() ?? [];
+    const marks = marksOf?.() ?? [];
+    const colorAt = (k: number) => marks[k]?.color;
+    const lineAt = (k: number) => !!marks[k]?.underline;
     let at = 0;
-    /** Teksten fra `at`, delt der fargen skifter. */
+    /** Teksten fra `at`, delt der fargen eller understrekingen skifter. */
     const pushText = (text: string) => {
       let i = 0;
       while (i < text.length) {
-        const c = colors[at + i];
+        const c = colorAt(at + i);
+        const u = lineAt(at + i);
         let j = i + 1;
-        while (j < text.length && colors[at + j] === c) j++;
-        const part = text.slice(i, j);
+        while (j < text.length && colorAt(at + j) === c && lineAt(at + j) === u) j++;
+        let n: Node = document.createTextNode(text.slice(i, j));
+        // Understrekingen ligger inni fargemerket, så begge strekene vises
+        if (u) {
+          const s = document.createElement('span');
+          s.className = 'ul-mark';
+          s.append(n);
+          n = s;
+        }
         if (c) {
           const s = document.createElement('span');
           s.className = 'tc-mark';
           s.style.setProperty('--tc', c);
-          s.textContent = part;
-          nodes.push(s);
-        } else nodes.push(document.createTextNode(part));
+          s.append(n);
+          n = s;
+        }
+        nodes.push(n);
         i = j;
       }
     };

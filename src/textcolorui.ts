@@ -1,10 +1,11 @@
-// Farge på deler av teksten i boks-panelet: marker ord i tekstfeltet og velg en farge,
-// som i Word og Excel. «A» gir den sist brukte fargen, pilen ved siden av viser alle fargene.
+// Farge og understreking på deler av teksten i boks-panelet: marker ord i tekstfeltet og velg en farge,
+// som i Word og Excel. «A» gir den sist brukte fargen, pilen ved siden av viser alle fargene,
+// og «U» understreker (eller fjerner understrekingen).
 import type { Box } from './format/types';
-import { charColors, hasTextColors, paintRuns } from './format/textcolor';
+import { allUnderlined, charColors, charUnderlines, hasTextColors, hasUnderlines, paintRuns, underlineRanges } from './format/textcolor';
 import { BOX_PALETTE, type Swatch } from './editmodel';
 import { icon } from './ctxmenu';
-import { REDRAW_MARKS } from './breakmarks';
+import { REDRAW_MARKS, type FieldMark } from './breakmarks';
 
 export interface TextColorKit {
   el: <K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Record<string, string>, text?: string) => HTMLElementTagNameMap[K];
@@ -24,8 +25,13 @@ let paletteOpen = false;
 const sameColor = (s: HTMLElement, c: string) => s.dataset.color === c.toUpperCase();
 const nameOf = (c: string) => BOX_PALETTE.find(([f]) => f.toUpperCase() === c.toUpperCase())?.[1] ?? c;
 
-/** Fargen til hvert tegn i feltet, til streken under farget tekst i feltet. */
-export const fieldColors = (b: Box | null) => (b && hasTextColors(b.textColors) ? charColors(b.text.length, b.textColors) : []);
+/** Fargen og understrekingen til hvert tegn i feltet, til strekene under teksten i feltet. */
+export function fieldMarks(b: Box | null): (FieldMark | undefined)[] {
+  if (!b || (!hasTextColors(b.textColors) && !hasUnderlines(b.underlines))) return [];
+  const cs = charColors(b.text.length, b.textColors);
+  const us = charUnderlines(b.text.length, b.underlines);
+  return cs.map((color, i) => (color || us[i] ? { color, underline: us[i] } : undefined));
+}
 
 /** Raden under tekstfeltet. ta er feltet med boksteksten. */
 export function textColorRows(kit: TextColorKit, ta: HTMLTextAreaElement): HTMLElement[] {
@@ -41,7 +47,14 @@ export function textColorRows(kit: TextColorKit, ta: HTMLTextAreaElement): HTMLE
   more.append(icon('chevron', 'pico'));
   const clear = el('button', { type: 'button', class: 'tc-clear' }, 'Fjern') as HTMLButtonElement;
   g.append(apply, more, clear);
-  row.append(g);
+  // Understreking står for seg ved siden av fargene, som i Word
+  const under = el('button', { type: 'button', class: 'tc-under', 'aria-pressed': 'false' }) as HTMLButtonElement;
+  under.append(el('span', { class: 'tc-u', 'aria-hidden': 'true' }, 'U'));
+  const ug = el('div', { class: 'group tc-under-g' });
+  ug.append(under);
+  const line = el('div', { class: 'tc-line' });
+  line.append(g, ug);
+  row.append(line);
 
   const palette = el('div', { class: 'tc-palette', id: `tc-pal-${Math.random().toString(36).slice(2, 8)}` });
   more.setAttribute('aria-controls', palette.id);
@@ -61,6 +74,11 @@ export function textColorRows(kit: TextColorKit, ta: HTMLTextAreaElement): HTMLE
     apply.setAttribute('aria-label', `Farge ${nameOf(lastColor)} på markert tekst`);
     clear.disabled = picked ? !anyIn : !colored;
     clear.title = picked ? 'Markert tekst får boksens vanlige tekstfarge' : 'All tekst får boksens vanlige tekstfarge';
+    const on = picked && !!b && allUnderlined(ta.value, b.underlines, a, z);
+    under.disabled = !picked;
+    under.setAttribute('aria-pressed', String(on));
+    under.setAttribute('aria-label', on ? 'Fjern understreking på markert tekst' : 'Understrek markert tekst');
+    under.title = picked ? `${on ? 'Fjern understrekingen' : 'Understrek markert tekst'} (Ctrl+U)` : 'Marker ord i teksten først';
     more.setAttribute('aria-expanded', String(paletteOpen));
     palette.hidden = !paletteOpen;
     for (const s of palette.querySelectorAll<HTMLButtonElement>('.swatch')) s.setAttribute('aria-pressed', String(sameColor(s, lastColor)));
@@ -88,6 +106,21 @@ export function textColorRows(kit: TextColorKit, ta: HTMLTextAreaElement): HTMLE
     sync();
   };
 
+  /** Understreker markert tekst, eller fjerner understrekingen når alt markert allerede er understreket. */
+  const toggleUnderline = () => {
+    const [a, z] = range();
+    if (z <= a) return;
+    kit.change((b) => {
+      const ranges = underlineRanges(b.underlines, b.text.length, a, z, !allUnderlined(b.text, b.underlines, a, z));
+      if (ranges.length) b.underlines = ranges;
+      else delete b.underlines;
+    });
+    ta.dispatchEvent(new Event(REDRAW_MARKS));
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(a, z);
+    sync();
+  };
+
   palette.append(
     kit.swatches(null, BOX_PALETTE, (c) => paint(c)),
   );
@@ -99,12 +132,20 @@ export function textColorRows(kit: TextColorKit, ta: HTMLTextAreaElement): HTMLE
   palette.append(custom);
 
   // Knappene tar ikke fokus fra feltet, så markeringen synes mens du velger farge
-  for (const b of [apply, more, clear, palette]) b.addEventListener('mousedown', (e) => {
+  for (const b of [apply, more, clear, under, palette]) b.addEventListener('mousedown', (e) => {
     if ((e.target as Element).closest('input')) return;
     e.preventDefault();
   });
   apply.addEventListener('click', () => paint(lastColor));
   clear.addEventListener('click', () => paint(null));
+  under.addEventListener('click', toggleUnderline);
+  // Ctrl+U i feltet, som i et tekstprogram
+  ta.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'u') {
+      e.preventDefault();
+      toggleUnderline();
+    }
+  });
   more.addEventListener('click', () => {
     paletteOpen = !paletteOpen;
     sync();

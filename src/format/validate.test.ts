@@ -26,6 +26,14 @@ describe('validatePlan', () => {
     expect(validatePlan(JSON.stringify(d)).errors.some((e) => e.includes('textColors'))).toBe(true);
   });
 
+  it('godtar understreking av deler av teksten, og sier fra om feil', () => {
+    const d = clone();
+    d.lanes[0].boxes[0].underlines = [{ from: 0, to: 3 }];
+    expect(validatePlan(JSON.stringify(d)).errors).toEqual([]);
+    d.lanes[0].boxes[0].underlines = [{ from: 3, to: 2 }];
+    expect(validatePlan(JSON.stringify(d)).errors.some((e) => e.includes('underlines'))).toBe(true);
+  });
+
   it('godtar inntil tre ganger tekst i bokser og lane-navn, men bare to ganger ellers', () => {
     const d = clone();
     d.lanes[0].boxes[0].textScale = 3;

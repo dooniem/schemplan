@@ -703,11 +703,19 @@ a.comment-link:hover { text-decoration-thickness: 2px; }
 .sheet-host .lane-col-edge, .sheet-host .bar-edge { cursor: col-resize; }
 .sheet-host .lane-col-edge:hover, .sheet-host .bar-edge:hover { stroke: rgba(31, 95, 191, 0.35); }
 /* Farge på deler av boksteksten: strek under i fargen i feltet, og «A» med fargestrek som i Word og Excel */
-#panel .ta-mirror .tc-mark { text-decoration: underline 2px var(--tc); text-underline-offset: 3px; text-decoration-skip-ink: none; }
+#panel .ta-mirror .tc-mark { text-decoration: underline 2px var(--tc); text-underline-offset: 4px; text-decoration-skip-ink: none; }
+/* Understreket tekst: tynn strek i tekstens farge rett under ordet, som understreking ser ut */
+#panel .ta-mirror .ul-mark { text-decoration: underline 1px var(--text); text-underline-offset: 1.5px; text-decoration-skip-ink: none; }
 #panel .tc-tools button { flex: 0 0 auto; min-height: 26px; }
 #panel .tc-tools .tc-apply, #panel .tc-tools .tc-more { width: 36px; }
 #panel .tc-tools .tc-clear { flex: 1 1 auto; }
-#panel .tc-tools button:disabled { opacity: 0.45; cursor: default; }
+#panel .tc-tools button:disabled, #panel .tc-under:disabled { opacity: 0.45; cursor: default; }
+/* «U» står for seg ved siden av fargeknappene */
+#panel .tc-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#panel .tc-line .tc-tools { flex: 1 1 auto; min-width: 0; }
+#panel .tc-under-g { flex: 0 0 auto; width: auto; }
+#panel .tc-under-g .tc-under { flex: 0 0 36px; min-height: 26px; }
+.tc-u { font-size: 13px; font-weight: 700; line-height: 1; text-decoration: underline 1.5px; text-underline-offset: 2px; }
 .tc-a { display: inline-block; font-size: 13px; font-weight: 700; line-height: 1; padding-bottom: 1px; border-bottom: 3px solid var(--tc); }
 .tc-more .pico { transform: rotate(90deg); transition: transform 0.15s ease-out; }
 .tc-more[aria-expanded='true'] .pico { transform: rotate(-90deg); }
