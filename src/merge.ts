@@ -2,7 +2,7 @@
 // Datoer, tekst, fag og lanes kommer fra Project. Det brukeren har endret i appen blir stående.
 import type { Box, BoxChange, BoxFollow, Lane, PlanFile } from './format/types';
 import { plainText } from './format/text';
-import { remapRuns } from './format/textcolor';
+import { carryTextStyles } from './format/textcolor';
 import { applyFollows } from './links';
 import { followMerged } from './lanemerge';
 
@@ -105,11 +105,8 @@ export function mergePlans(work: PlanFile, fresh: PlanFile): { plan: PlanFile; r
         if (rotOk) fb.rotation = ob.rotation;
         if (fb.text !== orig.text || fb.rotation !== orig.rotation) fb.original = orig;
       }
-      // Farger på deler av teksten følger teksten, også når Project har endret den
-      if (ob.textColors?.length) {
-        const runs = remapRuns(ob.textColors, ob.text, fb.text);
-        if (runs.length) fb.textColors = runs;
-      }
+      // Farger og understreking på deler av teksten følger teksten, også når Project har endret den
+      carryTextStyles(ob, fb.text, fb);
       // Flyttet til en annen lane i appen: blir der, så lenge Project ikke har flyttet den selv
       const now = oldLaneOf.get(ob)!;
       if (ob.fromLane && now.id !== lane.id) {

@@ -46,7 +46,7 @@ export function unpinBox(b: Box): void {
 
 /** Har brukeren overstyrt noe på boksen? */
 export function isEdited(b: Box): boolean {
-  return !!(b.trade !== undefined || b.fill || b.textColor || b.textColors?.length || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.compactTop !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.textAlign || b.textAt || b.bold || b.front || b.transparency || b.hatch || b.milestoneStyle || b.textScale || b.calloutWidthCm || b.showDates !== undefined);
+  return !!(b.trade !== undefined || b.fill || b.textColor || b.textColors?.length || b.underlines?.length || (b.callout && b.callout !== 'auto') || (b.calloutSide && b.calloutSide !== 'auto') || b.original || b.height || b.top !== undefined || b.compactTop !== undefined || b.hidden || b.fromLane || b.manual || b.header || b.spanTo !== undefined || b.textMiddle || b.textAlign || b.textAt || b.bold || b.front || b.transparency || b.hatch || b.milestoneStyle || b.textScale || b.calloutWidthCm || b.showDates !== undefined);
 }
 
 /** Fjerner alt brukeren har overstyrt, og setter tekst og rotasjon tilbake. */
@@ -60,6 +60,7 @@ export function resetBox(b: Box): void {
   delete b.fill;
   delete b.textColor;
   delete b.textColors;
+  delete b.underlines;
   delete b.callout;
   delete b.calloutSide;
   delete b.height;

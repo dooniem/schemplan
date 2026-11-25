@@ -1,9 +1,9 @@
 // Redigering i tegningen: velg en boks, endre den i panelet, angre og gjør om.
 // Endringene skrives rett inn i planen (som valgfrie felt på boksen), så de følger med i arbeidsfilen.
 import { effectiveRange } from './layout/range';
-import { withBreakMarks } from './breakmarks';
-import { fieldColors, textColorRows } from './textcolorui';
-import { remapRuns } from './format/textcolor';
+import { withBreakMarks, type FieldMark } from './breakmarks';
+import { fieldMarks, textColorRows } from './textcolorui';
+import { carryTextStyles } from './format/textcolor';
 import { autoTextColor } from './layout/color';
 import { baseMilestoneRotation, milestoneRotation } from './layout/milestone';
 import type { Box, Lane, PlanFile, Rotation, TextAlign } from './format/types';
@@ -865,7 +865,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
    * Tekstfelt. Ett angre-steg per skriveøkt.
    * breaks: Enter og | gir linjeskift, og de tvungne linjeskiftene vises med merker i feltet.
    */
-  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks = false, colorsOf?: () => (string | undefined)[]): HTMLElement => {
+  const textField = (id: string, label: string, value: string, rows: string, onInput: (v: string) => void, breaks = false, marksOf?: () => (FieldMark | undefined)[]): HTMLElement => {
     const ta = el('textarea', { id, rows, spellcheck: 'true', 'aria-label': label }) as HTMLTextAreaElement;
     ta.value = value;
     ta.addEventListener('focus', () => (typingSession = false));
@@ -874,7 +874,7 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
       typingSession = false;
       syncTools();
     });
-    return breaks ? withBreakMarks(ta, colorsOf) : ta;
+    return breaks ? withBreakMarks(ta, marksOf) : ta;
   };
   const textColorKey = (c?: string) => (c === '#000000' ? 'black' : c === '#FFFFFF' ? 'white' : 'auto');
   const TEXT_COLORS: ['auto' | 'black' | 'white', string][] = [['auto', 'Auto'], ['black', 'Svart'], ['white', 'Hvit']];
@@ -1607,14 +1607,10 @@ export function createEditor(host: EditorHost, sheet: HTMLElement, panel: HTMLEl
     const tf = textField('box-text', 'Tekst', b.text, '3', (v) =>
       change((x) => {
         keepOriginal(x);
-        // Farget tekst følger med når teksten endres
-        if (x.textColors) {
-          const runs = remapRuns(x.textColors, x.text, v);
-          if (runs.length) x.textColors = runs;
-          else delete x.textColors;
-        }
+        // Farget og understreket tekst følger med når teksten endres
+        carryTextStyles(x, v);
         x.text = v;
-      }, { typing: true, rebuild: false }), true, () => fieldColors(liveBox()),
+      }, { typing: true, rebuild: false }), true, () => fieldMarks(liveBox()),
     );
     st.append(
       tf,

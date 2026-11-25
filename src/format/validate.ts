@@ -381,6 +381,12 @@ export function validatePlan(input: string | unknown): ValidationResult {
             b.textColors.every((t) => isObj(t) && Number.isInteger(t.from) && Number.isInteger(t.to) && (t.from as number) >= 0 && (t.to as number) > (t.from as number) && typeof t.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(t.color));
           if (!ok) err(`${bp}.textColors`, 'må være en liste med fra, til og farge som #RRGGBB');
         }
+        if (b.underlines !== undefined) {
+          const ok =
+            Array.isArray(b.underlines) &&
+            b.underlines.every((t) => isObj(t) && Number.isInteger(t.from) && Number.isInteger(t.to) && (t.from as number) >= 0 && (t.to as number) > (t.from as number));
+          if (!ok) err(`${bp}.underlines`, 'må være en liste med fra og til');
+        }
         if (!Array.isArray(b.taskIds) || !b.taskIds.every((n) => typeof n === 'number')) err(`${bp}.taskIds`, 'må være en liste med tall');
         const label = typeof b.id === 'string' ? `Boks ${b.id}` : bp;
         if (typeof b.id === 'string') {

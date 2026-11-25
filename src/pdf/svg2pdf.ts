@@ -258,11 +258,12 @@ function drawText(c: Ctx, el: SVGTextElement) {
     const lc = s === el ? color : (rgb(s.getAttribute('fill') ?? '') ?? color);
     const f = bold ? c.fonts.bold : c.fonts.regular;
     const set = f.getCharacterSet();
-    // Linjen kan være delt i biter med egen farge (farget tekst i boksene)
+    // Linjen kan være delt i biter med egen farge eller understreking (i boksene)
     const parts = s === el ? [] : Array.from(s.children).filter((p) => p.tagName === 'tspan');
     const pieces = (parts.length ? parts : [s]).map((p) => {
       const safe = safeText(p.textContent ?? '', (cp) => set.includes(cp), c.missing);
-      return { safe, color: p === s ? lc : (rgb(p.getAttribute('fill') ?? '') ?? lc), w: f.widthOfTextAtSize(safe, ls) };
+      const underline = p !== s && p.getAttribute('text-decoration') === 'underline';
+      return { safe, underline, color: p === s ? lc : (rgb(p.getAttribute('fill') ?? '') ?? lc), w: f.widthOfTextAtSize(safe, ls) };
     });
     const w = pieces.reduce((sum, p) => sum + p.w, 0);
     let x = num(s, 'x', num(el, 'x'));
@@ -289,6 +290,11 @@ function drawText(c: Ctx, el: SVGTextElement) {
           showText(f.encodeText(p.safe)),
           endText(),
         );
+        // Understrekingen tegnes som et tynt rektangel i tekstens eget koordinatsystem, så den roteres med
+        if (p.underline && p.w > 0) {
+          const t = ls * (bold ? 0.075 : 0.055);
+          c.ops.push(pushGraphicsState(), concatTransformationMatrix(a, b, cc, d, e, ff), rectangle(0, -ls * 0.1 - t, p.w, t), fill(), popGraphicsState());
+        }
       }
       x += p.w;
     }

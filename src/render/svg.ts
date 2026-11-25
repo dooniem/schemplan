@@ -70,9 +70,9 @@ function text(t: TextBlock, parent: Element) {
     }
     const runs = !isSub(i) && t.runs?.[i];
     if (runs) {
-      // Deler av linjen med egen farge
+      // Deler av linjen med egen farge eller understreking
       for (const run of runs) {
-        const part = node('tspan', run.color ? { fill: run.color } : {}, span);
+        const part = node('tspan', { ...(run.color ? { fill: run.color } : {}), ...(run.underline ? { 'text-decoration': 'underline' } : {}) }, span);
         part.textContent = run.text;
       }
     } else span.textContent = line;

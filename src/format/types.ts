@@ -349,6 +349,12 @@ export interface TextColorRun {
   color: HexColor;
 }
 
+/** Tegnområde i teksten, fra og med `from`, til men ikke med `to`. */
+export interface TextRange {
+  from: number;
+  to: number;
+}
+
 export interface Box {
   /** "laneId_boxId". */
   id: string;
@@ -374,6 +380,8 @@ export interface Box {
   textColor?: HexColor;
   /** Egen farge på deler av teksten, valgt i appen (valgfritt). Går foran `textColor` for de tegnene. */
   textColors?: TextColorRun[];
+  /** Understreket tekst, som tegnområder i teksten slik den er lagret (valgfritt). */
+  underlines?: TextRange[];
   /** Tekst og rotasjon før første endring i appen, så de kan tilbakestilles (valgfritt). */
   original?: { text: string; rotation: Rotation };
   /** Høyde valgt i appen, i tekstlinjer (valgfritt). Boksen blir aldri lavere enn teksten krever. */
