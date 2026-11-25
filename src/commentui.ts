@@ -5,7 +5,7 @@ import { icon, type IconName } from './ctxmenu';
 import type { Fold } from './panelfold';
 import { commentPreview } from './commenttip';
 import { imageFiles, readImage } from './imagefile';
-import { addCommentImages, COMMENT_MAX_IMAGES, COMMENT_MAX_PX, COMMENT_PNG_LIMIT, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText } from './comment';
+import { addCommentImages, COMMENT_MAX_IMAGES, COMMENT_MAX_PX, COMMENT_PNG_LIMIT, commentBytes, commentOf, commentSummary, formatBytes, insertTodo, removeCommentImage, setCommentText } from './comment';
 
 export interface CommentKit {
   el: <K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Record<string, string>, text?: string) => HTMLElementTagNameMap[K];
@@ -60,7 +60,9 @@ export function commentSection(kit: CommentKit, b: Box): void {
       status.textContent = [failed ? `${failed} ${failed === 1 ? 'fil' : 'filer'} kunne ikke leses som bilde.` : '', over > 0 ? `Bare ${COMMENT_MAX_IMAGES} bilder får plass.` : ''].filter(Boolean).join(' ');
   };
 
-  const tf = kit.textField('box-comment', 'Kommentar', c?.text ?? b.comment?.text ?? '', '3', (v) => kit.typing((x) => setCommentText(x, v)));
+  // Feltet blir høyere med flere linjer (inntil åtte), så en liste med gjøremål kan leses
+  const now = c?.text ?? b.comment?.text ?? '';
+  const tf = kit.textField('box-comment', 'Kommentar', now, String(Math.min(8, Math.max(3, now.split('\n').length))), (v) => kit.typing((x) => setCommentText(x, v)));
   const ta = tf.querySelector('textarea') ?? (tf as HTMLTextAreaElement);
   // Bilde på utklippstavlen limes inn i kommentaren, tekst limes inn som vanlig
   ta.addEventListener('paste', (e) => {
@@ -69,7 +71,15 @@ export function commentSection(kit: CommentKit, b: Box): void {
     e.preventDefault();
     void add(files);
   });
-  s.append(tf);
+  // Gjøremål: «[ ] » først på linjen. I kortet ved klikk på boksen blir de avkrysningsbokser.
+  const todo = kit.btn('Legg til gjøremål', 'check', () => {
+    const r = insertTodo(ta.value, ta.selectionStart ?? ta.value.length);
+    ta.focus();
+    ta.value = r.text;
+    ta.setSelectionRange(r.caret, r.caret);
+    ta.dispatchEvent(new Event('input'));
+  }, 'Setter «[ ]» foran linjen. Skriv [x] for et gjøremål som er gjort.', 'linkish');
+  s.append(tf, todo, el('p', { class: 'hint' }, '[ ] først på linjen er et gjøremål, [x] er gjort. Utenfor redigering krysser du av ved å klikke boksen.'));
 
   if (imgs.length) {
     const list = el('ul', { class: 'comment-imgs', 'aria-label': 'Bilder i kommentaren' });

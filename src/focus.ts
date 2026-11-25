@@ -76,6 +76,8 @@ export function createFocus(
   getPlan: () => PlanFile | null,
   bar: HTMLElement,
   isEditing: () => boolean,
+  /** Et gjøremål i kommentaren er krysset av eller ikke, i kortet (linjen talt fra 0). */
+  onTodo?: (boxId: string, line: number) => void,
 ): Focus {
   let svg: SVGSVGElement | null = null;
   let L: Layout | null = null;
@@ -174,7 +176,7 @@ export function createFocus(
     tip.style.top = `${Math.max(8, y)}px`;
   };
   // Hele kommentaren i et kort når en boks med kommentar klikkes
-  const card = createCommentCard(commentPreview());
+  const card = createCommentCard(commentPreview(), onTodo);
   host.addEventListener('pointermove', (e) => {
     // Knapp nede (dra eller panorer) eller berøring: ingen detaljer. Leses fra hendelsen selv, så et
     // tapt «slipp» (f.eks. etter høyreklikkmenyen) ikke stopper detaljene for godt.
@@ -419,7 +421,6 @@ export function createFocus(
       return onlyTrades && anyPick();
     },
     afterDraw(s, layout) {
-      card.close();
       svg = s;
       L = layout;
       const plan = getPlan();
@@ -428,6 +429,9 @@ export function createFocus(
       marksOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, boxMarks(b, !!plan.plan.layout.customMark)] as [string, MarkKind[]])) : []);
       boxOf = new Map(plan ? plan.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as [string, Box])) : []);
       drawCommentMarks(s, layout, boxOf);
+      // Kortet står åpent når et gjøremål krysses av; i redigering står kommentaren i panelet
+      if (isEditing()) card.close();
+      else card.refresh(card.boxId ? boxOf.get(card.boxId) : undefined);
       hideTip();
       paint();
     },

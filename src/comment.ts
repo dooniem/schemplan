@@ -66,7 +66,8 @@ export function commentSummary(b: Box): string {
   const c = commentOf(b);
   if (!c) return 'Ingen';
   const n = c.images?.length ?? 0;
-  return [c.text?.trim() ? 'Tekst' : '', n ? `${n} ${n === 1 ? 'bilde' : 'bilder'}` : ''].filter(Boolean).join(' · ');
+  const t = todoCount(c.text ?? '');
+  return [c.text?.trim() ? 'Tekst' : '', t.total ? `${t.done} av ${t.total} gjort` : '', n ? `${n} ${n === 1 ? 'bilde' : 'bilder'}` : ''].filter(Boolean).join(' · ');
 }
 
 /** Er kommentaren gyldig i en plan som leses inn? */
@@ -126,4 +127,56 @@ export function splitLinks(text: string): TextPart[] {
   }
   if (at < text.length) out.push({ text: text.slice(at) });
   return out;
+}
+
+/** Linje som er et gjøremål: «[ ]» eller «[x]» først på linjen. */
+const TODO_RE = /^(\s*)\[( |x|X)\][ \t]?(.*)$/;
+
+/** En linje i kommentaren: vanlig tekst, eller et gjøremål som er gjort eller ikke. */
+export interface CommentLine {
+  text: string;
+  todo?: { done: boolean };
+}
+
+/** Deler kommentaren i linjer, med gjøremålene merket. */
+export function commentLines(text: string): CommentLine[] {
+  return text.split('\n').map((line) => {
+    const m = TODO_RE.exec(line);
+    return m ? { text: m[3], todo: { done: m[2] !== ' ' } } : { text: line };
+  });
+}
+
+/** Hvor mange gjøremål kommentaren har, og hvor mange som er gjort. */
+export function todoCount(text: string): { done: number; total: number } {
+  const todos = commentLines(text).filter((l) => l.todo);
+  return { done: todos.filter((l) => l.todo!.done).length, total: todos.length };
+}
+
+/** Krysser av eller fjerner krysset på gjøremålet på linje `line` (talt fra 0). */
+export function toggleTodo(b: Box, line: number): void {
+  const text = b.comment?.text;
+  if (!text) return;
+  const lines = text.split('\n');
+  const m = TODO_RE.exec(lines[line] ?? '');
+  if (!m) return;
+  lines[line] = lines[line].replace(/\[( |x|X)\]/, m[2] === ' ' ? '[x]' : '[ ]');
+  setCommentText(b, lines.join('\n'));
+}
+
+/**
+ * Gjør linjen markøren står på, til et gjøremål. En tom linje blir «[ ] »; en linje med tekst får
+ * «[ ] » foran. Gir den nye teksten og hvor markøren skal stå.
+ */
+export function insertTodo(text: string, caret: number): { text: string; caret: number } {
+  const start = text.lastIndexOf('\n', caret - 1) + 1;
+  const end = text.indexOf('\n', caret);
+  const line = text.slice(start, end < 0 ? undefined : end);
+  if (TODO_RE.test(line)) {
+    // Allerede et gjøremål: nytt gjøremål på linjen under
+    const at = end < 0 ? text.length : end;
+    const next = `${text.slice(0, at)}\n[ ] ${text.slice(at)}`;
+    return { text: next, caret: at + 5 };
+  }
+  const next = `${text.slice(0, start)}[ ] ${text.slice(start)}`;
+  return { text: next, caret: caret + 4 };
 }

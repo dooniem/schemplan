@@ -19,7 +19,8 @@ import { formatLong } from './layout/dates';
 import { createEditor } from './editor';
 import { createFocus } from './focus';
 import { dropHidden, shownImages } from './criticalonly';
-import { snapshotOf } from './editmodel';
+import { findBox, snapshotOf } from './editmodel';
+import { toggleTodo } from './comment';
 import type { PdfVariant } from './pdf/export';
 import { placePopovers } from './popover';
 import { setupSubmenus } from './submenu';
@@ -136,7 +137,15 @@ const editor = createEditor(
   $<HTMLElement>('#edit-tools'),
 );
 viewer.setIgnore((e) => editor.owns(e));
-const focus = createFocus(host, () => plan, $<HTMLElement>('#focus-bar'), () => editor.active);
+// Gjøremål i kommentarer krysses av mens planen vises, f.eks. i et møte. Det blir et angresteg og
+// en endring som må lagres, som andre endringer.
+const focus = createFocus(host, () => plan, $<HTMLElement>('#focus-bar'), () => editor.active, (id, line) => {
+  const b = plan && findBox(plan, id);
+  if (!b) return;
+  editor.record();
+  toggleTodo(b, line);
+  draw();
+});
 const search = createSearch($<HTMLInputElement>('#search'), $('#search-count'), () => plan);
 // Datafanen følger planen: tabellen tegnes på nytt etter hver tegning mens den vises
 const dataSection = $<HTMLElement>('#data-view');
