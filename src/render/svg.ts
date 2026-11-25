@@ -1,4 +1,4 @@
-import { ARROW_MM, CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type BoxItem, type Layout, type TextBlock } from '../layout/layout';
+import { ARROW_MM, CHANGE_COLOR, FLAG_HOIST, FLAG_WAVE, type BoxItem, type Layout, type ProgressMark, type TextBlock } from '../layout/layout';
 import { LINE_HEIGHT } from '../layout/text';
 import { dashArray } from '../layout/critical';
 import type { PlacedImage } from '../layout/image';
@@ -254,6 +254,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   // Bokser og milepæler
   const itemsG = node('g', { class: 'items' }, svg);
   const markEdges: [BoxItem, number][] = [];
+  const behind = new Map(L.progress.filter((m) => m.behind).map((m) => [m.id, m]));
   for (const it of L.items) {
     // Multi Lane-bokser går over flere lanes og klippes til planområdets omriss
     const g = node('g', { 'data-id': it.id, ...(it.kind === 'box' && it.span ? clipAttrs : {}) }, itemsG);
@@ -283,6 +284,9 @@ export function renderPlan(L: Layout): SVGSVGElement {
       }
       // Skravering over fyllet. Strekene er allerede klippet til boksen og holder seg unna teksten.
       if (it.hatch) node('path', { class: 'hatch', d: it.hatch.d, fill: 'none', stroke: it.hatch.color, 'stroke-width': it.hatch.width, 'pointer-events': 'none' }, g);
+      // Fremdrift i en Multi Lane-boks hører til boksen, så boksene oppå dekker den som de dekker boksen
+      const pm = behind.get(it.id);
+      if (pm?.done) progressStripe(pm, g);
       if (it.text) text(it.text, g);
       // Høylytt arbeid og nattarbeid på høyre kant, innenfor pilspissen når boksen fortsetter
       if (it.marks) markEdges.push([it, xr]);
@@ -353,10 +357,7 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.progress.length) {
     const pg = node('g', { class: 'progress', 'pointer-events': 'none' }, svg);
     for (const m of L.progress) {
-      if (m.done) {
-        const sh = Math.min(1.2, Math.max(0.5, m.h * 0.22));
-        node('rect', { 'data-for': m.id, x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * m.done, height: sh, fill: '#000000', 'fill-opacity': 0.4 }, pg);
-      }
+      if (m.done && !m.behind) progressStripe(m, pg);
       if (m.base) {
         const by = m.y + m.h + 0.45;
         node('path', { 'data-for': m.id, d: `M${r(m.base.x0)} ${r(by - 0.35)} L${r(m.base.x0)} ${r(by)} L${r(m.base.x1)} ${r(by)} L${r(m.base.x1)} ${r(by - 0.35)}`, fill: 'none', stroke: '#404040', 'stroke-width': 0.25 }, pg);
@@ -476,4 +477,10 @@ export function renderPlan(L: Layout): SVGSVGElement {
   if (L.headerRight) text(L.headerRight, svg);
   text(L.subtitle, svg);
   return svg;
+}
+
+/** Andel ferdig som mørk stripe nederst i boksen. */
+function progressStripe(m: ProgressMark, parent: Element) {
+  const sh = Math.min(1.2, Math.max(0.5, m.h * 0.22));
+  node('rect', { 'data-for': m.id, class: 'progress-done', 'pointer-events': 'none', x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * (m.done ?? 0), height: sh, fill: '#000000', 'fill-opacity': 0.4 }, parent);
 }

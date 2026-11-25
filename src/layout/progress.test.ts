@@ -137,3 +137,25 @@ describe('fremdriftsfront: tegning', () => {
     expect(off.status!.front).toBeNull();
   });
 });
+
+describe('fremdrift i boksene', () => {
+  const opts = { orientation: 'landscape' as const, heightMode: 'compact' as const, textSizePt: 9, fitToSheet: true };
+  it('Multi Lane-bokser får fremdrift, men ikke baseline; overskriftsbokser får ingen', () => {
+    const p = testplan();
+    p.plan.layout.showProgress = true;
+    p.plan.layout.showBaseline = true;
+    for (const t of p.tasks) Object.assign(t, { percentComplete: 40, baselineStart: t.start, baselineFinish: t.finish });
+    const boxes = p.lanes.flatMap((l) => l.boxes);
+    boxes.find((b) => b.id === '1_1')!.spanTo = '2';
+    boxes.find((b) => b.id === '2_1')!.header = true;
+    const L = computeLayout(p, opts, approxMeasure);
+    const span = L.progress.find((m) => m.id === '1_1')!;
+    expect(span.done).toBeCloseTo(0.4);
+    expect(span.base).toBeNull();
+    expect(span.behind).toBe(true);
+    expect(L.progress.some((m) => m.id === '2_1')).toBe(false);
+    const plain = L.progress.find((m) => m.id === '1_2')!;
+    expect(plain.base).not.toBeNull();
+    expect(plain.behind).toBeUndefined();
+  });
+});

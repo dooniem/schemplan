@@ -271,6 +271,8 @@ export interface ProgressMark {
   done: number | null;
   /** Baseline fra første baseline-start til siste baseline-slutt, når det vises og finnes. */
   base: { x0: number; x1: number } | null;
+  /** Multi Lane-boks: stripen tegnes sammen med boksen, bak boksene som ligger oppå den. */
+  behind?: boolean;
 }
 
 /** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
@@ -2151,7 +2153,10 @@ function changeMarks(items: Item[], changes: Record<string, BoxChange>, axis: Ti
   return marks;
 }
 
-/** Fremdrift og baseline for bokser fra Project (ikke overskrifts- og Multi Lane-bokser). */
+/**
+ * Fremdrift og baseline for bokser fra Project. Multi Lane-bokser får fremdrift, men ikke baseline,
+ * som ellers ville havnet inne i lanen under. Overskriftsbokser får ingen av dem.
+ */
 function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressMark[] {
   const showDone = !!file.plan.layout.showProgress;
   const showBase = !!file.plan.layout.showBaseline;
@@ -2161,12 +2166,13 @@ function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressM
   const last = addDays(axis.end, -1);
   const marks: ProgressMark[] = [];
   for (const it of items) {
-    if (it.kind !== 'box' || it.header || it.span) continue;
+    if (it.kind !== 'box' || (it.header && !it.span)) continue;
+    const span = !!it.span;
     const ts = (boxes.get(it.id)?.taskIds ?? []).map((id) => tasks.get(id)).filter((t) => !!t);
     if (!ts.length) continue;
     const done = showDone ? Math.min(1, Math.max(0, ts.reduce((s, t) => s + t.percentComplete, 0) / ts.length / 100)) : null;
     let base: ProgressMark['base'] = null;
-    if (showBase) {
+    if (showBase && !span) {
       const bs = ts.map((t) => t.baselineStart).filter((d): d is string => !!d).sort()[0];
       const bf = ts.map((t) => t.baselineFinish).filter((d): d is string => !!d).sort().pop();
       if (bs && bf && bf >= bs) {
@@ -2175,7 +2181,7 @@ function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressM
         if (f >= axis.start && s < axis.end) base = { x0: axis.xStart(Math.max(s, axis.start)), x1: axis.xEnd(Math.min(f, last)) };
       }
     }
-    if (done !== null || base) marks.push({ id: it.id, x0: it.x0, x1: it.x1, y: it.y, h: it.h, done, base });
+    if (done !== null || base) marks.push({ id: it.id, x0: it.x0, x1: it.x1, y: it.y, h: it.h, done, base, ...(span ? { behind: true } : {}) });
   }
   return marks;
 }
