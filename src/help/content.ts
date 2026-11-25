@@ -354,7 +354,7 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'innstillinger', group: 'Arket', title: 'Ark, kalender og visning',
-    text: `${ui('Innstillinger')} har arkstørrelse og retning, kalender med måned eller uke, start og slutt på tidsaksen, statuslinje, tekst og logo. ${ui('Vis på arket')} slår av og på det som tegnes, som forklaring, fremdrift, baseline og datoer.`,
+    text: `${ui('Innstillinger')} har arkstørrelse og retning, kalender med måned eller uke, start og slutt på tidsaksen, statuslinje, tekst og logo. ${ui('Vis på arket')} slår av og på det som tegnes, som forklaring, fremdrift, baseline og datoer. Fremdrift kan vises som stripe nederst i boksen eller som felt: den ferdige delen av boksen får brede skrå bånd og en strek der fremdriften står, og «Ferdig» kommer med i forklaringen.`,
     when: `A3 liggende passer de fleste planer; A4 er laget for å lime inn i Word. Ukekalender passer korte planer. Bokser utenfor en kortere tidsakse ligger urørt og kommer tilbake når den utvides.`,
     img: 'innstillinger', alt: 'Innstillinger med undermenyen Kalender og stil åpen.',
     words: 'innstillinger a3 a4 liggende stående måned uke kalender tidsakse statuslinje ferie logo revisjon', see: ['utkikk', 'datoer'],

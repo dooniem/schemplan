@@ -771,7 +771,7 @@ function syncControls() {
   document.querySelectorAll<HTMLButtonElement>('[data-paper]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === (opts.paper ?? 'A3'))));
   $<HTMLInputElement>('#show-legend').checked = opts.showLegend ?? plan?.plan.options.legend ?? true;
   $<HTMLInputElement>('#show-today').checked = !!plan?.plan.layout.todayLine;
-  $<HTMLInputElement>('#show-progress').checked = !!plan?.plan.layout.showProgress;
+  syncProgressControls();
   $<HTMLInputElement>('#show-baseline').checked = !!plan?.plan.layout.showBaseline;
   syncDateControls();
   $<HTMLInputElement>('#show-baseline').disabled = !plan?.tasks.some((t) => t.baselineFinish);
@@ -914,8 +914,22 @@ for (const [id, key] of [['#show-progress', 'showProgress'], ['#show-baseline', 
   $<HTMLInputElement>(id).addEventListener('change', (e) => {
     if (!plan) return;
     plan.plan.layout[key] = (e.target as HTMLInputElement).checked;
+    syncProgressControls();
     draw();
   });
+// Fremdrift som stripe (standard, lagres ikke) eller som felt i boksen
+function syncProgressControls() {
+  const on = !!plan?.plan.layout.showProgress;
+  $<HTMLInputElement>('#show-progress').checked = on;
+  $<HTMLElement>('#progress-style-row').hidden = !on;
+  $<HTMLSelectElement>('#progress-style').value = plan?.plan.layout.progressStyle ?? 'stripe';
+}
+$<HTMLSelectElement>('#progress-style').addEventListener('change', (e) => {
+  if (!plan) return;
+  if ((e.target as HTMLSelectElement).value === 'fill') plan.plan.layout.progressStyle = 'fill';
+  else delete plan.plan.layout.progressStyle;
+  draw();
+});
 // Datoer på boksene: gjelder hele planen, og hver boks kan ha eget valg i redigeringen
 const dateFormatSel = $<HTMLSelectElement>('#date-format');
 for (const f of DATE_FORMATS) dateFormatSel.append(new Option(DATE_FORMAT_LABELS[f], f));

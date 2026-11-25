@@ -17,6 +17,7 @@ import { autoTextColor, derivedBorder } from './color';
 import { autoInnerEdgeTrades, markInnerEdges } from './inneredge';
 import { seenFill, transparencyOf } from './transparency';
 import { boxHatch } from './hatch';
+import { boxProgressFill, type ProgressFill } from './progressfill';
 import { drawOrder } from './draworder';
 import { alignedText, alignOf, textAtOf } from './textalign';
 import { criticalLine, type CriticalLine } from './critical';
@@ -149,6 +150,8 @@ export interface BoxItem {
   innerEdge?: string;
   /** Skravering: strekene som én sti (M og L), fargen og strekbredden. */
   hatch?: { d: string; color: string; width: number };
+  /** Fremdrift som felt i boksen (plan.layout.progressStyle = 'fill'). */
+  progressFill?: ProgressFill;
 }
 
 export interface MilestoneItem {
@@ -237,13 +240,15 @@ export interface LegendEntry {
   trade?: string;
   label: TextBlock;
   /** Symbolforklaring i stedet for fagfarge (bare i ny stil). */
-  symbol?: 'diamond' | 'flag' | 'holiday' | 'new' | 'moved' | MarkKind;
+  symbol?: 'diamond' | 'flag' | 'holiday' | 'new' | 'moved' | 'progress' | MarkKind;
   /** Nøkkelen i plan.layout.legendItems: fagnavnet, eller FERIE_KEY. */
   key: string;
 }
 
 /** Nøkler i plan.layout.legendItems for endringsvisningen. */
 export const CHANGE_KEYS = { new: '(ny)', moved: '(ny dato)' } as const;
+/** Nøkkelen for fremdrift som felt i plan.layout.legendItems. */
+export const PROGRESS_KEY = '(ferdig)';
 /** Fargen endringene markeres med. */
 export const CHANGE_COLOR = '#E8590C';
 
@@ -273,6 +278,8 @@ export interface ProgressMark {
   base: { x0: number; x1: number } | null;
   /** Multi Lane-boks: stripen tegnes sammen med boksen, bak boksene som ligger oppå den. */
   behind?: boolean;
+  /** Fremdriften vises som felt i boksen (BoxItem.progressFill), ikke som stripe. */
+  asFill?: boolean;
 }
 
 /** Nøkkelen for ferie i plan.layout.legendItems. Fagnavn kan ikke ha parentes rundt hele navnet utenom «(none)». */
@@ -878,7 +885,12 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
   if (opts.showLegend ?? file.plan.options.legend) {
     // Plass til datoen nede til høyre
     const lxMax = x1 - measure(footerText, legendSize, true) - 6;
-    const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved' | MarkKind; key: string }[] = [
+    // Fremdrift som felt forklares, siden båndene ellers kan leses som vanlig skravering
+    const lay = file.plan.layout;
+    const pct = new Map(file.tasks.map((t) => [t.uid, t.percentComplete]));
+    const anyDone = !!lay.showProgress && lay.progressStyle === 'fill' && file.lanes.some((l) => l.shown && !l.hidden && l.boxes.some((b) => b.shown && !b.hidden && !b.resolved?.isMilestone && (b.taskIds ?? []).some((id) => (pct.get(id) ?? 0) > 0)));
+    const symbolEntries: { name: string; symbol: 'holiday' | 'new' | 'moved' | 'progress' | MarkKind; key: string }[] = [
+      ...(anyDone ? [{ name: 'Ferdig', symbol: 'progress' as const, key: PROGRESS_KEY }] : []),
       ...MARK_KINDS.filter((k) => usedMarks.has(k)).map((k) => ({ name: markName(k, file.plan.layout.customMark?.name), symbol: k, key: MARK_KEYS[k] })),
       // Ruter og flagg betyr ulike ting fra plan til plan, så de navngis ikke i legenden
       ...(ny && spans.length ? [{ name: 'Ferie', symbol: 'holiday' as const, key: FERIE_KEY }] : []),
@@ -1297,6 +1309,17 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const h = b && boxHatch(b, it, ny, measure);
     if (h) it.hatch = h;
   }
+  // Fremdrift som felt i boksen, i stedet for stripen nederst
+  const progress = progressMarks(items, file, axis);
+  if (file.plan.layout.progressStyle === 'fill') {
+    const byId = new Map(boxItems.map((i) => [i.id, i]));
+    for (const m of progress) {
+      const it = byId.get(m.id);
+      const pf = it && m.done !== null && boxProgressFill(it, m.done, ny, measure);
+      if (pf) it.progressFill = pf;
+      if (m.done !== null) m.asFill = true;
+    }
+  }
   return {
     width: W,
     height: H,
@@ -1332,7 +1355,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     logo,
     changes: changeMarks(items, changeOf, axis),
     todayX: opts.today ? xOfDate(opts.today) : null,
-    progress: progressMarks(items, file, axis),
+    progress,
     images,
     arrows: placeArrows(file.plan.layout.images ?? [], images, W, H, (id) => {
       const it = items.find((i) => i.id === id);

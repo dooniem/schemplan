@@ -114,6 +114,8 @@ export interface PlanSettings {
     revision?: { on: boolean; number: string; text?: string };
     /** % ferdig som mørk stripe nederst i boksene. */
     showProgress?: boolean;
+    /** Hvordan fremdriften vises: stripe nederst (standard) eller felt som fyller den ferdige delen av boksen. */
+    progressStyle?: 'stripe' | 'fill';
     /** Baseline som tynn strek under boksene. */
     showBaseline?: boolean;
     /** Tynn linje på dagens dato, uavhengig av statuslinjen. */

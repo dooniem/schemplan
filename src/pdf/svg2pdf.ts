@@ -1,6 +1,6 @@
 // Tegner SVG-en fra renderPlan inn på en PDF-side som ren vektor.
 // Bare det renderPlan bruker er støttet: rect, line, path (M L C Z), text/tspan, g,
-// fill-opacity, opacity på grupper, rotate() på tekst og skravurmønsteret for ferier.
+// fill-opacity, stroke-opacity (på streker uten fyll), opacity på grupper, rotate() på tekst og skravurmønsteret for ferier.
 import {
   LineCapStyle,
   LineJoinStyle,
@@ -127,7 +127,8 @@ function paint(c: Ctx, el: Element): 'f' | 's' | 'b' | null {
   const fillC = rgb(attr(el, 'fill') ?? '#000000');
   const strokeC = rgb(attr(el, 'stroke') ?? 'none');
   const sw = Number(attr(el, 'stroke-width') ?? '1');
-  const fo = Number(attr(el, 'fill-opacity') ?? '1') * opacityOf(el);
+  // Én gjennomsiktighet for både fyll og strek: stroke-opacity brukes bare på streker uten fyll
+  const fo = Number(attr(el, fillC ? 'fill-opacity' : 'stroke-opacity') ?? '1') * opacityOf(el);
   if (fillC) c.ops.push(setFillingRgbColor(...fillC));
   if (strokeC && sw > 0) c.ops.push(setStrokingRgbColor(...strokeC), setLineWidth(sw));
   if (strokeC && attr(el, 'stroke-linejoin') === 'round') c.ops.push(setLineJoin(LineJoinStyle.Round));
