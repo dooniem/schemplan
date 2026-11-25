@@ -6,7 +6,7 @@
 // Alt regnes ut som enkle former med klipping til feltet, så skjerm og PDF tegner det samme.
 
 import { ARROW_MM, type BoxItem } from './layout';
-import { luminance, mixColor } from './color';
+import { autoTextColor, mixColor } from './color';
 import { insetOutline } from './inneredge';
 import { boxGaps, stripes, subtractSpans, type Pt } from './hatch';
 import type { Measure } from './text';
@@ -44,8 +44,6 @@ export interface ProgressFill {
 
 const r = (v: number) => Math.round(v * 1000) / 1000;
 
-/** Mørke fyll, der svart ikke synes, får lyse bånd i stedet. */
-const DARK = 0.1;
 
 /** Delen av den konvekse mangekanten som ligger til venstre for x = cut (Sutherland–Hodgman). */
 export function clipLeft(poly: readonly Pt[], cut: number): Pt[] {
@@ -73,7 +71,8 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
   const outline = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, inset);
   const poly = d >= 1 ? outline : clipLeft(outline, it.x0 + (it.x1 - it.x0) * d);
   if (poly.length < 3) return null;
-  const dark = luminance(it.fill) < DARK;
+  // Fyll som får hvit tekst (mørke og mellommørke) får lyse bånd: mørke bånd forsvinner der
+  const dark = autoTextColor(it.fill) === '#FFFFFF';
   const gaps = boxGaps(it, measure);
   // Endene på de brede båndene skal heller ikke nå inn i feltet rundt teksten
   // Korte biter mellom tekstlinjene ser ødelagte ut; de tegnes svakt sammen med resten bak teksten
@@ -94,8 +93,8 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
     bands,
     bandsUnder,
     ink: dark ? '#FFFFFF' : '#000000',
-    wash: dark ? 0.14 : 0.1,
-    band: dark ? 0.2 : 0.15,
+    wash: dark ? 0.16 : 0.12,
+    band: dark ? 0.32 : 0.2,
     front,
     frontColor: dark ? mixColor(it.fill, '#FFFFFF', 0.7) : mixColor(it.fill, '#000000', 0.62),
     done: d,
