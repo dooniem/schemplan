@@ -531,5 +531,5 @@ function legendBands(x0: number, x1: number, y: number, h: number): string {
 /** Andel ferdig som mørk stripe nederst i boksen. */
 function progressStripe(m: ProgressMark, parent: Element) {
   const sh = Math.min(1.2, Math.max(0.5, m.h * 0.22));
-  node('rect', { 'data-for': m.id, class: 'progress-done', 'pointer-events': 'none', x: m.x0, y: m.y + m.h - sh, width: (m.x1 - m.x0) * (m.done ?? 0), height: sh, fill: '#000000', 'fill-opacity': 0.4 }, parent);
+  node('rect', { 'data-for': m.id, class: 'progress-done', 'pointer-events': 'none', x: m.x0, y: m.y + m.h - sh, width: Math.max(0, m.xDone - m.x0), height: sh, fill: '#000000', 'fill-opacity': 0.4 }, parent);
 }

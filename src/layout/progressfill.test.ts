@@ -24,26 +24,26 @@ describe('clipLeft', () => {
 
 describe('boxProgressFill', () => {
   it('ingenting når ingenting er ferdig', () => {
-    expect(boxProgressFill(box(), 0, true, approxMeasure)).toBeNull();
+    expect(boxProgressFill(box(), 0, null, true, approxMeasure)).toBeNull();
   });
   it('feltet slutter ved fremdriften, og fronten står der', () => {
-    const pf = boxProgressFill(box(), 0.25, true, approxMeasure)!;
+    const pf = boxProgressFill(box(), 0.25, null, true, approxMeasure)!;
     expect(Math.max(...xs(pf.poly))).toBeCloseTo(20);
     expect(pf.front).toMatch(/^M20 /);
     expect(pf.bands.length).toBeGreaterThan(0);
     expect(pf.ink).toBe('#000000');
   });
   it('ferdig boks: hele boksen, ingen front', () => {
-    const pf = boxProgressFill(box(), 1, true, approxMeasure)!;
+    const pf = boxProgressFill(box(), 1, null, true, approxMeasure)!;
     expect(Math.max(...xs(pf.poly))).toBeCloseTo(50 - 0.15);
     expect(pf.front).toBe('');
   });
   it('mørkt fyll får lyse bånd', () => {
-    expect(boxProgressFill(box({ fill: '#000075' }), 0.5, true, approxMeasure)!.ink).toBe('#FFFFFF');
+    expect(boxProgressFill(box({ fill: '#000075' }), 0.5, null, true, approxMeasure)!.ink).toBe('#FFFFFF');
   });
   it('fronten brytes rundt teksten', () => {
     const text = { x: 30, y: 23.5, lines: ['Lorem ipsum dolor'], size: 3, color: '#000000', anchor: 'middle' as const };
-    const pf = boxProgressFill(box({ h: 12, y: 20, text: { ...text, y: 27 } }), 0.5, true, approxMeasure)!;
+    const pf = boxProgressFill(box({ h: 12, y: 20, text: { ...text, y: 27 } }), 0.5, null, true, approxMeasure)!;
     // To stykker: over og under teksten
     expect(pf.front.match(/M/g)!.length).toBe(2);
   });
@@ -67,5 +67,26 @@ describe('fremdrift som felt i planen', () => {
     expect(withDone.every((m) => m.asFill)).toBe(true);
     expect(L.items.filter((i) => i.kind === 'box' && i.progressFill).length).toBe(withDone.length);
     expect(L.legend.some((e) => e.key === PROGRESS_KEY && e.symbol === 'progress')).toBe(true);
+  });
+});
+
+describe('fremdrift i arbeidstid', () => {
+  it('20 % av 15 arbeidsdager står ved slutten av tredje arbeidsdag, som fremdriftsfronten', () => {
+    const p = testplan();
+    p.plan.layout.showProgress = true;
+    p.plan.layout.progressStyle = 'fill';
+    const b = p.lanes.flatMap((l) => l.boxes).find((x) => x.id === '4_2')!;
+    b.rotation = 0;
+    b.resolved = { ...b.resolved!, start: '2026-11-23', finish: '2026-12-11' };
+    for (const t of p.tasks.filter((t) => b.taskIds.includes(t.uid))) Object.assign(t, { start: '2026-11-23', finish: '2026-12-11', percentComplete: 20 });
+    const L = computeLayout(p, { orientation: 'landscape', heightMode: 'compact', textSizePt: 9, fitToSheet: true }, approxMeasure);
+    const m = L.progress.find((x) => x.id === '4_2')!;
+    // Mandag til onsdag er ferdig: grensen mellom onsdag 25. og torsdag 26.
+    const edge = (L.xOfDate('2026-11-25')! + L.xOfDate('2026-11-26')!) / 2;
+    expect(m.xDone).toBeCloseTo(edge, 2);
+    // Andel av bredden i kalenderdager ville gitt et punkt lenger til høyre
+    expect(m.x0 + (m.x1 - m.x0) * 0.2).toBeGreaterThan(edge);
+    const it = L.items.find((i) => i.id === '4_2');
+    expect(it?.kind === 'box' && Math.max(...it.progressFill!.poly.map(([x]) => x))).toBeCloseTo(edge, 2);
   });
 });

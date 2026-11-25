@@ -24,7 +24,7 @@ import { criticalLine, type CriticalLine } from './critical';
 import { CRITICAL_NUMBERS, inLine, styleOf } from '../criticallines';
 import { laneTint, tintStrengthOf, type LaneTint } from './lanetint';
 import { statusLabel, type StatusMoment } from './status';
-import { deltaText, frontPath, frontPoints } from './progress';
+import { deltaText, frontPath, frontPoints, workClock } from './progress';
 import type { LookaheadExtras } from './lookahead';
 import { boxTrade, tradeColors } from '../trades';
 import { groupRuns } from '../lanegroup';
@@ -274,6 +274,8 @@ export interface ProgressMark {
   h: number;
   /** Andel ferdig, 0–1. Null når fremdrift ikke vises eller boksen ikke har aktiviteter. */
   done: number | null;
+  /** Der fremdriften står (mm), regnet i arbeidstid fra boksens start, som fremdriftsfronten. */
+  xDone: number;
   /** Baseline fra første baseline-start til siste baseline-slutt, når det vises og finnes. */
   base: { x0: number; x1: number } | null;
   /** Multi Lane-boks: stripen tegnes sammen med boksen, bak boksene som ligger oppå den. */
@@ -1315,7 +1317,7 @@ function layoutAt(file: PlanFile, opts: LayoutOptions, measure: Measure, scale: 
     const byId = new Map(boxItems.map((i) => [i.id, i]));
     for (const m of progress) {
       const it = byId.get(m.id);
-      const pf = it && m.done !== null && boxProgressFill(it, m.done, ny, measure);
+      const pf = it && m.done !== null && boxProgressFill(it, m.done, m.xDone, ny, measure);
       if (pf) it.progressFill = pf;
       if (m.done !== null) m.asFill = true;
     }
@@ -2188,6 +2190,28 @@ function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressM
   const boxes = new Map(file.lanes.flatMap((l) => l.boxes.map((b) => [b.id, b] as const)));
   const last = addDays(axis.end, -1);
   const marks: ProgressMark[] = [];
+  // Fremdriften måles i arbeidstid, som fremdriftsfronten: 20 % av 15 arbeidsdager er 3 arbeidsdager
+  const dated = items.flatMap((it) => {
+    const r = it.kind === 'box' ? boxes.get(it.id)?.resolved : undefined;
+    const s = r ? parseIso(r.start) : NaN;
+    const f = r ? parseIso(r.finish) : NaN;
+    return Number.isNaN(s) || Number.isNaN(f) ? [] : [s, f];
+  });
+  const clock = showDone && dated.length ? workClock(file, Math.min(...dated), Math.max(...dated)) : null;
+  const doneX = (it: BoxItem, done: number): number => {
+    if (done >= 1) return it.x1;
+    const r = boxes.get(it.id)?.resolved;
+    const s = r ? parseIso(r.start) : NaN;
+    const f = r ? parseIso(r.finish) : NaN;
+    if (!clock || Number.isNaN(s) || Number.isNaN(f) || f < s) return it.x0 + (it.x1 - it.x0) * done;
+    const ws = clock.at(s);
+    const wf = clock.at(addDays(f, 1));
+    // Uten arbeidsdager i boksen (bare helg): andel av bredden
+    if (wf <= ws) return it.x0 + (it.x1 - it.x0) * done;
+    const at = clock.day(ws + (wf - ws) * done);
+    const x = axis.xStart(at.t) + at.frac * (axis.xEnd(at.t) - axis.xStart(at.t));
+    return Math.min(it.x1, Math.max(it.x0, x));
+  };
   for (const it of items) {
     if (it.kind !== 'box' || (it.header && !it.span)) continue;
     const span = !!it.span;
@@ -2204,7 +2228,7 @@ function progressMarks(items: Item[], file: PlanFile, axis: TimeAxis): ProgressM
         if (f >= axis.start && s < axis.end) base = { x0: axis.xStart(Math.max(s, axis.start)), x1: axis.xEnd(Math.min(f, last)) };
       }
     }
-    if (done !== null || base) marks.push({ id: it.id, x0: it.x0, x1: it.x1, y: it.y, h: it.h, done, base, ...(span ? { behind: true } : {}) });
+    if (done !== null || base) marks.push({ id: it.id, x0: it.x0, x1: it.x1, y: it.y, h: it.h, done, xDone: done ? doneX(it, done) : it.x0, base, ...(span ? { behind: true } : {}) });
   }
   return marks;
 }

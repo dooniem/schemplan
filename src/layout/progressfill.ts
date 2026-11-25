@@ -67,13 +67,15 @@ export function clipLeft(poly: readonly Pt[], cut: number): Pt[] {
 }
 
 /** Feltet for den ferdige delen av boksen, eller null når ingenting er ferdig. */
-export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure: Measure): ProgressFill | null {
+/** xDone er der fremdriften står i mm (arbeidstid); uten den regnes andelen av bredden. */
+export function boxProgressFill(it: BoxItem, done: number, xDone: number | null, ny: boolean, measure: Measure): ProgressFill | null {
   if (!(done > 0) || it.h <= 0 || it.x1 <= it.x0) return null;
   const d = Math.min(1, done);
   const inset = it.border ? (ny ? 0.3 : 0.25) / 2 : 0;
   const tip = Math.min(ARROW_MM, (it.x1 - it.x0) / 3);
   const outline = insetOutline(it.x0, it.x1, it.y, it.h, tip, it.arrowLeft, it.arrowRight, inset);
-  const poly = d >= 1 ? outline : clipLeft(outline, it.x0 + (it.x1 - it.x0) * d);
+  const cut = d >= 1 ? it.x1 : (xDone ?? it.x0 + (it.x1 - it.x0) * d);
+  const poly = d >= 1 ? outline : clipLeft(outline, cut);
   if (poly.length < 3) return null;
   // Fyll som får hvit tekst (mørke og mellommørke) får lyse bånd: mørke bånd forsvinner der
   const dark = autoTextColor(it.fill) === '#FFFFFF';
@@ -84,7 +86,7 @@ export function boxProgressFill(it: BoxItem, done: number, ny: boolean, measure:
   const { out: bands, under: bandsUnder } = stripes([45], BAND_STEP, poly, gaps.map(([a, b, c, e]) => [a - pad, b - pad, c + pad, e + pad]), MIN_BAND);
   let front = '';
   if (d < 1) {
-    const x = it.x0 + (it.x1 - it.x0) * d;
+    const x = cut;
     const fp = FRONT_WIDTH / 2;
     const cuts = gaps.filter((g) => g[0] - fp < x && g[2] + fp > x).map((g): [number, number] => [g[1], g[3]]);
     front = subtractSpans([it.y + inset, it.y + it.h - inset], cuts)
