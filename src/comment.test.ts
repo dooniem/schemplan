@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitLinks, addCommentImages, COMMENT_MAX_IMAGES, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText, validComment } from './comment';
+import { commentLines, insertTodo, splitLinks, todoCount, toggleTodo, addCommentImages, COMMENT_MAX_IMAGES, commentBytes, commentOf, commentSummary, formatBytes, removeCommentImage, setCommentText, validComment } from './comment';
 import { fitSize } from './commenttip';
 import { mergePlans } from './merge';
 import { samePlanApartFromImages, snapshotOf } from './editmodel';
@@ -104,5 +104,38 @@ describe('kommentarer på bokser', () => {
     expect(samePlanApartFromImages(a, b)).toBe(true);
     box(b, '1_1').comment = { images: [img('data:image/png;base64,AAAA')] };
     expect(samePlanApartFromImages(a, b)).toBe(false);
+  });
+});
+
+describe('gjøremål i kommentarer', () => {
+  const withText = (text: string): Box => ({ id: 'a', text: 'A', taskIds: [], rotation: 0, milestone: null, shown: true, resolved: null, comment: { text } });
+
+  it('leser gjøremål og teller dem', () => {
+    expect(commentLines('Husk:\n[ ] Kran\n[x] Stillas\n  [X]Lift')).toEqual([
+      { text: 'Husk:' },
+      { text: 'Kran', todo: { done: false } },
+      { text: 'Stillas', todo: { done: true } },
+      { text: 'Lift', todo: { done: true } },
+    ]);
+    expect(todoCount('Husk:\n[ ] Kran\n[x] Stillas')).toEqual({ done: 1, total: 2 });
+    expect(todoCount('Bare tekst [ ] midt i')).toEqual({ done: 0, total: 0 });
+  });
+
+  it('krysser av og fjerner krysset på riktig linje', () => {
+    const b = withText('Husk:\n[ ] Kran\n[x] Stillas');
+    toggleTodo(b, 1);
+    expect(b.comment!.text).toBe('Husk:\n[x] Kran\n[x] Stillas');
+    toggleTodo(b, 2);
+    expect(b.comment!.text).toBe('Husk:\n[x] Kran\n[ ] Stillas');
+    toggleTodo(b, 0);
+    expect(b.comment!.text).toBe('Husk:\n[x] Kran\n[ ] Stillas');
+    expect(commentSummary(b)).toBe('Tekst · 1 av 2 gjort');
+  });
+
+  it('legger til gjøremål der markøren står', () => {
+    expect(insertTodo('', 0)).toEqual({ text: '[ ] ', caret: 4 });
+    expect(insertTodo('Kran', 2)).toEqual({ text: '[ ] Kran', caret: 6 });
+    expect(insertTodo('Husk:\nKran', 8)).toEqual({ text: 'Husk:\n[ ] Kran', caret: 12 });
+    expect(insertTodo('[ ] Kran', 8)).toEqual({ text: '[ ] Kran\n[ ] ', caret: 13 });
   });
 });

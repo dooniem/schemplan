@@ -5,7 +5,7 @@ import type { Box, CommentImage } from './format/types';
 import type { Layout } from './layout/layout';
 import { plainText } from './format/text';
 import { icon } from './ctxmenu';
-import { commentOf, splitLinks } from './comment';
+import { commentLines, commentOf, splitLinks, todoCount } from './comment';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** Rødt som kommentarmerket i Excel, med hvit kant så det synes på røde bokser også. */
@@ -60,6 +60,46 @@ function textWithLinks(cls: string, text: string, clickable: boolean): HTMLEleme
   return p;
 }
 
+/**
+ * Hele kommentarteksten i kortet: vanlige linjer som avsnitt, og gjøremål som avkrysningsbokser.
+ * onToggle får linjenummeret (talt fra 0) når et gjøremål krysses av eller krysset fjernes.
+ */
+function commentBody(text: string, onToggle: (line: number) => void): HTMLElement {
+  const wrap = make('div', 'comment-card-text');
+  let plain: string[] = [];
+  const flush = () => {
+    // Tomme linjer før og etter et gjøremål gir bare luft, ikke egne avsnitt
+    const t = plain.join('\n').replace(/^\n+|\n+$/g, '');
+    if (t) wrap.append(textWithLinks('comment-para', t, true));
+    plain = [];
+  };
+  commentLines(text).forEach((line, i) => {
+    if (!line.todo) {
+      plain.push(line.text);
+      return;
+    }
+    flush();
+    const row = make('label', line.todo.done ? 'comment-todo done' : 'comment-todo');
+    const box = make('input');
+    box.type = 'checkbox';
+    box.checked = line.todo.done;
+    box.addEventListener('change', () => onToggle(i));
+    row.append(box, textWithLinks('comment-todo-text', line.text, true));
+    wrap.append(row);
+  });
+  flush();
+  return wrap;
+}
+
+/** «2 av 5 gjort», med et lite avkrysningsmerke foran. */
+function todoSummary(text: string): HTMLElement | null {
+  const { done, total } = todoCount(text);
+  if (!total) return null;
+  const p = make('p', done === total ? 'tip-todos all' : 'tip-todos');
+  p.append(icon('check', 'tip-ico'), total === 1 ? (done ? 'Gjøremålet er gjort' : 'Ett gjøremål, ikke gjort') : `${done} av ${total} gjøremål gjort`);
+  return p;
+}
+
 /** Lite bilde med fast størrelse før det er lest inn, så ingenting hopper. */
 function thumb(im: CommentImage, max: { w: number; h: number }, alt = ''): HTMLImageElement {
   const img = make('img');
@@ -81,7 +121,13 @@ export function commentTip(b: Box, canOpen = false): HTMLElement | null {
   if (!c) return null;
   const wrap = make('div', 'tip-comment');
   const text = c.text?.trim();
-  if (text) wrap.append(textWithLinks('tip-comment-text', text, false));
+  if (text) {
+    // Gjøremålene telles i stedet for å listes, så detaljene holder seg små
+    const plain = commentLines(text).filter((l) => !l.todo).map((l) => l.text).join('\n').trim();
+    if (plain) wrap.append(textWithLinks('tip-comment-text', plain, false));
+    const todos = todoSummary(text);
+    if (todos) wrap.append(todos);
+  }
   const imgs = c.images ?? [];
   if (imgs.length) {
     const row = make('div', 'tip-thumbs');
@@ -135,11 +181,16 @@ export const commentPreview = (): Preview => (shared ??= createPreview());
 /** Kortet med hele kommentaren, åpnet ved klikk på en boks. */
 export interface CommentCard {
   open(b: Box, at: { x: number; y: number }): void;
+  /** Planen er tegnet på nytt: vis boksen slik den er nå, på samme plass, eller lukk når den er borte. */
+  refresh(b: Box | undefined): void;
   close(): void;
   readonly isOpen: boolean;
+  /** Boksen kortet viser, eller null. */
+  readonly boxId: string | null;
 }
 
-export function createCommentCard(preview: Preview): CommentCard {
+/** onToggle: et gjøremål på linjen (talt fra 0) i kommentaren til boksen er krysset av eller ikke. */
+export function createCommentCard(preview: Preview, onToggle?: (boxId: string, line: number) => void): CommentCard {
   const card = make('div', 'comment-card');
   card.setAttribute('role', 'dialog');
   card.hidden = true;
@@ -147,6 +198,7 @@ export function createCommentCard(preview: Preview): CommentCard {
   /** Bildet som er klikket, og som står fremme til det klikkes igjen. */
   let locked = -1;
   let back: HTMLElement | null = null;
+  let boxId: string | null = null;
 
   const close = () => {
     if (card.hidden) return;
@@ -154,6 +206,7 @@ export function createCommentCard(preview: Preview): CommentCard {
     card.replaceChildren();
     preview.hide();
     locked = -1;
+    boxId = null;
     back?.focus?.({ preventScroll: true });
     back = null;
   };
@@ -190,63 +243,83 @@ export function createCommentCard(preview: Preview): CommentCard {
   );
   window.addEventListener('resize', close);
 
+  /** Bygger innholdet i kortet. Gir lukkeknappen. */
+  const render = (b: Box): HTMLButtonElement | null => {
+    const c = commentOf(b);
+    if (!c) return null;
+    const title = plainText(b.text) || 'Kommentar';
+    card.setAttribute('aria-label', `Kommentar til ${title}`);
+    const head = make('div', 'comment-card-head');
+    const x = make('button', 'icon comment-card-close');
+    x.type = 'button';
+    x.title = 'Lukk (Esc)';
+    x.setAttribute('aria-label', 'Lukk');
+    x.append(icon('close', 'pico'));
+    x.addEventListener('click', close);
+    head.append(make('h2', 'comment-card-title', title), x);
+    const body: Node[] = [head];
+    // Linjenumrene må stemme med den lagrede teksten, så den trimmes ikke her
+    if (c.text?.trim()) body.push(commentBody(c.text, (line) => onToggle?.(b.id, line)));
+    const imgs = c.images ?? [];
+    if (imgs.length) {
+      const row = make('div', 'comment-card-thumbs');
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', 'Bilder');
+      const buttons: HTMLButtonElement[] = [];
+      const showAt = (i: number) => preview.show(imgs[i], card.getBoundingClientRect(), buttons[i].getBoundingClientRect());
+      const settle = () => (locked >= 0 && locked < imgs.length ? showAt(locked) : preview.hide());
+      imgs.forEach((im, i) => {
+        const btn = make('button', 'comment-thumb');
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', String(i === locked));
+        btn.title = 'Klikk for å la bildet stå fremme';
+        btn.append(thumb(im, CARD_THUMB, `Bilde ${i + 1} av ${imgs.length}`));
+        btn.addEventListener('pointerenter', () => showAt(i));
+        btn.addEventListener('pointerleave', settle);
+        btn.addEventListener('focus', () => showAt(i));
+        btn.addEventListener('blur', settle);
+        // Klikk lar bildet stå fremme, så musen kan flyttes bort fra det
+        btn.addEventListener('click', () => {
+          locked = locked === i ? -1 : i;
+          buttons.forEach((y, j) => y.setAttribute('aria-pressed', String(j === locked)));
+          settle();
+        });
+        buttons.push(btn);
+        row.append(btn);
+      });
+      body.push(row, make('p', 'comment-card-hint', 'Hold musen over et bilde for å se det stort.'));
+    }
+    card.replaceChildren(...body);
+    return x;
+  };
+
   return {
     get isOpen() {
       return !card.hidden;
     },
+    get boxId() {
+      return boxId;
+    },
     close,
     open(b, at) {
-      const c = commentOf(b);
-      if (!c) return;
       back = document.activeElement as HTMLElement | null;
       locked = -1;
       preview.hide();
-      const title = plainText(b.text) || 'Kommentar';
-      card.setAttribute('aria-label', `Kommentar til ${title}`);
-      const head = make('div', 'comment-card-head');
-      const x = make('button', 'icon comment-card-close');
-      x.type = 'button';
-      x.title = 'Lukk (Esc)';
-      x.setAttribute('aria-label', 'Lukk');
-      x.append(icon('close', 'pico'));
-      x.addEventListener('click', close);
-      head.append(make('h2', 'comment-card-title', title), x);
-      const body: Node[] = [head];
-      const text = c.text?.trim();
-      if (text) body.push(textWithLinks('comment-card-text', text, true));
-      const imgs = c.images ?? [];
-      if (imgs.length) {
-        const row = make('div', 'comment-card-thumbs');
-        row.setAttribute('role', 'group');
-        row.setAttribute('aria-label', 'Bilder');
-        const buttons: HTMLButtonElement[] = [];
-        const showAt = (i: number) => preview.show(imgs[i], card.getBoundingClientRect(), buttons[i].getBoundingClientRect());
-        const settle = () => (locked >= 0 ? showAt(locked) : preview.hide());
-        imgs.forEach((im, i) => {
-          const btn = make('button', 'comment-thumb');
-          btn.type = 'button';
-          btn.setAttribute('aria-pressed', 'false');
-          btn.title = 'Klikk for å la bildet stå fremme';
-          btn.append(thumb(im, CARD_THUMB, `Bilde ${i + 1} av ${imgs.length}`));
-          btn.addEventListener('pointerenter', () => showAt(i));
-          btn.addEventListener('pointerleave', settle);
-          btn.addEventListener('focus', () => showAt(i));
-          btn.addEventListener('blur', settle);
-          // Klikk lar bildet stå fremme, så musen kan flyttes bort fra det
-          btn.addEventListener('click', () => {
-            locked = locked === i ? -1 : i;
-            buttons.forEach((y, j) => y.setAttribute('aria-pressed', String(j === locked)));
-            settle();
-          });
-          buttons.push(btn);
-          row.append(btn);
-        });
-        body.push(row, make('p', 'comment-card-hint', 'Hold musen over et bilde for å se det stort.'));
-      }
-      card.replaceChildren(...body);
+      const x = render(b);
+      if (!x) return;
+      boxId = b.id;
       card.hidden = false;
       place(at);
       x.focus({ preventScroll: true });
+    },
+    refresh(b) {
+      if (card.hidden) return;
+      if (!b || !commentOf(b)) return close();
+      // Fokus står på samme avkrysningsboks etter at kortet er bygget på nytt
+      const boxes = [...card.querySelectorAll('input[type=checkbox]')];
+      const at = boxes.indexOf(document.activeElement as Element);
+      render(b);
+      if (at >= 0) card.querySelectorAll<HTMLInputElement>('input[type=checkbox]')[at]?.focus({ preventScroll: true });
     },
   };
 }
