@@ -301,9 +301,9 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'skravering', group: 'Fag og farger', title: 'Skravering',
-    text: `Under ${ui('Skravering')} i panelet velger du mønster (skrå, skrå andre vei, skrå kryss, vannrett, loddrett eller rutenett), hvor tett strekene står og fargen på dem. Det gjelder alle bokser, også overskrifts- og Multi Lane-bokser, og kommer med i PDF-en. Teksten og ikonene får et felt uten streker rundt seg.`,
+    text: `Under ${ui('Skravering')} i panelet velger du mønster (skrå, skrå andre vei, skrå kryss, vannrett, loddrett eller rutenett), hvor tett strekene står og fargen på dem. Det gjelder alle bokser, også overskrifts- og Multi Lane-bokser, og kommer med i PDF-en. Bak teksten og ikonene er strekene svake, så teksten er like lett å lese og mønsteret henger sammen.`,
     when: `Skravering skiller noe som ikke er vanlig arbeid, for eksempel et område som er stengt. Røde skrå streker på hvit boks gir et tydelig «stopp». ${ui('Ingen')} tar skraveringen bort.`,
-    words: 'skravering skravur hatch striper streker mønster stopp stengt kryss rutenett', see: ['farger'],
+    words: 'skravering skravur hatch striper streker mønster stopp stengt kryss rutenett', see: ['farger', 'fremdrift'],
   },
   {
     id: 'innerkant', group: 'Fag og farger', title: 'Lys innerkant',
@@ -354,10 +354,16 @@ export const TOPICS: HelpTopic[] = [
   },
   {
     id: 'innstillinger', group: 'Arket', title: 'Ark, kalender og visning',
-    text: `${ui('Innstillinger')} har arkstørrelse og retning, kalender med måned eller uke, start og slutt på tidsaksen, statuslinje, tekst og logo. ${ui('Vis på arket')} slår av og på det som tegnes, som forklaring, fremdrift, baseline og datoer. Fremdrift kan vises som stripe nederst i boksen, eller som stripe og felt: da får den ferdige delen av boksen også brede skrå bånd og en strek der fremdriften står, og «Ferdig» kommer med i forklaringen.`,
+    text: `${ui('Innstillinger')} har arkstørrelse og retning, kalender med måned eller uke, start og slutt på tidsaksen, statuslinje, tekst og logo. ${ui('Vis på arket')} slår av og på det som tegnes, som forklaring, fremdrift, baseline og datoer.`,
     when: `A3 liggende passer de fleste planer; A4 er laget for å lime inn i Word. Ukekalender passer korte planer. Bokser utenfor en kortere tidsakse ligger urørt og kommer tilbake når den utvides.`,
     img: 'innstillinger', alt: 'Innstillinger med undermenyen Kalender og stil åpen.',
-    words: 'innstillinger a3 a4 liggende stående måned uke kalender tidsakse statuslinje ferie logo revisjon', see: ['utkikk', 'datoer'],
+    words: 'innstillinger a3 a4 liggende stående måned uke kalender tidsakse statuslinje ferie logo revisjon', see: ['utkikk', 'datoer', 'fremdrift'],
+  },
+  {
+    id: 'fremdrift', group: 'Arket', title: 'Fremdrift i boksene',
+    text: `${ui('Vis på arket')} › ${ui('Fremdrift')} viser % ferdig fra Project. ${ui('Stripe nederst')} er en mørk stripe i bunnen av boksen. ${ui('Stripe og felt i boksen')} gir i tillegg den ferdige delen av boksen en mørkere tone, brede skrå bånd og en strek der fremdriften står, og «Ferdig» kommer med i forklaringen. Fremdriften regnes i arbeidsdager, som fremdriftsfronten: 20 % av en boks på 15 arbeidsdager er tre arbeidsdager.`,
+    when: `Feltet gjør det lett å se på avstand hva som er gjort. Har boksen også vanlig skravering, ligger fremdriften over, og skraveringen dempes der båndene krysser. Med statuslinjen på skal feltet slutte ved statuslinjen når arbeidet går som planlagt.`,
+    words: 'fremdrift ferdig prosent % fullført stripe felt bånd progress statuslinje fremdriftsfront', see: ['innstillinger', 'skravering'],
   },
   {
     id: 'bilder', group: 'Arket', title: 'Bilder og fritekst',
